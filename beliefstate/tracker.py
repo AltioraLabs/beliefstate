@@ -27,7 +27,8 @@ class BeliefTracker:
         adapter: ProviderAdapter, 
         store: Optional[Store] = None,
         internal_adapter: Optional[ProviderAdapter] = None,
-        dispatcher: Optional[Any] = None
+        dispatcher: Optional[Any] = None,
+        judge: Optional[Any] = None
     ):
         self.config = config
         self.app_adapter = adapter
@@ -43,7 +44,12 @@ class BeliefTracker:
             self.store = store
             
         self.extractor = BeliefExtractor(adapter=self.internal_adapter, config=self.config)
-        self.detector = ContradictionDetector(adapter=self.internal_adapter, store=self.store, config=self.config)
+        self.detector = ContradictionDetector(
+            adapter=self.internal_adapter, 
+            store=self.store, 
+            config=self.config,
+            judge=judge
+        )
         self.resolver = BeliefResolver(store=self.store, strategy="overwrite")
         self.turn_counter = 0
 

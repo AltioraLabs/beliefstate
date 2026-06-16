@@ -22,6 +22,13 @@ from beliefstate.resilience import (
     CircuitBreakerOpenException,
 )
 
+# Judge Exports
+from beliefstate.judge import (
+    ContradictionJudge,
+    LLMJudge,
+    LocalNLIJudge,
+)
+
 # Dispatcher Exports
 from beliefstate.dispatcher import (
     AsyncioDispatcher,
@@ -60,4 +67,7 @@ __all__ = [
     "RQDispatcher",
     "register_global_tracker",
     "execute_tracking_task",
+    "ContradictionJudge",
+    "LLMJudge",
+    "LocalNLIJudge",
 ]
