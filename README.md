@@ -207,20 +207,59 @@ BeliefState ships with helpers for major frameworks to handle session tracking a
 ### FastAPI (ASGI)
 ```python
 from fastapi import FastAPI
-from beliefstate.integrations.asgi import BeliefTrackerASGIMiddleware
+from beliefstate import FastAPIBeliefTrackerMiddleware
 
 app = FastAPI()
 app.add_middleware(
-    BeliefTrackerASGIMiddleware,
+    FastAPIBeliefTrackerMiddleware,
     header_name="X-Session-ID"
 )
 # Automatically sets session_context from incoming header X-Session-ID
 ```
 
+### Flask (WSGI)
+```python
+from flask import Flask
+from beliefstate import FlaskBeliefTrackerMiddleware, register_flask_hooks
+
+app = Flask(__name__)
+# 1. WSGI Middleware context propagation
+app.wsgi_app = FlaskBeliefTrackerMiddleware(app.wsgi_app, header_name="X-Session-ID")
+
+# 2. Flask request lifetime hooks
+register_flask_hooks(app, header_name="X-Session-ID")
+```
+
+### LlamaIndex
+```python
+from llama_index.core import Settings
+from llama_index.core.callbacks import CallbackManager
+from beliefstate import LlamaIndexBeliefTrackerCallback
+
+callback_handler = LlamaIndexBeliefTrackerCallback(tracker=tracker)
+Settings.callback_manager = CallbackManager([callback_handler])
+```
+
+### OpenAI Assistant Observer
+```python
+import asyncio
+from beliefstate import observe_run
+
+# Poll run status and dispatch thread messages chronologically to background tracker
+asyncio.create_task(
+    observe_run(
+        tracker=tracker,
+        client=openai_client,
+        thread_id=thread_id,
+        run_id=run.id,
+        session_id="session_123"
+    )
+)
+```
+
 ### LangChain
 ```python
-from beliefstate import session_context
-from beliefstate.integrations.langchain import BeliefTrackerLangchainCallback
+from beliefstate import session_context, BeliefTrackerLangchainCallback
 
 # 1. Set active session ID context
 session_context.set("user_123")

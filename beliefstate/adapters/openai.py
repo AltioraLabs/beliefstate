@@ -10,9 +10,16 @@ except ImportError:
 class OpenAIAdapter(ProviderAdapter):
     """Adapter for OpenAI API."""
     
-    def __init__(self, client: Optional[Any] = None, model: str = "gpt-4o-mini", embed_model: str = "text-embedding-3-small"):
+    def __init__(
+        self, 
+        client: Optional[Any] = None, 
+        model: str = "gpt-4o-mini", 
+        embed_model: str = "text-embedding-3-small",
+        embed_kwargs: Optional[Dict[str, Any]] = None
+    ):
         self.model = model
         self.embed_model = embed_model
+        self.embed_kwargs = embed_kwargs or {}
         
         if client:
             self.client = client
@@ -66,9 +73,17 @@ class OpenAIAdapter(ProviderAdapter):
             kwargs["model"] = self.model
             
         if response_format:
-            kwargs["response_format"] = response_format
-        
-        response = await self.client.chat.completions.create(**kwargs)
+            try:
+                response = await self.client.beta.chat.completions.parse(
+                    response_format=response_format,
+                    **kwargs
+                )
+            except AttributeError:
+                kwargs["response_format"] = response_format
+                response = await self.client.chat.completions.create(**kwargs)
+        else:
+            response = await self.client.chat.completions.create(**kwargs)
+            
         return self.to_llm_response(response)
 
     async def get_embedding(self, text: str) -> List[float]:
@@ -81,8 +96,12 @@ class OpenAIAdapter(ProviderAdapter):
         if not texts:
             return []
             
-        response = await self.client.embeddings.create(
-            input=texts,
-            model=self.embed_model
-        )
+        kwargs = {
+            "input": texts,
+            "model": self.embed_model
+        }
+        if self.embed_kwargs:
+            kwargs.update(self.embed_kwargs)
+            
+        response = await self.client.embeddings.create(**kwargs)
         return [item.embedding for item in response.data]

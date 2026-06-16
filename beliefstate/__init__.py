@@ -39,6 +39,13 @@ from beliefstate.dispatcher import (
     execute_tracking_task,
 )
 
+# Integration Exports
+from beliefstate.integrations.fastapi import FastAPIBeliefTrackerMiddleware, get_session_id
+from beliefstate.integrations.flask import FlaskBeliefTrackerMiddleware, register_flask_hooks
+from beliefstate.integrations.llamaindex import LlamaIndexBeliefTrackerCallback
+from beliefstate.integrations.openai import process_openai_assistant_message, observe_run
+from beliefstate.integrations.langchain import BeliefTrackerLangchainCallback
+
 __all__ = [
     "LLMCall",
     "LLMResponse",
@@ -70,4 +77,12 @@ __all__ = [
     "ContradictionJudge",
     "LLMJudge",
     "LocalNLIJudge",
+    "FastAPIBeliefTrackerMiddleware",
+    "get_session_id",
+    "FlaskBeliefTrackerMiddleware",
+    "register_flask_hooks",
+    "LlamaIndexBeliefTrackerCallback",
+    "process_openai_assistant_message",
+    "observe_run",
+    "BeliefTrackerLangchainCallback",
 ]

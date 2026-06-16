@@ -222,40 +222,76 @@ Instead of making single HTTP requests for each extracted belief, `BeliefExtract
 ## 🔌 Framework Integrations
 
 ### 1. FastAPI / ASGI
-The `BeliefTrackerASGIMiddleware` automatically extracts a session or user ID from incoming request headers and registers it into the tracker's context.
+The `FastAPIBeliefTrackerMiddleware` automatically extracts a session or user ID from incoming request headers and registers it into the tracker's context.
 
 ```python
 from fastapi import FastAPI
-from beliefstate.integrations.asgi import BeliefTrackerASGIMiddleware
+from beliefstate import FastAPIBeliefTrackerMiddleware
 
 app = FastAPI()
 app.add_middleware(
-    BeliefTrackerASGIMiddleware, 
+    FastAPIBeliefTrackerMiddleware, 
     header_name="X-Session-ID"
 )
 ```
 
 ### 2. Flask / WSGI
-The `BeliefTrackerWSGIMiddleware` maps session context variables from standard WSGI environ environments:
+The `FlaskBeliefTrackerMiddleware` maps session context variables from standard WSGI environ environments:
 
 ```python
 from flask import Flask
-from beliefstate.integrations.wsgi import BeliefTrackerWSGIMiddleware
+from beliefstate import FlaskBeliefTrackerMiddleware
 
 app = Flask(__name__)
-app.wsgi_app = BeliefTrackerWSGIMiddleware(
+app.wsgi_app = FlaskBeliefTrackerMiddleware(
     app.wsgi_app, 
     header_name="X-Session-ID"
 )
 ```
 
-### 3. LangChain Callback
+### 3. LlamaIndex Callback Handler
+Automatically intercept chats executed inside a LlamaIndex application. Requires `llama-index-core`:
+
+```python
+from llama_index.core import Settings
+from llama_index.core.callbacks import CallbackManager
+from beliefstate import LlamaIndexBeliefTrackerCallback
+
+callback_handler = LlamaIndexBeliefTrackerCallback(tracker=tracker)
+Settings.callback_manager = CallbackManager([callback_handler])
+```
+
+### 4. OpenAI Assistant Run Observer
+Asynchronously observe thread-based Assistant runs and track beliefs when completed. Requires `openai`:
+
+```python
+import asyncio
+from beliefstate import observe_run
+
+# Start assistant run
+run = await client.beta.threads.runs.create(
+    thread_id=thread_id,
+    assistant_id=assistant_id
+)
+
+# Background-observe the run until complete, then extract and track beliefs
+asyncio.create_task(
+    observe_run(
+        tracker=tracker,
+        client=client,
+        thread_id=thread_id,
+        run_id=run.id,
+        session_id="session_123"
+    )
+)
+```
+
+### 5. LangChain Callback
 Allows seamless interception of LangChain chain executions without wrapping functions manually:
 
 ```python
 from langchain_openai import ChatOpenAI
-from beliefstate import session_context
-from beliefstate.integrations.langchain import BeliefTrackerLangchainCallback
+from beliefstate import session_context, BeliefTrackerLangchainCallback
 
 # Set session ID context
 session_context.set("user_123")

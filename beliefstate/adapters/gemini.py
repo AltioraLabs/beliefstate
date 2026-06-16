@@ -12,9 +12,16 @@ except ImportError:
 class GeminiAdapter(ProviderAdapter):
     """Adapter for Google GenAI API (google-genai)."""
     
-    def __init__(self, client: Optional[Any] = None, model: str = "gemini-2.0-flash", embed_model: str = "text-embedding-004"):
+    def __init__(
+        self, 
+        client: Optional[Any] = None, 
+        model: str = "gemini-2.0-flash", 
+        embed_model: str = "text-embedding-004",
+        embed_kwargs: Optional[Dict[str, Any]] = None
+    ):
         self.model = model
         self.embed_model = embed_model
+        self.embed_kwargs = embed_kwargs or {}
         
         if client:
             self.client = client
@@ -87,7 +94,13 @@ class GeminiAdapter(ProviderAdapter):
             
         if response_format:
             config_args["response_mime_type"] = "application/json"
-            config_args["response_schema"] = response_format
+            if isinstance(response_format, dict):
+                config_args["response_schema"] = response_format
+            else:
+                try:
+                    config_args["response_schema"] = response_format.model_json_schema()
+                except Exception:
+                    config_args["response_schema"] = response_format
             
         generate_config = types.GenerateContentConfig(**config_args) if config_args else None
             
@@ -108,8 +121,12 @@ class GeminiAdapter(ProviderAdapter):
         if not texts:
             return []
             
-        response = await self.client.aio.models.embed_content(
-            model=self.embed_model,
-            contents=texts
-        )
+        kwargs = {
+            "model": self.embed_model,
+            "contents": texts
+        }
+        if self.embed_kwargs:
+            kwargs.update(self.embed_kwargs)
+            
+        response = await self.client.aio.models.embed_content(**kwargs)
         return [list(emb.values) for emb in response.embeddings]

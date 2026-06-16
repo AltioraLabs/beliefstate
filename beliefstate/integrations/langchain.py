@@ -23,6 +23,23 @@ class BeliefTrackerLangchainCallback(AsyncCallbackHandler):
         self.tracker = tracker
         self.pending_calls: Dict[str, LLMCall] = {}
 
+    async def on_llm_start(
+        self,
+        serialized: Dict[str, Any],
+        prompts: List[str],
+        *,
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs: Any
+    ) -> Any:
+        universal_msgs = []
+        if prompts and len(prompts) > 0:
+            for p in prompts:
+                universal_msgs.append({"role": "user", "content": p})
+        self.pending_calls[str(run_id)] = LLMCall(messages=universal_msgs, kwargs=kwargs)
+
     async def on_chat_model_start(
         self, 
         serialized: Dict[str, Any], 
@@ -70,8 +87,14 @@ class BeliefTrackerLangchainCallback(AsyncCallbackHandler):
             return
             
         text = response.generations[0][0].text
-        # Safely dump response to dict if it's a pydantic model
-        raw = response.dict() if hasattr(response, "dict") else response
+        # Safely dump response to dict if it's a pydantic model (supporting both v1 and v2)
+        if hasattr(response, "model_dump"):
+            raw = response.model_dump()
+        elif hasattr(response, "dict"):
+            raw = response.dict()
+        else:
+            raw = response
+            
         llm_response = LLMResponse(text=text, raw_response=raw)
         
         session_id = session_context.get()
@@ -84,3 +107,14 @@ class BeliefTrackerLangchainCallback(AsyncCallbackHandler):
             )
         else:
             await self.tracker._track_background(call, llm_response, session_id, current_turn)
+
+    async def on_llm_error(
+        self,
+        error: BaseException,
+        *,
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        **kwargs: Any
+    ) -> Any:
+        # Prevent memory leaks by cleaning up pending calls on error
+        self.pending_calls.pop(str(run_id), None)

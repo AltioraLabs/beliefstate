@@ -10,9 +10,16 @@ except ImportError:
 class AnthropicAdapter(ProviderAdapter):
     """Adapter for Anthropic API."""
     
-    def __init__(self, client: Optional[Any] = None, model: str = "claude-3-5-sonnet-latest", embed_model: str = "voyage-large-2"):
+    def __init__(
+        self, 
+        client: Optional[Any] = None, 
+        model: str = "claude-3-5-sonnet-latest", 
+        embed_model: str = "voyage-large-2",
+        embed_kwargs: Optional[Dict[str, Any]] = None
+    ):
         self.model = model
         self.embed_model = embed_model
+        self.embed_kwargs = embed_kwargs or {}
         
         if client:
             self.client = client
@@ -60,10 +67,13 @@ class AnthropicAdapter(ProviderAdapter):
         # Prompt-based fallback formatting instructions if the provider does not support native schema validation
         messages = call.messages.copy()
         if response_format:
-            try:
-                schema_json = json.dumps(response_format.model_json_schema())
-            except Exception:
-                schema_json = "{}"
+            if isinstance(response_format, dict):
+                schema_json = json.dumps(response_format)
+            else:
+                try:
+                    schema_json = json.dumps(response_format.model_json_schema())
+                except Exception:
+                    schema_json = "{}"
             instruction = f"\n\nIMPORTANT: You must return a valid JSON object or JSON array conforming strictly to the following JSON Schema: {schema_json}. Do NOT include any explanations, markdown code blocks, or preamble in your response. Output only raw JSON."
             if messages:
                 last_m = messages[-1].copy()

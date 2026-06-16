@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.call import LLMCall, LLMResponse
 
@@ -11,13 +11,20 @@ except ImportError:
 class LiteLLMAdapter(ProviderAdapter):
     """Adapter for LiteLLM API, routing to any provider (Azure, Bedrock, OpenAI, etc.) via LiteLLM."""
     
-    def __init__(self, model: str = "gpt-4o-mini", embed_model: str = "text-embedding-3-small", **kwargs: Any):
+    def __init__(
+        self, 
+        model: str = "gpt-4o-mini", 
+        embed_model: str = "text-embedding-3-small",
+        embed_kwargs: Optional[Dict[str, Any]] = None,
+        **kwargs: Any
+    ):
         if not HAS_LITELLM:
             raise ImportError(
                 "LiteLLM is not installed. Install with `pip install beliefstate[litellm]` or `pip install litellm`."
             )
         self.model = model
         self.embed_model = embed_model
+        self.embed_kwargs = embed_kwargs or {}
         self.kwargs = kwargs
 
     def to_llm_call(self, *args, **kwargs) -> LLMCall:
@@ -87,6 +94,9 @@ class LiteLLMAdapter(ProviderAdapter):
             return []
             
         kwargs = self.kwargs.copy()
+        if self.embed_kwargs:
+            kwargs.update(self.embed_kwargs)
+            
         response = await litellm.aembedding(
             model=self.embed_model,
             input=texts,
