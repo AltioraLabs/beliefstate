@@ -86,3 +86,74 @@ async def test_redis_store_mock():
     assert len(retrieved) == 1
     assert retrieved[0].value == "value"
     assert retrieved[0].embedding == [0.1, 0.2]
+
+
+@pytest.mark.asyncio
+async def test_sqlite_search_beliefs():
+    store = SQLiteStore(db_path=":memory:")
+
+    b1 = Belief(
+        subject="user",
+        predicate="likes",
+        value="apples",
+        confidence=1.0,
+        turn=1,
+        source="user",
+        embedding=[1.0, 0.0, 0.0],
+    )
+    b2 = Belief(
+        subject="user",
+        predicate="hates",
+        value="bananas",
+        confidence=1.0,
+        turn=2,
+        source="user",
+        embedding=[0.0, 1.0, 0.0],
+    )
+    await store.add_belief("session_123", b1)
+    await store.add_belief("session_123", b2)
+
+    # Search with query embedding close to b1
+    results = await store.search_beliefs("session_123", [1.0, 0.1, 0.0], threshold=0.7, limit=5)
+    assert len(results) == 1
+    assert results[0].value == "apples"
+
+    # Search with limit=1
+    results_limited = await store.search_beliefs("session_123", [0.1, 1.0, 0.0], threshold=0.1, limit=1)
+    assert len(results_limited) == 1
+    assert results_limited[0].value == "bananas"
+
+
+@pytest.mark.asyncio
+async def test_redis_search_beliefs():
+    store = RedisStore(redis_url="redis://localhost:6379")
+    mock_client = AsyncMock()
+    store._client = mock_client
+
+    b1 = Belief(
+        subject="user",
+        predicate="likes",
+        value="apples",
+        confidence=1.0,
+        turn=1,
+        source="user",
+        embedding=[1.0, 0.0, 0.0],
+    )
+    b2 = Belief(
+        subject="user",
+        predicate="hates",
+        value="bananas",
+        confidence=1.0,
+        turn=2,
+        source="user",
+        embedding=[0.0, 1.0, 0.0],
+    )
+
+    mock_client.hgetall.return_value = {
+        "user::likes": b1.model_dump_json(),
+        "user::hates": b2.model_dump_json()
+    }
+
+    results = await store.search_beliefs("session_123", [1.0, 0.1, 0.0], threshold=0.7, limit=5)
+    assert len(results) == 1
+    assert results[0].value == "apples"

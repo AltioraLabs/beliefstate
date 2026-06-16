@@ -38,6 +38,29 @@ class RedisStore(Store):
             beliefs.append(Belief.model_validate_json(value_str))
         return beliefs
         
+    async def search_beliefs(
+        self, session_id: str, embedding: List[float], threshold: float = 0.0, limit: int = 5
+    ) -> List[Belief]:
+        import math
+        
+        beliefs = await self.get_beliefs(session_id)
+        scored_beliefs = []
+        
+        for b in beliefs:
+            if not b.embedding or not embedding:
+                continue
+            v1 = b.embedding
+            v2 = embedding
+            dot = sum(a*b for a, b in zip(v1, v2))
+            mag1 = math.sqrt(sum(a*a for a in v1))
+            mag2 = math.sqrt(sum(b*b for b in v2))
+            sim = dot / (mag1 * mag2) if mag1 > 0 and mag2 > 0 else 0.0
+            if sim >= threshold:
+                scored_beliefs.append((b, sim))
+                
+        scored_beliefs.sort(key=lambda x: x[1], reverse=True)
+        return [sb[0] for sb in scored_beliefs[:limit]]
+        
     async def remove_belief(self, session_id: str, subject: str, predicate: str) -> None:
         if not self._client:
             raise RuntimeError("redis package is not installed. Run `pip install redis`")

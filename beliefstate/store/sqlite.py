@@ -8,6 +8,23 @@ try:
 except ImportError:
     aiosqlite = None
 
+def cosine_similarity_py(emb1_str: str, emb2_json_str: str) -> float:
+    try:
+        import json
+        import math
+        v1 = json.loads(emb1_str)
+        v2 = json.loads(emb2_json_str)
+        if not v1 or not v2:
+            return 0.0
+        dot = sum(a*b for a, b in zip(v1, v2))
+        mag1 = math.sqrt(sum(a*a for a in v1))
+        mag2 = math.sqrt(sum(b*b for b in v2))
+        if mag1 == 0.0 or mag2 == 0.0:
+            return 0.0
+        return dot / (mag1 * mag2)
+    except Exception:
+        return 0.0
+
 class SQLiteStore(Store):
     """SQLite-based asynchronous storage for beliefs."""
     
@@ -26,6 +43,7 @@ class SQLiteStore(Store):
                     os.makedirs(parent, exist_ok=True)
             self._conn = await aiosqlite.connect(self.db_path)
             self._conn.row_factory = aiosqlite.Row
+            await self._conn.create_function("cosine_similarity", 2, cosine_similarity_py)
             await self._init_db()
         return self._conn
         
@@ -72,6 +90,34 @@ class SQLiteStore(Store):
         ''', (session_id,)) as cursor:
             rows = await cursor.fetchall()
             
+        beliefs = []
+        for r in rows:
+            beliefs.append(Belief(
+                subject=r['subject'],
+                predicate=r['predicate'],
+                value=r['value'],
+                confidence=r['confidence'],
+                turn=r['turn'],
+                source=r['source'],
+                embedding=json.loads(r['embedding']) if r['embedding'] else []
+            ))
+        return beliefs
+
+    async def search_beliefs(
+        self, session_id: str, embedding: List[float], threshold: float = 0.0, limit: int = 5
+    ) -> List[Belief]:
+        conn = await self._get_connection()
+        embedding_json = json.dumps(embedding)
+        async with conn.execute('''
+            SELECT subject, predicate, value, confidence, turn, source, embedding,
+                   cosine_similarity(?, embedding) as similarity
+            FROM beliefs 
+            WHERE session_id = ? AND similarity >= ?
+            ORDER BY similarity DESC
+            LIMIT ?
+         ''', (embedding_json, session_id, threshold, limit)) as cursor:
+             rows = await cursor.fetchall()
+             
         beliefs = []
         for r in rows:
             beliefs.append(Belief(

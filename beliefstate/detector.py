@@ -30,42 +30,47 @@ class ContradictionDetector:
     async def detect(self, session_id: str, new_beliefs: List[Belief]) -> List[Tuple[Belief, Belief, float, str]]:
         """Detect contradictions between new beliefs and existing store."""
         contradictions = []
-        old_beliefs = await self.store.get_beliefs(session_id)
         
-        if not old_beliefs:
-            return contradictions
-            
         for new_b in new_beliefs:
-            for old_b in old_beliefs:
-                # Fast semantic check using embeddings
+            if not new_b.embedding:
+                continue
+                
+            # Database-side vector search for top candidate beliefs
+            matched_beliefs = await self.store.search_beliefs(
+                session_id=session_id,
+                embedding=new_b.embedding,
+                threshold=self.config.similarity_threshold,
+                limit=5
+            )
+            
+            for old_b in matched_beliefs:
                 sim = cosine_similarity(new_b.embedding, old_b.embedding)
                 
                 # If semantically related, do a deep check with LLM NLI
-                if sim >= self.config.similarity_threshold:
-                    premise = f"{old_b.subject} {old_b.predicate} {old_b.value}"
-                    hypothesis = f"{new_b.subject} {new_b.predicate} {new_b.value}"
-                    
-                    prompt = self.config.judge_prompt_template.format(
-                        premise=premise, hypothesis=hypothesis
-                    )
-                    
-                    call = LLMCall(messages=[{"role": "user", "content": prompt}])
-                    try:
-                        llm_resp = await self.adapter.generate(call)
-                        raw_text = llm_resp.text.strip()
-                        if raw_text.startswith("```json"):
-                            raw_text = raw_text[7:-3].strip()
-                        elif raw_text.startswith("```"):
-                            raw_text = raw_text[3:-3].strip()
-                            
-                        data = json.loads(raw_text)
+                premise = f"{old_b.subject} {old_b.predicate} {old_b.value}"
+                hypothesis = f"{new_b.subject} {new_b.predicate} {new_b.value}"
+                
+                prompt = self.config.judge_prompt_template.format(
+                    premise=premise, hypothesis=hypothesis
+                )
+                
+                call = LLMCall(messages=[{"role": "user", "content": prompt}])
+                try:
+                    llm_resp = await self.adapter.generate(call)
+                    raw_text = llm_resp.text.strip()
+                    if raw_text.startswith("```json"):
+                        raw_text = raw_text[7:-3].strip()
+                    elif raw_text.startswith("```"):
+                        raw_text = raw_text[3:-3].strip()
                         
-                        if data.get("relationship") == "contradiction":
-                            score = float(data.get("score", 0.0))
-                            if score >= self.config.contradiction_threshold:
-                                contradictions.append((old_b, new_b, score, data.get("reason", "")))
-                                
-                    except Exception as e:
-                        logger.error(f"Contradiction detection error: {e}", exc_info=True)
+                    data = json.loads(raw_text)
+                    
+                    if data.get("relationship") == "contradiction":
+                        score = float(data.get("score", 0.0))
+                        if score >= self.config.contradiction_threshold:
+                            contradictions.append((old_b, new_b, score, data.get("reason", "")))
+                            
+                except Exception as e:
+                    logger.error(f"Contradiction detection error: {e}", exc_info=True)
                         
         return contradictions

@@ -13,6 +13,12 @@ class Store(Protocol):
         """Retrieve all beliefs for a given session."""
         ...
         
+    async def search_beliefs(
+        self, session_id: str, embedding: List[float], threshold: float = 0.0, limit: int = 5
+    ) -> List[Belief]:
+        """Search the store for beliefs semantically similar to the target embedding."""
+        ...
+        
     async def remove_belief(self, session_id: str, subject: str, predicate: str) -> None:
         """Remove a specific belief based on its subject and predicate."""
         ...
