@@ -21,18 +21,18 @@ def normalize_currency(text: str) -> str:
     """Normalize currency to ISO code format: USD 5000 instead of $5,000."""
     # Common currency patterns
     patterns = [
-        (r'\$\s*(\d+(?:,\d{3})*(?:\.\d{2})?)', r'USD \1'),  # $5,000 -> USD 5,000
-        (r'€\s*(\d+(?:,\d{3})*(?:\.\d{2})?)', r'EUR \1'),  # €100 -> EUR 100
-        (r'£\s*(\d+(?:,\d{3})*(?:\.\d{2})?)', r'GBP \1'),  # £50 -> GBP 50
-        (r'¥\s*(\d+(?:,\d{3})*(?:\.\d{2})?)', r'JPY \1'),  # ¥1000 -> JPY 1000
+        (r'\$\s*(\d+(?:,\d{3})*(?:\.\d{2})?)', r'USD \1'),
+        (r'€\s*(\d+(?:,\d{3})*(?:\.\d{2})?)', r'EUR \1'),
+        (r'£\s*(\d+(?:,\d{3})*(?:\.\d{2})?)', r'GBP \1'),
+        (r'¥\s*(\d+(?:,\d{3})*(?:\.\d{2})?)', r'JPY \1'),
     ]
     
     for pattern, replacement in patterns:
         text = re.sub(pattern, replacement, text)
     
-    # Also handle currency words: "five thousand dollars" -> if already normalized to digits
-    # This is best handled by the LLM prompt, but add fallback
-    text = re.sub(r'(USD|EUR|GBP|JPY)\s+(\d+),(\d+)', r'\1 \2\3', text)  # USD 5,000 -> USD 5000
+    # Handle currency: "five thousand dollars" normalized to digits
+    # Best handled by LLM prompt, but add fallback
+    text = re.sub(r'(USD|EUR|GBP|JPY)\s+(\d+),(\d+)', r'\1 \2\3', text)
     
     return text
 
@@ -43,12 +43,13 @@ def normalize_dates(text: str) -> str:
     months = {
         'january': '01', 'february': '02', 'march': '03', 'april': '04',
         'may': '05', 'june': '06', 'july': '07', 'august': '08',
-        'september': '09', 'october': '10', 'november': '11', 'december': '12',
-        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'jun': '06',
-        'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+        'september': '09', 'october': '10', 'november': '11',
+        'december': '12', 'jan': '01', 'feb': '02', 'mar': '03',
+        'apr': '04', 'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09',
+        'oct': '10', 'nov': '11', 'dec': '12'
     }
     
-    # Pattern: "March 15, 2024" or "March 15, 1990" -> 2024-03-15 / 1990-03-15
+    # Pattern: "March 15, 2024" -> 2024-03-15
     def replace_date_long(match):
         month_name = match.group(1).lower()
         day = match.group(2).zfill(2)
@@ -63,7 +64,7 @@ def normalize_dates(text: str) -> str:
         flags=re.IGNORECASE
     )
     
-    # Pattern: "15 March 2024" or "15/03/2024" -> 2024-03-15
+    # Pattern: "15 March 2024" -> 2024-03-15
     def replace_date_dmy(match):
         day = match.group(1).zfill(2)
         month_name = match.group(2).lower()
@@ -78,8 +79,7 @@ def normalize_dates(text: str) -> str:
         flags=re.IGNORECASE
     )
     
-    # Pattern: MM/DD/YYYY or DD/MM/YYYY - try to detect based on value ranges
-    # Assume MM/DD/YYYY format (US standard)
+    # Pattern: MM/DD/YYYY (US standard)
     text = re.sub(
         r'(\d{1,2})/(\d{1,2})/(\d{4})',
         lambda m: f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}",
@@ -122,7 +122,7 @@ def classify_response_type(text: str) -> str:
     - "code": Code block (skip extraction)
     - "json": Pure JSON/structured data (skip extraction)
     - "sql": SQL query or output (skip extraction)
-    - "markdown_heavy": Markdown with code blocks (extract text only, skip code)
+    - "markdown_heavy": Markdown with code (extract text only, skip code)
     """
     if not text:
         return "conversational"
@@ -144,7 +144,7 @@ def classify_response_type(text: str) -> str:
         'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER',
         'DROP', 'FROM', 'WHERE', 'JOIN', 'GROUP BY', 'ORDER BY'
     ]
-    text_upper = text.split('\n')[0].upper()  # Check first line
+    text_upper = text.split('\n')[0].upper()
     if any(keyword in text_upper for keyword in sql_keywords):
         return "sql"
     
@@ -166,11 +166,13 @@ def classify_response_type(text: str) -> str:
     return "conversational"
 
 
-def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> List[str]:
+def chunk_response_by_paragraphs(
+    text: str, max_chunk_length: int = 2000
+) -> List[str]:
     """Chunk a response into paragraphs for extraction.
     
-    For long responses (>2000 chars), splits at paragraph boundaries (double newlines)
-    to avoid token limits and improve extraction quality.
+    For long responses (>2000 chars), splits at paragraph boundaries
+    (double newlines) to avoid token limits and improve extraction quality.
     """
     if not text or len(text) <= max_chunk_length:
         return [text]
@@ -194,7 +196,10 @@ def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> Lis
         para_length = len(para) + 2  # +2 for newlines
         
         # If adding this paragraph would exceed max length, save current chunk
-        if current_chunk and current_length + para_length > max_chunk_length:
+        if (
+            current_chunk
+            and current_length + para_length > max_chunk_length
+        ):
             chunks.append('\n\n'.join(current_chunk))
             current_chunk = [para]
             current_length = para_length
@@ -209,7 +214,9 @@ def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> Lis
     if not chunks:
         return [text]
     
-    logger.debug(f"Chunked response into {len(chunks)} paragraphs for extraction")
+    logger.debug(
+        f"Chunked response into {len(chunks)} paragraphs for extraction"
+    )
     return chunks
 
 
@@ -236,9 +243,11 @@ def recover_json_from_response(text: str) -> Optional[List]:
             return data
         elif isinstance(data, dict):
             if "beliefs" in data:
-                return data["beliefs"] if isinstance(data["beliefs"], list) else None
+                b = data["beliefs"]
+                return b if isinstance(b, list) else None
             if "root" in data:
-                return data["root"] if isinstance(data["root"], list) else None
+                r = data["root"]
+                return r if isinstance(r, list) else None
         return None
     except json.JSONDecodeError:
         pass
@@ -252,7 +261,9 @@ def recover_json_from_response(text: str) -> Optional[List]:
         data = json.loads(text_clean)
         if isinstance(data, list):
             return data
-        elif isinstance(data, dict) and ("beliefs" in data or "root" in data):
+        elif isinstance(data, dict) and (
+            "beliefs" in data or "root" in data
+        ):
             result = data.get("beliefs") or data.get("root")
             return result if isinstance(result, list) else None
     except json.JSONDecodeError:
@@ -311,7 +322,9 @@ def recover_json_from_response(text: str) -> Optional[List]:
         try:
             data = json.loads(json_substr_recover)
             if isinstance(data, list):
-                logger.debug("Recovered truncated JSON by adding closing bracket")
+                logger.debug(
+                    "Recovered truncated JSON by adding closing bracket"
+                )
                 return data
         except json.JSONDecodeError:
             pass
@@ -327,12 +340,17 @@ def recover_json_from_response(text: str) -> Optional[List]:
         try:
             data = json.loads(json_substr_recover)
             if isinstance(data, list):
-                logger.debug("Recovered truncated JSON by adding missing braces")
+                logger.debug(
+                    "Recovered truncated JSON by adding missing braces"
+                )
                 return data
         except json.JSONDecodeError:
             pass
     
-    logger.warning(f"Failed to recover JSON from response. Last attempt: {json_substr[:100]}...")
+    logger.warning(
+        f"Failed to recover JSON from response. "
+        f"Last attempt: {json_substr[:100]}..."
+    )
     return None
 
 
@@ -391,14 +409,21 @@ class BeliefExtractor:
         extraction_text = response_text
         if resp_type == "markdown_heavy":
             # Remove code blocks from extraction
-            extraction_text = re.sub(r'```[\w]*\n.*?\n```', '', response_text, flags=re.DOTALL)
+            extraction_text = re.sub(
+                r'```[\w]*\n.*?\n```',
+                '',
+                response_text,
+                flags=re.DOTALL
+            )
             extraction_text = extraction_text.strip()
             if not extraction_text:
                 logger.debug("Skipping extraction: only code blocks in response")
                 return []
         
         # Chunk long responses at paragraph boundaries
-        chunks = chunk_response_by_paragraphs(extraction_text, max_chunk_length=2000)
+        chunks = chunk_response_by_paragraphs(
+            extraction_text, max_chunk_length=2000
+        )
         
         all_beliefs = []
         for chunk_idx, chunk_text in enumerate(chunks):
@@ -406,9 +431,14 @@ class BeliefExtractor:
                 continue
             
             if len(chunks) > 1:
-                logger.debug(f"Extracting beliefs from chunk {chunk_idx + 1}/{len(chunks)}")
+                logger.debug(
+                    f"Extracting beliefs from chunk {chunk_idx + 1}/"
+                    f"{len(chunks)}"
+                )
             
-            chunk_beliefs = await self._extract_from_chunk(chunk_text, turn, source)
+            chunk_beliefs = await self._extract_from_chunk(
+                chunk_text, turn, source
+            )
             all_beliefs.extend(chunk_beliefs)
         
         return all_beliefs
@@ -417,7 +447,9 @@ class BeliefExtractor:
         self, chunk_text: str, turn: int, source: str
     ) -> List[Belief]:
         """Extract beliefs from a single chunk of text."""
-        prompt = self.config.extract_prompt_template.format(response=chunk_text)
+        prompt = self.config.extract_prompt_template.format(
+            response=chunk_text
+        )
 
         # We make an internal LLM call to extract beliefs
         call = LLMCall(messages=[{"role": "user", "content": prompt}])
@@ -457,12 +489,16 @@ class BeliefExtractor:
                     if source == "user":
                         if subj_upper in ["I", "ME", "MY", "MINE", "MYSELF"]:
                             subj = "USER"
-                        elif subj_upper in ["YOU", "YOUR", "YOURS", "YOURSELF"]:
+                        elif subj_upper in [
+                            "YOU", "YOUR", "YOURS", "YOURSELF"
+                        ]:
                             subj = "ASSISTANT"
                     elif source == "assistant":
                         if subj_upper in ["I", "ME", "MY", "MINE", "MYSELF"]:
                             subj = "ASSISTANT"
-                        elif subj_upper in ["YOU", "YOUR", "YOURS", "YOURSELF"]:
+                        elif subj_upper in [
+                            "YOU", "YOUR", "YOURS", "YOURSELF"
+                        ]:
                             subj = "USER"
 
                     b = Belief(
@@ -479,11 +515,14 @@ class BeliefExtractor:
 
             if temp_beliefs:
                 try:
-                    # Request batch embeddings for all valid beliefs in a single API call
+                    # Request batch embeddings for all valid beliefs
                     texts_to_embed = [
-                        f"{b.subject} {b.predicate} {b.value}" for b in temp_beliefs
+                        f"{b.subject} {b.predicate} {b.value}"
+                        for b in temp_beliefs
                     ]
-                    embeddings = await self.adapter.get_embeddings(texts_to_embed)
+                    embeddings = await self.adapter.get_embeddings(
+                        texts_to_embed
+                    )
                     for b, emb in zip(temp_beliefs, embeddings):
                         b.embedding = emb
                         b.embedding_model = self.embedding_model
@@ -491,26 +530,32 @@ class BeliefExtractor:
                         beliefs.append(b)
                 except Exception as e:
                     logger.warning(
-                        f"Error enqueuing batch embeddings: {e}. Falling back to individual embedding generation."
+                        f"Error enqueuing batch embeddings: {e}. "
+                        f"Falling back to individual embedding generation."
                     )
-                    # Fallback to individual embedding requests to preserve the extracted facts
+                    # Fallback to individual embedding requests
                     for b in temp_beliefs:
                         try:
-                            text_to_embed = f"{b.subject} {b.predicate} {b.value}"
-                            b.embedding = await self.adapter.get_embedding(
-                                text_to_embed
+                            text_to_embed = (
+                                f"{b.subject} {b.predicate} {b.value}"
+                            )
+                            b.embedding = (
+                                await self.adapter.get_embedding(
+                                    text_to_embed
+                                )
                             )
                             b.embedding_model = self.embedding_model
                             b.embedding_dim = self.embedding_dim
                             beliefs.append(b)
                         except Exception as ie:
                             logger.error(
-                                f"Error embedding individual belief fallback: {ie}",
+                                f"Error embedding individual belief "
+                                f"fallback: {ie}",
                                 exc_info=True,
                             )
 
             return beliefs
         except Exception as e:
-            # Silently fail or log for extraction errors so we don't crash the main app
+            # Silently fail or log for extraction errors so we don't crash
             logger.error(f"Belief extraction error: {e}", exc_info=True)
             return []

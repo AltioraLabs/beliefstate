@@ -53,7 +53,8 @@ def has_negation(text: str) -> bool:
     """Check if text contains negation tokens.
     
     Returns True if any negation token is found in the text (case-insensitive).
-    Helps force negated beliefs to LLM judge to prevent cosine similarity false positives.
+    Helps force negated beliefs to LLM judge to prevent cosine similarity
+    false positives.
     """
     if not text:
         return False
@@ -82,7 +83,8 @@ def has_negation(text: str) -> bool:
 def cosine_similarity(v1: List[float], v2: List[float]) -> float:
     """Compute cosine similarity between two vectors.
     
-    Returns 0.0 if vectors have mismatched dimensions to prevent silent corruption.
+    Returns 0.0 if vectors have mismatched dimensions to prevent silent
+    corruption.
     """
     if not v1 or not v2:
         return 0.0
@@ -126,7 +128,8 @@ class ContradictionDetector:
     ) -> List[Tuple[Belief, Belief, float, str]]:
         """Detect contradictions between new beliefs and existing store.
         
-        Checks for embedding model consistency to prevent silent dimension mismatch errors.
+        Checks for embedding model consistency to prevent silent dimension
+        mismatch errors.
         """
         contradictions = []
 
@@ -150,12 +153,16 @@ class ContradictionDetector:
                     and old_b.embedding_model != new_b.embedding_model
                 ):
                     logger.warning(
-                        f"Embedding model mismatch: old='{old_b.embedding_model}' vs new='{new_b.embedding_model}'. "
-                        f"Belief may be from a different embedding version. Skipping comparison."
+                        f"Embedding model mismatch: old='{old_b.embedding_model}' "
+                        f"vs new='{new_b.embedding_model}'. "
+                        f"Belief may be from a different embedding version. "
+                        f"Skipping comparison."
                     )
                     continue
 
-                is_contradiction, score, reason = await self.judge.check(old_b, new_b)
+                is_contradiction, score, reason = (
+                    await self.judge.check(old_b, new_b)
+                )
                 if is_contradiction:
                     contradictions.append((old_b, new_b, score, reason))
 
@@ -168,17 +175,19 @@ class ContradictionDetector:
         
         Returns:
             - List of contradictions (old, new, score, reason)
-            - List of new beliefs that are entailed by existing beliefs (duplicates to skip)
+            - List of new beliefs entailed by existing beliefs (duplicates)
         
-        Entailment check: if judge returns relationship="entailment" with score >= entailment_threshold,
-        the new belief is semantically entailed by the old belief and should be skipped (it's a duplicate).
+        Entailment check: if judge returns relationship="entailment" with
+        score >= entailment_threshold, the new belief is semantically entailed
+        by the old belief and should be skipped (it's a duplicate).
         
-        Negation check: if belief contains negation tokens, bypasses cosine similarity gate and goes
-        straight to LLM judge to prevent false positives (e.g., "likes X" vs "doesn't like X").
+        Negation check: if belief contains negation tokens, bypasses cosine
+        similarity gate and goes straight to LLM judge to prevent false
+        positives (e.g., "likes X" vs "doesn't like X").
         
-        Guards against embedding dimension mismatch: if old and new beliefs have
-        different embedding dimensions, skips cosine similarity check and goes
-        straight to LLM judge to avoid silent corruption.
+        Guards against embedding dimension mismatch: if old and new beliefs
+        have different embedding dimensions, skips cosine similarity check
+        and goes straight to LLM judge to avoid silent corruption.
         """
         contradictions = []
         duplicates_to_skip = []
@@ -187,7 +196,7 @@ class ContradictionDetector:
             if not new_b.embedding:
                 continue
 
-            # Check if the new belief contains negation - if so, bypass cosine gate
+            # Check if the new belief contains negation - if so, bypass cosine
             new_b_text = f"{new_b.predicate} {new_b.value}"
             has_new_negation = has_negation(new_b_text)
 
@@ -207,77 +216,119 @@ class ContradictionDetector:
                     and old_b.embedding_model != new_b.embedding_model
                 ):
                     logger.warning(
-                        f"Embedding model mismatch: old='{old_b.embedding_model}' vs new='{new_b.embedding_model}'. "
-                        f"Belief may be from a different embedding version. Skipping vector comparison, using LLM judge instead."
+                        f"Embedding model mismatch: old='{old_b.embedding_model}' "
+                        f"vs new='{new_b.embedding_model}'. "
+                        f"Belief may be from a different embedding version. "
+                        f"Skipping vector comparison, using LLM judge instead."
                     )
                     # Skip cosine gate entirely, go straight to LLM judge
-                    is_contradiction, score, reason = await self.judge.check(old_b, new_b)
+                    is_contradiction, score, reason = (
+                        await self.judge.check(old_b, new_b)
+                    )
                     if is_contradiction:
                         contradictions.append((old_b, new_b, score, reason))
-                    elif reason and "entailment" in reason.lower() and score >= self.config.entailment_threshold:
+                    elif (
+                        reason
+                        and "entailment" in reason.lower()
+                        and score >= self.config.entailment_threshold
+                    ):
                         logger.debug(
-                            f"Detected entailment (via model mismatch fallback): '{new_b.value}' entailed by '{old_b.value}' "
-                            f"(score: {score:.2f}). Skipping duplicate."
+                            f"Detected entailment (via model mismatch "
+                            f"fallback): '{new_b.value}' entailed by "
+                            f"'{old_b.value}' (score: {score:.2f}). "
+                            f"Skipping duplicate."
                         )
                         duplicates_to_skip.append(new_b)
                     continue
 
                 # Guard against embedding dimension mismatch
-                if old_b.embedding_dim and new_b.embedding_dim and old_b.embedding_dim != new_b.embedding_dim:
+                if (
+                    old_b.embedding_dim
+                    and new_b.embedding_dim
+                    and old_b.embedding_dim != new_b.embedding_dim
+                ):
                     logger.warning(
                         f"Embedding dimension mismatch for '{old_b.subject}': "
-                        f"old={old_b.embedding_dim}D vs new={new_b.embedding_dim}D. "
-                        f"This likely indicates embedding model upgrade. Skipping vector comparison, using LLM judge instead."
+                        f"old={old_b.embedding_dim}D vs "
+                        f"new={new_b.embedding_dim}D. "
+                        f"This likely indicates embedding model upgrade. "
+                        f"Skipping vector comparison, using LLM judge instead."
                     )
                     # Skip cosine gate entirely, go straight to LLM judge
-                    is_contradiction, score, reason = await self.judge.check(old_b, new_b)
+                    is_contradiction, score, reason = (
+                        await self.judge.check(old_b, new_b)
+                    )
                     if is_contradiction:
                         contradictions.append((old_b, new_b, score, reason))
-                    elif reason and "entailment" in reason.lower() and score >= self.config.entailment_threshold:
+                    elif (
+                        reason
+                        and "entailment" in reason.lower()
+                        and score >= self.config.entailment_threshold
+                    ):
                         logger.debug(
-                            f"Detected entailment (via dimension mismatch fallback): '{new_b.value}' entailed by '{old_b.value}' "
-                            f"(score: {score:.2f}). Skipping duplicate."
+                            f"Detected entailment (via dimension mismatch "
+                            f"fallback): '{new_b.value}' entailed by "
+                            f"'{old_b.value}' (score: {score:.2f}). "
+                            f"Skipping duplicate."
                         )
                         duplicates_to_skip.append(new_b)
                     continue
 
-                # Check for negation in either belief - if found, bypass cosine gate
+                # Check for negation in either belief - if found, bypass cosine
                 old_b_text = f"{old_b.predicate} {old_b.value}"
                 has_old_negation = has_negation(old_b_text)
-                
+
                 if has_new_negation or has_old_negation:
                     logger.debug(
-                        f"Negation detected in belief (new: {has_new_negation}, old: {has_old_negation}). "
-                        f"Bypassing cosine similarity gate, going straight to LLM judge."
+                        f"Negation detected in belief "
+                        f"(new: {has_new_negation}, old: {has_old_negation}). "
+                        f"Bypassing cosine similarity gate, using LLM judge."
                     )
-                    # Skip cosine gate, use LLM judge directly to avoid false positives
-                    is_contradiction, score, reason = await self.judge.check(old_b, new_b)
+                    # Skip cosine gate, use LLM judge directly
+                    is_contradiction, score, reason = (
+                        await self.judge.check(old_b, new_b)
+                    )
                     if is_contradiction:
                         contradictions.append((old_b, new_b, score, reason))
-                        logger.debug(f"Detected negation-related contradiction: '{old_b.value}' vs '{new_b.value}'")
-                    elif reason and "entailment" in reason.lower() and score >= self.config.entailment_threshold:
                         logger.debug(
-                            f"Detected entailment (negation path): '{new_b.value}' entailed by '{old_b.value}' "
+                            f"Detected negation-related contradiction: "
+                            f"'{old_b.value}' vs '{new_b.value}'"
+                        )
+                    elif (
+                        reason
+                        and "entailment" in reason.lower()
+                        and score >= self.config.entailment_threshold
+                    ):
+                        logger.debug(
+                            f"Detected entailment (negation path): "
+                            f"'{new_b.value}' entailed by '{old_b.value}' "
                             f"(score: {score:.2f}). Skipping duplicate."
                         )
                         duplicates_to_skip.append(new_b)
                     continue
 
                 # Normal path: cosine similarity check
-                is_contradiction, score, reason = await self.judge.check(old_b, new_b)
-                
+                is_contradiction, score, reason = (
+                    await self.judge.check(old_b, new_b)
+                )
+
                 if is_contradiction:
                     contradictions.append((old_b, new_b, score, reason))
-                    logger.debug(f"Detected contradiction: '{old_b.value}' vs '{new_b.value}' (score: {score:.2f})")
-                    
-                # Check for entailment - new belief is semantically entailed by existing belief
-                # The judge returns relationship types: "contradiction", "entailment", "neutral"
-                # If the judge explicitly identified entailment, use that. Otherwise fall back to checking reason string.
+                    logger.debug(
+                        f"Detected contradiction: '{old_b.value}' vs "
+                        f"'{new_b.value}' (score: {score:.2f})"
+                    )
+
+                # Check for entailment - new belief semantically entailed
+                # Judge returns types: "contradiction", "entailment", "neutral"
+                # If judge identified entailment, use that. Otherwise fall back
+                # to checking reason string.
                 elif score >= self.config.entailment_threshold:
-                    # Check if reason/judge response indicates entailment relationship
+                    # Check if reason/judge response indicates entailment
                     if reason and "entailment" in reason.lower():
                         logger.debug(
-                            f"Detected entailment: '{new_b.value}' semantically entailed by '{old_b.value}' "
+                            f"Detected entailment: '{new_b.value}' "
+                            f"semantically entailed by '{old_b.value}' "
                             f"(score: {score:.2f}). Skipping duplicate."
                         )
                         duplicates_to_skip.append(new_b)
