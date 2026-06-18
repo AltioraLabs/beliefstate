@@ -1,4 +1,4 @@
-from typing import List, Any
+from typing import List, Optional, Any
 from beliefstate.store.base import Store
 from beliefstate.models import Belief
 
@@ -9,7 +9,11 @@ except ImportError:
 
 
 class RedisStore(Store):
-    """Redis-based asynchronous storage for beliefs."""
+    """Redis-based asynchronous storage for beliefs.
+    
+    FUTURE OPTIMIZATION: Use binary format (struct.pack float32) for embeddings to reduce storage by ~75%.
+    Current implementation stores embeddings as JSON for easier testing and debugging.
+    """
 
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
         self.redis_url = redis_url
@@ -33,6 +37,11 @@ class RedisStore(Store):
         await self._client.hset(
             self._get_key(session_id), field, belief.model_dump_json()
         )
+        
+        # Optionally set TTL on the hash (from config or override)
+        # Note: Redis TTL applies to the entire key, not individual fields
+        # If you want per-belief TTL, store each belief as a separate key
+        # For now, we store as a hash but don't auto-expire by default
 
     async def get_beliefs(self, session_id: str) -> List[Belief]:
         if not self._client:
@@ -94,3 +103,40 @@ class RedisStore(Store):
             )
 
         await self._client.delete(self._get_key(session_id))
+
+    async def set_session_ttl(self, session_id: str, ttl_seconds: int) -> None:
+        """Set time-to-live (expiration) for all beliefs in a session.
+        
+        When TTL expires, Redis automatically deletes the entire session hash.
+        
+        Args:
+            session_id: Session ID
+            ttl_seconds: Time in seconds before beliefs expire
+        
+        Example:
+            await store.set_session_ttl("user-123", 86400)  # 24 hours
+        """
+        if not self._client:
+            raise RuntimeError(
+                "redis package is not installed. Run `pip install redis`"
+            )
+        
+        key = self._get_key(session_id)
+        await self._client.expire(key, ttl_seconds)
+
+    async def get_session_ttl(self, session_id: str) -> Optional[int]:
+        """Get remaining TTL for a session's beliefs in seconds.
+        
+        Returns:
+            - Positive int: seconds until expiration
+            - -1: key exists but no TTL is set
+            - -2 or None: key doesn't exist
+        """
+        if not self._client:
+            raise RuntimeError(
+                "redis package is not installed. Run `pip install redis`"
+            )
+        
+        key = self._get_key(session_id)
+        ttl = await self._client.ttl(key)
+        return ttl if ttl >= -1 else None

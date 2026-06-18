@@ -1,6 +1,19 @@
+import asyncio
+import logging
+import os
 from typing import Any, Dict, List, Optional
 from beliefstate.adapters.base import ProviderAdapter
+from beliefstate.adapters.common import (
+    RetryConfig,
+    retry_with_backoff,
+    with_timeout,
+    validate_api_key,
+    StructuredLogger,
+    PermanentError,
+)
 from beliefstate.call import LLMCall, LLMResponse
+
+logger = logging.getLogger(__name__)
 
 try:
     from google import genai
@@ -11,7 +24,19 @@ except ImportError:
 
 
 class GeminiAdapter(ProviderAdapter):
-    """Adapter for Google GenAI API (google-genai)."""
+    """Adapter for Google GenAI API (google-genai) with production-ready robustness.
+    
+    Features:
+    - Automatic retry with exponential backoff for transient errors
+    - Configurable request timeouts
+    - Structured logging for debugging
+    - Health check mechanism
+    - Safety settings handling
+    - API key validation at initialization
+    
+    NOTE: Uses google-genai library (experimental). For production, consider
+    using the stable google-cloud-aiplatform library.
+    """
 
     def __init__(
         self,
@@ -19,10 +44,17 @@ class GeminiAdapter(ProviderAdapter):
         model: str = "gemini-2.0-flash",
         embed_model: str = "text-embedding-004",
         embed_kwargs: Optional[Dict[str, Any]] = None,
+        timeout: float = 30.0,
+        retry_config: Optional[RetryConfig] = None,
+        safety_settings: Optional[List[Dict[str, str]]] = None,
     ):
         self.model = model
         self.embed_model = embed_model
         self.embed_kwargs = embed_kwargs or {}
+        self.timeout = timeout
+        self.retry_config = retry_config or RetryConfig()
+        self.safety_settings = safety_settings or []
+        self.log = StructuredLogger(__name__, "Gemini")
 
         if client:
             self.client = client
@@ -30,9 +62,20 @@ class GeminiAdapter(ProviderAdapter):
             try:
                 from google import genai
 
-                self.client = genai.Client()
-            except (ImportError, Exception):
+                api_key = os.getenv("GOOGLE_API_KEY")
+                validate_api_key(api_key, "Google Gemini")
+                self.client = genai.Client(api_key=api_key)
+                self.log.info(
+                    "Initialized",
+                    model=model,
+                    embed_model=embed_model,
+                    note="Using experimental google-genai library",
+                )
+            except ImportError:
+                self.log.error("google-genai SDK not installed")
                 self.client = None
+            except ValueError as e:
+                self.log.error(f"Configuration error: {e}")
 
     def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
         contents = kwargs.get("contents", [])
@@ -81,14 +124,10 @@ class GeminiAdapter(ProviderAdapter):
 
         return LLMResponse(text=text, raw_response=response)
 
-    async def generate(
+    async def _generate_with_backoff(
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
-        if not self.client:
-            raise RuntimeError(
-                "Google GenAI client not installed. Install with `pip install google-genai`."
-            )
-
+        """Internal method that actually calls the API."""
         from google.genai import types
 
         # Combine messages into a simple string for internal tracker calls (like json extraction)
@@ -110,6 +149,10 @@ class GeminiAdapter(ProviderAdapter):
                 except Exception:
                     config_args["response_schema"] = response_format
 
+        # Add safety settings
+        if self.safety_settings:
+            config_args["safety_settings"] = self.safety_settings
+
         generate_config = (
             types.GenerateContentConfig(**config_args) if config_args else None
         )
@@ -119,11 +162,89 @@ class GeminiAdapter(ProviderAdapter):
         )
         return self.to_llm_response(response)
 
+    async def generate(
+        self, call: LLMCall, response_format: Optional[Any] = None
+    ) -> LLMResponse:
+        """Generate a response with automatic retry and timeout handling.
+        
+        Args:
+            call: LLMCall with messages and parameters
+            response_format: Optional response schema (for structured output)
+            
+        Returns:
+            LLMResponse with generated text
+            
+        Raises:
+            RuntimeError: If Gemini client is not configured
+            asyncio.TimeoutError: If request exceeds timeout
+            PermanentError: If error is not transient
+        """
+        if not self.client:
+            raise RuntimeError(
+                "Google GenAI client not installed. Install with `pip install google-genai`."
+            )
+
+        try:
+            async def api_call() -> LLMResponse:
+                return await retry_with_backoff(
+                    self._generate_with_backoff,
+                    call,
+                    response_format,
+                    config=self.retry_config,
+                )
+
+            result = await with_timeout(
+                api_call(),
+                self.timeout * (self.retry_config.max_retries + 1),
+                "Gemini generate",
+            )
+            return result
+
+        except PermanentError:
+            self.log.error("Generate failed with permanent error", model=self.model)
+            raise
+        except asyncio.TimeoutError:
+            self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
+            raise
+        except Exception as e:
+            self.log.error("Generate failed unexpectedly", error=str(e), model=self.model)
+            raise
+
+    async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
+        """Internal method that actually calls the embeddings API."""
+        kwargs = {"model": self.embed_model, "contents": texts}
+        if self.embed_kwargs:
+            kwargs.update(self.embed_kwargs)
+
+        response = await self.client.aio.models.embed_content(**kwargs)
+        return [list(emb.values) for emb in response.embeddings]
+
     async def get_embedding(self, text: str) -> List[float]:
+        """Get embedding for a single text.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Embedding vector
+        """
         res = await self.get_embeddings([text])
         return res[0]
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings for multiple texts with automatic retry and timeout.
+        
+        Args:
+            texts: List of texts to embed
+            
+        Returns:
+            List of embedding vectors
+            
+        Raises:
+            RuntimeError: If Gemini client is not configured
+            asyncio.TimeoutError: If request exceeds timeout
+            PermanentError: If error is not transient
+        """
         if not self.client:
             raise RuntimeError(
                 "Google GenAI client not installed. Install with `pip install google-genai`."
@@ -131,9 +252,67 @@ class GeminiAdapter(ProviderAdapter):
         if not texts:
             return []
 
-        kwargs = {"model": self.embed_model, "contents": texts}
-        if self.embed_kwargs:
-            kwargs.update(self.embed_kwargs)
+        try:
+            async def api_call() -> List[List[float]]:
+                return await retry_with_backoff(
+                    self._get_embeddings_with_backoff,
+                    texts,
+                    config=self.retry_config,
+                )
 
-        response = await self.client.aio.models.embed_content(**kwargs)
-        return [list(emb.values) for emb in response.embeddings]
+            result = await with_timeout(
+                api_call(),
+                self.timeout * (self.retry_config.max_retries + 1),
+                f"Gemini embeddings ({len(texts)} texts)",
+            )
+            return result
+
+        except PermanentError:
+            self.log.error(
+                "Get embeddings failed with permanent error",
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+        except asyncio.TimeoutError:
+            self.log.error(
+                "Get embeddings timed out",
+                timeout=self.timeout,
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+        except Exception as e:
+            self.log.error(
+                "Get embeddings failed unexpectedly",
+                error=str(e),
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+
+    async def health_check(self) -> bool:
+        """Check if Gemini API is accessible and healthy.
+        
+        Returns:
+            True if healthy, False otherwise
+        """
+        if not self.client:
+            self.log.warning("Health check failed: client not configured")
+            return False
+
+        try:
+            # Try to generate minimal content with a short timeout
+            await with_timeout(
+                self.client.aio.models.generate_content(
+                    model=self.model,
+                    contents="ok",
+                ),
+                timeout_seconds=5.0,
+                operation_name="Gemini health check",
+            )
+            self.log.debug("Health check passed")
+            return True
+        except Exception as e:
+            self.log.warning(f"Health check failed: {e}")
+            return False

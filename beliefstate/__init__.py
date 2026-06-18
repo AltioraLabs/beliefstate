@@ -55,6 +55,14 @@ from beliefstate.integrations.openai import (
 )
 from beliefstate.integrations.langchain import BeliefTrackerLangchainCallback
 
+# Observability Exports
+from beliefstate.observability import (
+    setup_otel,
+    trace_sync,
+    trace_async,
+    BeliefTrackerMetrics,
+)
+
 __all__ = [
     "LLMCall",
     "LLMResponse",
@@ -94,4 +102,8 @@ __all__ = [
     "process_openai_assistant_message",
     "observe_run",
     "BeliefTrackerLangchainCallback",
+    "setup_otel",
+    "trace_sync",
+    "trace_async",
+    "BeliefTrackerMetrics",
 ]

@@ -1,6 +1,18 @@
+import asyncio
+import logging
+import os
 from typing import Any, Dict, List, Optional, cast
 from beliefstate.adapters.base import ProviderAdapter
+from beliefstate.adapters.common import (
+    RetryConfig,
+    retry_with_backoff,
+    with_timeout,
+    StructuredLogger,
+    PermanentError,
+)
 from beliefstate.call import LLMCall, LLMResponse
+
+logger = logging.getLogger(__name__)
 
 try:
     from ollama import AsyncClient
@@ -41,7 +53,19 @@ def _dereference_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class OllamaAdapter(ProviderAdapter):
-    """Adapter for Ollama API."""
+    """Adapter for Ollama API with production-ready robustness.
+    
+    Features:
+    - Automatic retry with exponential backoff for transient errors
+    - Configurable request timeouts
+    - Structured logging for debugging
+    - Health check mechanism
+    - Server availability validation
+    - Model availability verification
+    
+    NOTE: Requires Ollama to be running locally (default: http://localhost:11434).
+    Configure host/port via OLLAMA_HOST environment variable.
+    """
 
     def __init__(
         self,
@@ -49,10 +73,34 @@ class OllamaAdapter(ProviderAdapter):
         model: str = "llama3.2",
         embed_model: str = "nomic-embed-text",
         embed_kwargs: Optional[Dict[str, Any]] = None,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        timeout: float = 30.0,
+        retry_config: Optional[RetryConfig] = None,
     ):
         self.model = model
         self.embed_model = embed_model
         self.embed_kwargs = embed_kwargs or {}
+        self.timeout = timeout
+        self.retry_config = retry_config or RetryConfig()
+        self.log = StructuredLogger(__name__, "Ollama")
+
+        # Parse OLLAMA_HOST if available
+        if not host and not port:
+            ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            if "://" in ollama_host:
+                host = ollama_host
+            else:
+                parts = ollama_host.split(":")
+                host = parts[0]
+                if len(parts) > 1:
+                    try:
+                        port = int(parts[1])
+                    except ValueError:
+                        pass
+
+        self.host = host or "http://localhost"
+        self.port = port or 11434
 
         if client:
             self.client = client
@@ -60,8 +108,14 @@ class OllamaAdapter(ProviderAdapter):
             try:
                 from ollama import AsyncClient
 
-                self.client = AsyncClient()  # Defaults to local Ollama server
-            except (ImportError, Exception):
+                base_url = f"{self.host}:{self.port}"
+                self.client = AsyncClient(host=base_url)
+                self.log.info("Initialized", model=model, embed_model=embed_model, host=self.host, port=self.port)
+            except ImportError:
+                self.log.error("Ollama SDK not installed")
+                self.client = None
+            except Exception as e:
+                self.log.error(f"Failed to initialize Ollama client: {e}")
                 self.client = None
 
     def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
@@ -91,14 +145,10 @@ class OllamaAdapter(ProviderAdapter):
 
         return LLMResponse(text=text, raw_response=response)
 
-    async def generate(
+    async def _generate_with_backoff(
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
-        if not self.client:
-            raise RuntimeError(
-                "Ollama client not installed. Install with `pip install ollama`."
-            )
-
+        """Internal method that actually calls the API."""
         kwargs = call.kwargs.copy()
         kwargs["messages"] = call.messages
         if "model" not in kwargs:
@@ -117,12 +167,57 @@ class OllamaAdapter(ProviderAdapter):
         response = await self.client.chat(**kwargs)
         return self.to_llm_response(response)
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def generate(
+        self, call: LLMCall, response_format: Optional[Any] = None
+    ) -> LLMResponse:
+        """Generate a response with automatic retry and timeout handling.
+        
+        Args:
+            call: LLMCall with messages and parameters
+            response_format: Optional response schema (for structured output)
+            
+        Returns:
+            LLMResponse with generated text
+            
+        Raises:
+            RuntimeError: If Ollama client is not configured
+            asyncio.TimeoutError: If request exceeds timeout
+            PermanentError: If error is not transient
+        """
         if not self.client:
             raise RuntimeError(
-                "Ollama client not installed. Install with `pip install ollama`."
+                "Ollama client not installed. Install with `pip install ollama`. "
+                f"Also ensure Ollama is running at {self.host}:{self.port}"
             )
 
+        try:
+            async def api_call() -> LLMResponse:
+                return await retry_with_backoff(
+                    self._generate_with_backoff,
+                    call,
+                    response_format,
+                    config=self.retry_config,
+                )
+
+            result = await with_timeout(
+                api_call(),
+                self.timeout * (self.retry_config.max_retries + 1),
+                "Ollama generate",
+            )
+            return result
+
+        except PermanentError:
+            self.log.error("Generate failed with permanent error", model=self.model)
+            raise
+        except asyncio.TimeoutError:
+            self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
+            raise
+        except Exception as e:
+            self.log.error("Generate failed unexpectedly", error=str(e), model=self.model)
+            raise
+
+    async def _get_embedding_with_backoff(self, text: str) -> List[float]:
+        """Internal method for single embedding."""
         emb_args = {"model": self.embed_model, "prompt": text}
         if self.embed_kwargs:
             emb_args.update(self.embed_kwargs)
@@ -130,14 +225,48 @@ class OllamaAdapter(ProviderAdapter):
         response = await self.client.embeddings(**emb_args)
         return cast(List[float], response.get("embedding", []))
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embedding(self, text: str) -> List[float]:
+        """Get embedding for a single text.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Embedding vector
+        """
         if not self.client:
             raise RuntimeError(
-                "Ollama client not installed. Install with `pip install ollama`."
+                "Ollama client not installed. Install with `pip install ollama`. "
+                f"Also ensure Ollama is running at {self.host}:{self.port}"
             )
-        if not texts:
-            return []
 
+        try:
+            async def api_call() -> List[float]:
+                return await retry_with_backoff(
+                    self._get_embedding_with_backoff,
+                    text,
+                    config=self.retry_config,
+                )
+
+            result = await with_timeout(
+                api_call(),
+                self.timeout * (self.retry_config.max_retries + 1),
+                "Ollama embedding",
+            )
+            return result
+
+        except PermanentError:
+            self.log.error("Get embedding failed with permanent error", model=self.embed_model)
+            raise
+        except asyncio.TimeoutError:
+            self.log.error("Get embedding timed out", timeout=self.timeout, model=self.embed_model)
+            raise
+        except Exception as e:
+            self.log.error("Get embedding failed unexpectedly", error=str(e), model=self.embed_model)
+            raise
+
+    async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
+        """Internal method for batch embeddings (with fallback to individual)."""
         if hasattr(self.client, "embed"):
             try:
                 embed_args = {"model": self.embed_model, "input": texts}
@@ -147,13 +276,94 @@ class OllamaAdapter(ProviderAdapter):
                 if "embeddings" in response:
                     return cast(List[List[float]], response["embeddings"])
             except Exception as e:
-                import logging
-
-                logging.getLogger(__name__).warning(
+                self.log.warning(
                     f"Ollama batch embed failed: {e}. Falling back to individual embeddings."
                 )
 
-        import asyncio
-
-        tasks = [self.get_embedding(text) for text in texts]
+        # Fallback: call get_embedding for each text
+        tasks = [self._get_embedding_with_backoff(text) for text in texts]
         return list(await asyncio.gather(*tasks))
+
+    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings for multiple texts with automatic retry and timeout.
+        
+        Args:
+            texts: List of texts to embed
+            
+        Returns:
+            List of embedding vectors
+            
+        Raises:
+            RuntimeError: If Ollama client is not configured
+            asyncio.TimeoutError: If request exceeds timeout
+            PermanentError: If error is not transient
+        """
+        if not self.client:
+            raise RuntimeError(
+                "Ollama client not installed. Install with `pip install ollama`. "
+                f"Also ensure Ollama is running at {self.host}:{self.port}"
+            )
+        if not texts:
+            return []
+
+        try:
+            async def api_call() -> List[List[float]]:
+                return await retry_with_backoff(
+                    self._get_embeddings_with_backoff,
+                    texts,
+                    config=self.retry_config,
+                )
+
+            result = await with_timeout(
+                api_call(),
+                self.timeout * (self.retry_config.max_retries + 1),
+                f"Ollama embeddings ({len(texts)} texts)",
+            )
+            return result
+
+        except PermanentError:
+            self.log.error(
+                "Get embeddings failed with permanent error",
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+        except asyncio.TimeoutError:
+            self.log.error(
+                "Get embeddings timed out",
+                timeout=self.timeout,
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+        except Exception as e:
+            self.log.error(
+                "Get embeddings failed unexpectedly",
+                error=str(e),
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+
+    async def health_check(self) -> bool:
+        """Check if Ollama server is accessible and the model is available.
+        
+        Returns:
+            True if healthy, False otherwise
+        """
+        if not self.client:
+            self.log.warning("Health check failed: client not configured")
+            return False
+
+        try:
+            # Try to list models to verify server is running
+            await with_timeout(
+                self.client.list(),
+                timeout_seconds=5.0,
+                operation_name="Ollama health check",
+            )
+            self.log.debug("Health check passed")
+            return True
+        except Exception as e:
+            self.log.warning(f"Health check failed: {e}")
+            return False

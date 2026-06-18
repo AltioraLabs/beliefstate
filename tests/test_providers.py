@@ -25,6 +25,9 @@ def test_protocol_runtime_checks() -> None:
         async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
             return [[0.1]]
 
+        async def health_check(self) -> bool:
+            return True
+
     p = MockValidProvider()
     assert isinstance(p, ProviderAdapter)
 

@@ -1,6 +1,17 @@
+import asyncio
+import logging
 from typing import Any, List, Optional, Dict
 from beliefstate.adapters.base import ProviderAdapter
+from beliefstate.adapters.common import (
+    RetryConfig,
+    retry_with_backoff,
+    with_timeout,
+    StructuredLogger,
+    PermanentError,
+)
 from beliefstate.call import LLMCall, LLMResponse
+
+logger = logging.getLogger(__name__)
 
 try:
     import litellm
@@ -11,13 +22,35 @@ except ImportError:
 
 
 class LiteLLMAdapter(ProviderAdapter):
-    """Adapter for LiteLLM API, routing to any provider (Azure, Bedrock, OpenAI, etc.) via LiteLLM."""
+    """Adapter for LiteLLM API with production-ready robustness.
+    
+    Routes to any provider (Azure, Bedrock, OpenAI, Anthropic, etc.) via LiteLLM.
+    
+    Features:
+    - Automatic retry with exponential backoff for transient errors
+    - Configurable request timeouts
+    - Structured logging for debugging
+    - Health check mechanism
+    - Support for any LiteLLM-supported provider
+    
+    LiteLLM supports 100+ providers including:
+    - OpenAI, Azure OpenAI
+    - Anthropic Claude
+    - Google Gemini
+    - AWS Bedrock
+    - Mistral, Groq, and more
+    
+    Configure the model using format: "provider/model-name" or
+    use LiteLLM aliases like "gpt-4", "claude-3-sonnet", etc.
+    """
 
     def __init__(
         self,
         model: str = "gpt-4o-mini",
         embed_model: str = "text-embedding-3-small",
         embed_kwargs: Optional[Dict[str, Any]] = None,
+        timeout: float = 30.0,
+        retry_config: Optional[RetryConfig] = None,
         **kwargs: Any,
     ):
         if not HAS_LITELLM:
@@ -27,7 +60,11 @@ class LiteLLMAdapter(ProviderAdapter):
         self.model = model
         self.embed_model = embed_model
         self.embed_kwargs = embed_kwargs or {}
+        self.timeout = timeout
+        self.retry_config = retry_config or RetryConfig()
         self.kwargs = kwargs
+        self.log = StructuredLogger(__name__, "LiteLLM")
+        self.log.info("Initialized", model=model, embed_model=embed_model)
 
     def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
         messages = kwargs.get("messages", [])
@@ -59,12 +96,10 @@ class LiteLLMAdapter(ProviderAdapter):
 
         return LLMResponse(text=text, raw_response=response)
 
-    async def generate(
+    async def _generate_with_backoff(
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
-        if not HAS_LITELLM:
-            raise ImportError("LiteLLM is not installed.")
-
+        """Internal method that actually calls the API."""
         kwargs = self.kwargs.copy()
         kwargs.update(call.kwargs)
         kwargs["messages"] = call.messages
@@ -86,16 +121,54 @@ class LiteLLMAdapter(ProviderAdapter):
         response = await litellm.acompletion(**kwargs)
         return self.to_llm_response(response)
 
-    async def get_embedding(self, text: str) -> List[float]:
-        res = await self.get_embeddings([text])
-        return res[0]
-
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def generate(
+        self, call: LLMCall, response_format: Optional[Any] = None
+    ) -> LLMResponse:
+        """Generate a response with automatic retry and timeout handling.
+        
+        Args:
+            call: LLMCall with messages and parameters
+            response_format: Optional response schema (for structured output)
+            
+        Returns:
+            LLMResponse with generated text
+            
+        Raises:
+            ImportError: If LiteLLM is not installed
+            asyncio.TimeoutError: If request exceeds timeout
+            PermanentError: If error is not transient
+        """
         if not HAS_LITELLM:
             raise ImportError("LiteLLM is not installed.")
-        if not texts:
-            return []
 
+        try:
+            async def api_call() -> LLMResponse:
+                return await retry_with_backoff(
+                    self._generate_with_backoff,
+                    call,
+                    response_format,
+                    config=self.retry_config,
+                )
+
+            result = await with_timeout(
+                api_call(),
+                self.timeout * (self.retry_config.max_retries + 1),
+                f"LiteLLM generate via {self.model}",
+            )
+            return result
+
+        except PermanentError:
+            self.log.error("Generate failed with permanent error", model=self.model)
+            raise
+        except asyncio.TimeoutError:
+            self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
+            raise
+        except Exception as e:
+            self.log.error("Generate failed unexpectedly", error=str(e), model=self.model)
+            raise
+
+    async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
+        """Internal method that actually calls the embeddings API."""
         kwargs = self.kwargs.copy()
         if self.embed_kwargs:
             kwargs.update(self.embed_kwargs)
@@ -111,3 +184,100 @@ class LiteLLMAdapter(ProviderAdapter):
             else:
                 embeddings.append(getattr(item, "embedding"))
         return embeddings
+
+    async def get_embedding(self, text: str) -> List[float]:
+        """Get embedding for a single text.
+        
+        Args:
+            text: Text to embed
+            
+        Returns:
+            Embedding vector
+        """
+        res = await self.get_embeddings([text])
+        return res[0]
+
+    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings for multiple texts with automatic retry and timeout.
+        
+        Args:
+            texts: List of texts to embed
+            
+        Returns:
+            List of embedding vectors
+            
+        Raises:
+            ImportError: If LiteLLM is not installed
+            asyncio.TimeoutError: If request exceeds timeout
+            PermanentError: If error is not transient
+        """
+        if not HAS_LITELLM:
+            raise ImportError("LiteLLM is not installed.")
+        if not texts:
+            return []
+
+        try:
+            async def api_call() -> List[List[float]]:
+                return await retry_with_backoff(
+                    self._get_embeddings_with_backoff,
+                    texts,
+                    config=self.retry_config,
+                )
+
+            result = await with_timeout(
+                api_call(),
+                self.timeout * (self.retry_config.max_retries + 1),
+                f"LiteLLM embeddings via {self.embed_model} ({len(texts)} texts)",
+            )
+            return result
+
+        except PermanentError:
+            self.log.error(
+                "Get embeddings failed with permanent error",
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+        except asyncio.TimeoutError:
+            self.log.error(
+                "Get embeddings timed out",
+                timeout=self.timeout,
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+        except Exception as e:
+            self.log.error(
+                "Get embeddings failed unexpectedly",
+                error=str(e),
+                model=self.embed_model,
+                count=len(texts),
+            )
+            raise
+
+    async def health_check(self) -> bool:
+        """Check if LiteLLM routing and the underlying provider are healthy.
+        
+        Returns:
+            True if healthy, False otherwise
+        """
+        if not HAS_LITELLM:
+            self.log.warning("Health check failed: LiteLLM not installed")
+            return False
+
+        try:
+            # Try to route a minimal request
+            await with_timeout(
+                litellm.acompletion(
+                    model=self.model,
+                    messages=[{"role": "user", "content": "ok"}],
+                    max_tokens=5,
+                ),
+                timeout_seconds=5.0,
+                operation_name=f"LiteLLM health check via {self.model}",
+            )
+            self.log.debug("Health check passed")
+            return True
+        except Exception as e:
+            self.log.warning(f"Health check failed: {e}")
+            return False

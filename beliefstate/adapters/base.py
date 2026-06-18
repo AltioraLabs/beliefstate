@@ -4,7 +4,15 @@ from beliefstate.call import LLMCall, LLMResponse
 
 @runtime_checkable
 class ProviderAdapter(Protocol):
-    """Protocol for translating between native SDK formats and our universal models."""
+    """Protocol for translating between native SDK formats and our universal models.
+    
+    All adapters should implement:
+    - to_llm_call: Convert native args to universal LLMCall
+    - to_llm_response: Convert native response to universal LLMResponse
+    - generate: Execute generation with retry and timeout handling
+    - get_embedding/get_embeddings: Generate embeddings
+    - health_check: Verify provider is accessible
+    """
 
     def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
         """Convert native args/kwargs into a universal LLMCall."""
@@ -26,4 +34,12 @@ class ProviderAdapter(Protocol):
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for a list of texts using this provider natively."""
+        ...
+
+    async def health_check(self) -> bool:
+        """Check if the provider is accessible and responding correctly.
+        
+        Returns:
+            True if provider is healthy, False otherwise.
+        """
         ...
