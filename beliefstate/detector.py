@@ -199,8 +199,6 @@ class ContradictionDetector:
                 limit=5,
             )
 
-            is_duplicate = False
-
             for old_b in matched_beliefs:
                 # Guard against embedding model mismatch
                 if (
@@ -221,7 +219,6 @@ class ContradictionDetector:
                             f"Detected entailment (via model mismatch fallback): '{new_b.value}' entailed by '{old_b.value}' "
                             f"(score: {score:.2f}). Skipping duplicate."
                         )
-                        is_duplicate = True
                         duplicates_to_skip.append(new_b)
                     continue
 
@@ -241,7 +238,6 @@ class ContradictionDetector:
                             f"Detected entailment (via dimension mismatch fallback): '{new_b.value}' entailed by '{old_b.value}' "
                             f"(score: {score:.2f}). Skipping duplicate."
                         )
-                        is_duplicate = True
                         duplicates_to_skip.append(new_b)
                     continue
 
@@ -264,7 +260,6 @@ class ContradictionDetector:
                             f"Detected entailment (negation path): '{new_b.value}' entailed by '{old_b.value}' "
                             f"(score: {score:.2f}). Skipping duplicate."
                         )
-                        is_duplicate = True
                         duplicates_to_skip.append(new_b)
                     continue
 
@@ -285,7 +280,6 @@ class ContradictionDetector:
                             f"Detected entailment: '{new_b.value}' semantically entailed by '{old_b.value}' "
                             f"(score: {score:.2f}). Skipping duplicate."
                         )
-                        is_duplicate = True
                         duplicates_to_skip.append(new_b)
                         break
 

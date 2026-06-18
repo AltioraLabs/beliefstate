@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from beliefstate.config import TrackerConfig
 from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.adapters.base import ProviderAdapter
+from beliefstate.models import DeletionReceipt
 from beliefstate.store.base import Store
 from beliefstate.store.sqlite import SQLiteStore
 from beliefstate.extractor import BeliefExtractor
