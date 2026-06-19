@@ -18,9 +18,13 @@ from beliefstate import (
 )
 
 HAS_FASTAPI = FastAPIBeliefTrackerMiddleware is not None and get_session_id is not None
-HAS_FLASK = FlaskBeliefTrackerMiddleware is not None and register_flask_hooks is not None
+HAS_FLASK = (
+    FlaskBeliefTrackerMiddleware is not None and register_flask_hooks is not None
+)
 HAS_LLAMAINDEX = LlamaIndexBeliefTrackerCallback is not None
-HAS_OPENAI_INTEGRATION = process_openai_assistant_message is not None and observe_run is not None
+HAS_OPENAI_INTEGRATION = (
+    process_openai_assistant_message is not None and observe_run is not None
+)
 HAS_LANGCHAIN = BeliefTrackerLangchainCallback is not None
 
 
