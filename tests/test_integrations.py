@@ -6,50 +6,22 @@ from beliefstate import (
     session_context,
 )
 
-# Try to import optional dependencies
-try:
-    from beliefstate import (
-        FastAPIBeliefTrackerMiddleware,
-        get_session_id,
-    )
+from beliefstate import (
+    FastAPIBeliefTrackerMiddleware,
+    get_session_id,
+    FlaskBeliefTrackerMiddleware,
+    register_flask_hooks,
+    LlamaIndexBeliefTrackerCallback,
+    process_openai_assistant_message,
+    observe_run,
+    BeliefTrackerLangchainCallback,
+)
 
-    HAS_FASTAPI = True
-except ImportError:
-    HAS_FASTAPI = False
-
-try:
-    from beliefstate import (
-        FlaskBeliefTrackerMiddleware,
-        register_flask_hooks,
-    )
-
-    HAS_FLASK = True
-except ImportError:
-    HAS_FLASK = False
-
-try:
-    from beliefstate import LlamaIndexBeliefTrackerCallback
-
-    HAS_LLAMAINDEX = True
-except ImportError:
-    HAS_LLAMAINDEX = False
-
-try:
-    from beliefstate import (
-        process_openai_assistant_message,
-        observe_run,
-    )
-
-    HAS_OPENAI_INTEGRATION = True
-except ImportError:
-    HAS_OPENAI_INTEGRATION = False
-
-try:
-    from beliefstate import BeliefTrackerLangchainCallback
-
-    HAS_LANGCHAIN = True
-except ImportError:
-    HAS_LANGCHAIN = False
+HAS_FASTAPI = FastAPIBeliefTrackerMiddleware is not None and get_session_id is not None
+HAS_FLASK = FlaskBeliefTrackerMiddleware is not None and register_flask_hooks is not None
+HAS_LLAMAINDEX = LlamaIndexBeliefTrackerCallback is not None
+HAS_OPENAI_INTEGRATION = process_openai_assistant_message is not None and observe_run is not None
+HAS_LANGCHAIN = BeliefTrackerLangchainCallback is not None
 
 
 # --- FastAPI Middleware & Dependency Tests ---

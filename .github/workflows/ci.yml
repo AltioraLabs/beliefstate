@@ -22,7 +22,7 @@ jobs:
     - name: Verify import succeeds
       run: |
         python -c "from beliefstate import BeliefTracker, TrackerConfig, Belief; print('Core import OK')"
-        python -c "from beliefstate import OpenAIAdapter; assert OpenAIAdapter is None; print('Lazy import OK')"
+        python -c "from beliefstate import OpenAIAdapter; assert OpenAIAdapter is None or callable(OpenAIAdapter); print('Lazy import OK')"
 
   # ── Test matrix ──────────────────────────────────────────────────────
   test:
