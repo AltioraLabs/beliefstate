@@ -12,13 +12,13 @@ class FlaskBeliefTrackerMiddleware(BeliefTrackerWSGIMiddleware):
     """
     Flask-branded WSGI middleware to automatically extract a session ID
     from an incoming request header and set it in the tracker's context.
-    
+
     Features:
     - Automatic session ID extraction from X-Session-ID header
     - Request-scoped context propagation using Flask g
     - Structured logging
     - Error handling with graceful degradation
-    
+
     Usage:
         app = Flask(__name__)
         app.wsgi_app = FlaskBeliefTrackerMiddleware(app.wsgi_app)
@@ -35,18 +35,18 @@ def register_flask_hooks(app: Flask, header_name: str = "X-Session-ID") -> None:
     Helper to register request hooks directly on a Flask application instance.
     This sets the session ID globally within the request context using flask.g
     and binds the ContextVar for the duration of the request.
-    
+
     Features:
     - Automatic session ID extraction from headers
     - Request-scoped context propagation
     - Structured logging
     - Graceful error handling
     - Thread-safe using Flask's g object
-    
+
     Usage:
         app = Flask(__name__)
         register_flask_hooks(app)
-        
+
         @app.route("/chat", methods=["POST"])
         def chat():
             # Session context is automatically available
@@ -88,7 +88,7 @@ def register_flask_hooks(app: Flask, header_name: str = "X-Session-ID") -> None:
             if token:
                 session_context.reset(token)
                 log.debug("Session context reset", session_id=session_id)
-            
+
             if exception:
                 log.error(
                     "Request ended with exception",

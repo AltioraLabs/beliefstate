@@ -1,4 +1,5 @@
 """Advanced tests for SQLiteStore — context manager, conversations, pruning, stats."""
+
 import pytest
 from datetime import datetime, timezone, timedelta
 
@@ -163,8 +164,15 @@ class TestSQLiteSearchConversation:
     @pytest.mark.asyncio
     async def test_search_within_conversation(self):
         store = SQLiteStore(db_path=":memory:")
-        b1 = _make_belief(value="apples", embedding=[1.0, 0.0, 0.0], conversation_id="c1")
-        b2 = _make_belief(predicate="hates", value="bananas", embedding=[1.0, 0.1, 0.0], conversation_id="c2")
+        b1 = _make_belief(
+            value="apples", embedding=[1.0, 0.0, 0.0], conversation_id="c1"
+        )
+        b2 = _make_belief(
+            predicate="hates",
+            value="bananas",
+            embedding=[1.0, 0.1, 0.0],
+            conversation_id="c2",
+        )
         await store.add_belief("s1", b1)
         await store.add_belief("s1", b2)
 

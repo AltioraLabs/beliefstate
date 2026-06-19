@@ -5,11 +5,14 @@ from pydantic import BaseModel, Field
 
 class DeletionReceipt(BaseModel):
     """Auditable record of a GDPR data deletion request."""
-    
+
     session_id: str = Field(description="Session ID that was deleted")
     beliefs_deleted: int = Field(description="Number of beliefs removed from store")
     deleted_at: datetime = Field(description="UTC timestamp when deletion completed")
-    in_flight_tasks_drained: int = Field(default=0, description="Number of in-flight tasks that were drained before deletion")
+    in_flight_tasks_drained: int = Field(
+        default=0,
+        description="Number of in-flight tasks that were drained before deletion",
+    )
 
 
 class Belief(BaseModel):

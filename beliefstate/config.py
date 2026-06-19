@@ -149,7 +149,8 @@ class TrackerConfig(BaseModel):
         default=0.70, description="Threshold for finding contradictions."
     )
     entailment_threshold: float = Field(
-        default=0.85, description="Threshold for detecting semantic entailment (belief duplication). If new belief is entailed by existing belief with score >= this threshold, skip the new belief."
+        default=0.85,
+        description="Threshold for detecting semantic entailment (belief duplication). If new belief is entailed by existing belief with score >= this threshold, skip the new belief.",
     )
 
     # Prompts

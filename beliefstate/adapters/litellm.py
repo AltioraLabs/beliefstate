@@ -23,23 +23,23 @@ except ImportError:
 
 class LiteLLMAdapter(ProviderAdapter):
     """Adapter for LiteLLM API with production-ready robustness.
-    
+
     Routes to any provider (Azure, Bedrock, OpenAI, Anthropic, etc.) via LiteLLM.
-    
+
     Features:
     - Automatic retry with exponential backoff for transient errors
     - Configurable request timeouts
     - Structured logging for debugging
     - Health check mechanism
     - Support for any LiteLLM-supported provider
-    
+
     LiteLLM supports 100+ providers including:
     - OpenAI, Azure OpenAI
     - Anthropic Claude
     - Google Gemini
     - AWS Bedrock
     - Mistral, Groq, and more
-    
+
     Configure the model using format: "provider/model-name" or
     use LiteLLM aliases like "gpt-4", "claude-3-sonnet", etc.
     """
@@ -125,14 +125,14 @@ class LiteLLMAdapter(ProviderAdapter):
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
-        
+
         Args:
             call: LLMCall with messages and parameters
             response_format: Optional response schema (for structured output)
-            
+
         Returns:
             LLMResponse with generated text
-            
+
         Raises:
             ImportError: If LiteLLM is not installed
             asyncio.TimeoutError: If request exceeds timeout
@@ -142,6 +142,7 @@ class LiteLLMAdapter(ProviderAdapter):
             raise ImportError("LiteLLM is not installed.")
 
         try:
+
             async def api_call() -> LLMResponse:
                 return await retry_with_backoff(
                     self._generate_with_backoff,
@@ -164,7 +165,9 @@ class LiteLLMAdapter(ProviderAdapter):
             self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
             raise
         except Exception as e:
-            self.log.error("Generate failed unexpectedly", error=str(e), model=self.model)
+            self.log.error(
+                "Generate failed unexpectedly", error=str(e), model=self.model
+            )
             raise
 
     async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
@@ -187,10 +190,10 @@ class LiteLLMAdapter(ProviderAdapter):
 
     async def get_embedding(self, text: str) -> List[float]:
         """Get embedding for a single text.
-        
+
         Args:
             text: Text to embed
-            
+
         Returns:
             Embedding vector
         """
@@ -199,13 +202,13 @@ class LiteLLMAdapter(ProviderAdapter):
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for multiple texts with automatic retry and timeout.
-        
+
         Args:
             texts: List of texts to embed
-            
+
         Returns:
             List of embedding vectors
-            
+
         Raises:
             ImportError: If LiteLLM is not installed
             asyncio.TimeoutError: If request exceeds timeout
@@ -217,6 +220,7 @@ class LiteLLMAdapter(ProviderAdapter):
             return []
 
         try:
+
             async def api_call() -> List[List[float]]:
                 return await retry_with_backoff(
                     self._get_embeddings_with_backoff,
@@ -257,7 +261,7 @@ class LiteLLMAdapter(ProviderAdapter):
 
     async def health_check(self) -> bool:
         """Check if LiteLLM routing and the underlying provider are healthy.
-        
+
         Returns:
             True if healthy, False otherwise
         """

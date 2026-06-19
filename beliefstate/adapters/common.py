@@ -29,7 +29,7 @@ class RetryConfig:
 
     def get_delay(self, attempt: int) -> float:
         """Calculate delay for a given attempt number (0-indexed)."""
-        delay = self.initial_delay * (self.exponential_base ** attempt)
+        delay = self.initial_delay * (self.exponential_base**attempt)
         delay = min(delay, self.max_delay)
 
         if self.jitter:
@@ -114,7 +114,9 @@ async def retry_with_backoff(
 
     for attempt in range(config.max_retries + 1):
         try:
-            logger.debug(f"Attempt {attempt + 1}/{config.max_retries + 1}: {coro_func.__name__}")
+            logger.debug(
+                f"Attempt {attempt + 1}/{config.max_retries + 1}: {coro_func.__name__}"
+            )
             result = await coro_func(*args, **kwargs)
             if attempt > 0:
                 logger.info(f"Recovered after {attempt} retries: {coro_func.__name__}")
@@ -159,7 +161,9 @@ def async_retry(config: Optional[RetryConfig] = None) -> Callable:
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return await retry_with_backoff(func, *args, config=config or RetryConfig(), **kwargs)
+            return await retry_with_backoff(
+                func, *args, config=config or RetryConfig(), **kwargs
+            )
 
         return wrapper
 
@@ -229,11 +233,14 @@ async def validate_model_availability(
         True if model is available, False otherwise
     """
     try:
-        models = await with_timeout(list_models_func(), timeout, f"list models from {provider}")
+        models = await with_timeout(
+            list_models_func(), timeout, f"list models from {provider}"
+        )
         if isinstance(models, dict):
             models = models.get("data", [])
         available = any(
-            (isinstance(m, dict) and m.get("id") == model_name) or (hasattr(m, "id") and m.id == model_name)
+            (isinstance(m, dict) and m.get("id") == model_name)
+            or (hasattr(m, "id") and m.id == model_name)
             for m in models
         )
         if available:
@@ -260,7 +267,9 @@ class StructuredLogger:
             msg_parts.append(f"metadata={metadata}")
         message = " ".join(msg_parts)
 
-        getattr(self.logger, level)(message, extra={"provider": self.provider, **metadata})
+        getattr(self.logger, level)(
+            message, extra={"provider": self.provider, **metadata}
+        )
 
     def debug(self, operation: str, **metadata: Any) -> None:
         self._log("debug", operation, **metadata)

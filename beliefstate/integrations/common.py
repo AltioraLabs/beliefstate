@@ -19,7 +19,9 @@ class IntegrationLogger:
     def _log(self, level: str, operation: str, **metadata: Any) -> None:
         """Log with structured metadata."""
         msg = f"[{self.integration_type}] {operation}"
-        getattr(self.logger, level)(msg, extra={"integration": self.integration_type, **metadata})
+        getattr(self.logger, level)(
+            msg, extra={"integration": self.integration_type, **metadata}
+        )
 
     def debug(self, operation: str, **metadata: Any) -> None:
         self._log("debug", operation, **metadata)
@@ -45,7 +47,7 @@ class RequestIDGenerator:
 
 def track_request(integration_type: str = "integration") -> Callable:
     """Decorator to track request latency and errors.
-    
+
     Usage:
         @track_request("fastapi")
         async def handle_request():
@@ -60,7 +62,9 @@ def track_request(integration_type: str = "integration") -> Callable:
             start_time = time.time()
 
             try:
-                log.debug("Request started", request_id=request_id, function=func.__name__)
+                log.debug(
+                    "Request started", request_id=request_id, function=func.__name__
+                )
                 result = await func(*args, **kwargs)
                 latency = time.time() - start_time
                 log.info(
@@ -87,7 +91,9 @@ def track_request(integration_type: str = "integration") -> Callable:
             start_time = time.time()
 
             try:
-                log.debug("Request started", request_id=request_id, function=func.__name__)
+                log.debug(
+                    "Request started", request_id=request_id, function=func.__name__
+                )
                 result = func(*args, **kwargs)
                 latency = time.time() - start_time
                 log.info(
@@ -118,13 +124,13 @@ def track_request(integration_type: str = "integration") -> Callable:
 
 def validate_session_id(session_id: Optional[str]) -> str:
     """Validate and normalize a session ID.
-    
+
     Args:
         session_id: Session ID to validate
-        
+
     Returns:
         Valid session ID
-        
+
     Raises:
         ValueError: If session ID is invalid
     """
@@ -135,11 +141,11 @@ def validate_session_id(session_id: Optional[str]) -> str:
 
 def format_error_response(error: Exception, request_id: str) -> dict[str, Any]:
     """Format an exception as a standard error response.
-    
+
     Args:
         error: Exception to format
         request_id: Request ID for correlation
-        
+
     Returns:
         Error response dictionary
     """

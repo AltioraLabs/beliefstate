@@ -25,7 +25,7 @@ except ImportError:
 
 class GeminiAdapter(ProviderAdapter):
     """Adapter for Google GenAI API (google-genai) with production-ready robustness.
-    
+
     Features:
     - Automatic retry with exponential backoff for transient errors
     - Configurable request timeouts
@@ -33,7 +33,7 @@ class GeminiAdapter(ProviderAdapter):
     - Health check mechanism
     - Safety settings handling
     - API key validation at initialization
-    
+
     NOTE: Uses google-genai library (experimental). For production, consider
     using the stable google-cloud-aiplatform library.
     """
@@ -166,14 +166,14 @@ class GeminiAdapter(ProviderAdapter):
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
-        
+
         Args:
             call: LLMCall with messages and parameters
             response_format: Optional response schema (for structured output)
-            
+
         Returns:
             LLMResponse with generated text
-            
+
         Raises:
             RuntimeError: If Gemini client is not configured
             asyncio.TimeoutError: If request exceeds timeout
@@ -185,6 +185,7 @@ class GeminiAdapter(ProviderAdapter):
             )
 
         try:
+
             async def api_call() -> LLMResponse:
                 return await retry_with_backoff(
                     self._generate_with_backoff,
@@ -207,7 +208,9 @@ class GeminiAdapter(ProviderAdapter):
             self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
             raise
         except Exception as e:
-            self.log.error("Generate failed unexpectedly", error=str(e), model=self.model)
+            self.log.error(
+                "Generate failed unexpectedly", error=str(e), model=self.model
+            )
             raise
 
     async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
@@ -221,10 +224,10 @@ class GeminiAdapter(ProviderAdapter):
 
     async def get_embedding(self, text: str) -> List[float]:
         """Get embedding for a single text.
-        
+
         Args:
             text: Text to embed
-            
+
         Returns:
             Embedding vector
         """
@@ -233,13 +236,13 @@ class GeminiAdapter(ProviderAdapter):
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for multiple texts with automatic retry and timeout.
-        
+
         Args:
             texts: List of texts to embed
-            
+
         Returns:
             List of embedding vectors
-            
+
         Raises:
             RuntimeError: If Gemini client is not configured
             asyncio.TimeoutError: If request exceeds timeout
@@ -253,6 +256,7 @@ class GeminiAdapter(ProviderAdapter):
             return []
 
         try:
+
             async def api_call() -> List[List[float]]:
                 return await retry_with_backoff(
                     self._get_embeddings_with_backoff,
@@ -293,7 +297,7 @@ class GeminiAdapter(ProviderAdapter):
 
     async def health_check(self) -> bool:
         """Check if Gemini API is accessible and healthy.
-        
+
         Returns:
             True if healthy, False otherwise
         """

@@ -54,7 +54,7 @@ def _dereference_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
 
 class OllamaAdapter(ProviderAdapter):
     """Adapter for Ollama API with production-ready robustness.
-    
+
     Features:
     - Automatic retry with exponential backoff for transient errors
     - Configurable request timeouts
@@ -62,7 +62,7 @@ class OllamaAdapter(ProviderAdapter):
     - Health check mechanism
     - Server availability validation
     - Model availability verification
-    
+
     NOTE: Requires Ollama to be running locally (default: http://localhost:11434).
     Configure host/port via OLLAMA_HOST environment variable.
     """
@@ -110,7 +110,13 @@ class OllamaAdapter(ProviderAdapter):
 
                 base_url = f"{self.host}:{self.port}"
                 self.client = AsyncClient(host=base_url)
-                self.log.info("Initialized", model=model, embed_model=embed_model, host=self.host, port=self.port)
+                self.log.info(
+                    "Initialized",
+                    model=model,
+                    embed_model=embed_model,
+                    host=self.host,
+                    port=self.port,
+                )
             except ImportError:
                 self.log.error("Ollama SDK not installed")
                 self.client = None
@@ -171,14 +177,14 @@ class OllamaAdapter(ProviderAdapter):
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
-        
+
         Args:
             call: LLMCall with messages and parameters
             response_format: Optional response schema (for structured output)
-            
+
         Returns:
             LLMResponse with generated text
-            
+
         Raises:
             RuntimeError: If Ollama client is not configured
             asyncio.TimeoutError: If request exceeds timeout
@@ -191,6 +197,7 @@ class OllamaAdapter(ProviderAdapter):
             )
 
         try:
+
             async def api_call() -> LLMResponse:
                 return await retry_with_backoff(
                     self._generate_with_backoff,
@@ -213,7 +220,9 @@ class OllamaAdapter(ProviderAdapter):
             self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
             raise
         except Exception as e:
-            self.log.error("Generate failed unexpectedly", error=str(e), model=self.model)
+            self.log.error(
+                "Generate failed unexpectedly", error=str(e), model=self.model
+            )
             raise
 
     async def _get_embedding_with_backoff(self, text: str) -> List[float]:
@@ -227,10 +236,10 @@ class OllamaAdapter(ProviderAdapter):
 
     async def get_embedding(self, text: str) -> List[float]:
         """Get embedding for a single text.
-        
+
         Args:
             text: Text to embed
-            
+
         Returns:
             Embedding vector
         """
@@ -241,6 +250,7 @@ class OllamaAdapter(ProviderAdapter):
             )
 
         try:
+
             async def api_call() -> List[float]:
                 return await retry_with_backoff(
                     self._get_embedding_with_backoff,
@@ -256,13 +266,21 @@ class OllamaAdapter(ProviderAdapter):
             return result
 
         except PermanentError:
-            self.log.error("Get embedding failed with permanent error", model=self.embed_model)
+            self.log.error(
+                "Get embedding failed with permanent error", model=self.embed_model
+            )
             raise
         except asyncio.TimeoutError:
-            self.log.error("Get embedding timed out", timeout=self.timeout, model=self.embed_model)
+            self.log.error(
+                "Get embedding timed out", timeout=self.timeout, model=self.embed_model
+            )
             raise
         except Exception as e:
-            self.log.error("Get embedding failed unexpectedly", error=str(e), model=self.embed_model)
+            self.log.error(
+                "Get embedding failed unexpectedly",
+                error=str(e),
+                model=self.embed_model,
+            )
             raise
 
     async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
@@ -286,13 +304,13 @@ class OllamaAdapter(ProviderAdapter):
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for multiple texts with automatic retry and timeout.
-        
+
         Args:
             texts: List of texts to embed
-            
+
         Returns:
             List of embedding vectors
-            
+
         Raises:
             RuntimeError: If Ollama client is not configured
             asyncio.TimeoutError: If request exceeds timeout
@@ -307,6 +325,7 @@ class OllamaAdapter(ProviderAdapter):
             return []
 
         try:
+
             async def api_call() -> List[List[float]]:
                 return await retry_with_backoff(
                     self._get_embeddings_with_backoff,
@@ -347,7 +366,7 @@ class OllamaAdapter(ProviderAdapter):
 
     async def health_check(self) -> bool:
         """Check if Ollama server is accessible and the model is available.
-        
+
         Returns:
             True if healthy, False otherwise
         """

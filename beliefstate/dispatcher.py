@@ -12,16 +12,16 @@ _global_tracker = None
 
 def register_global_tracker(tracker: Any) -> None:
     """Register the global tracker instance to be used by background workers.
-    
+
     IMPORTANT: Call this in your worker startup script BEFORE processing tasks.
     ContextVar (session_context) does not cross process boundaries, so session_id
     must be explicitly passed through task payloads.
-    
+
     Example:
         # In your celery worker startup (tasks.py or celery config)
         from my_app import tracker
         from beliefstate.dispatcher import register_global_tracker
-        
+
         register_global_tracker(tracker)
     """
     global _global_tracker
@@ -43,11 +43,11 @@ def execute_tracking_task(
     call_dict: Dict[str, Any], response_dict: Dict[str, Any], session_id: str, turn: int
 ) -> None:
     """Worker entrypoint for processing belief tracking tasks.
-    
+
     This function is called by Celery/RQ workers in a separate process.
     Session context does NOT propagate across process boundaries,
     so session_id is explicitly passed as a parameter.
-    
+
     Args:
         call_dict: Serialized LLMCall (from model_dump())
         response_dict: Serialized LLMResponse (from model_dump())
@@ -58,7 +58,7 @@ def execute_tracking_task(
 
     # Set session context in the worker process so internal code can access it
     token = session_context.set(session_id)
-    
+
     # Run the async tracking task in a new event loop on the worker thread/process
     loop = asyncio.new_event_loop()
     try:
@@ -89,30 +89,31 @@ class TaskDispatcher(Protocol):
 
 class AsyncioDispatcher:
     """Default dispatcher that runs tasks in the background using asyncio.create_task.
-    
+
     ⚠️ WARNING: This dispatcher is NOT DURABLE - in-flight tasks are lost on process restart.
-    
+
     Suitable for: Development, testing, single-process deployments
     NOT suitable for: Production, multi-worker setups, applications requiring durability
-    
+
     For production use, consider using:
     - CeleryDispatcher: Distributed task queue with RabbitMQ/Redis backend
     - RQDispatcher: Simpler queue with Redis backend
-    
+
     Tracks in-flight tasks for graceful draining during GDPR deletion.
     """
-    
+
     def __init__(self, log_warning_in_production: bool = True):
         """Initialize AsyncioDispatcher.
-        
+
         Args:
             log_warning_in_production: If True, logs a warning if BELIEFSTATE_ENV=production is detected
         """
         self._in_flight_tasks: Dict[str, list] = {}  # session_id -> [tasks]
-        
+
         # Warn if running in production
         if log_warning_in_production:
             import os
+
             env = os.getenv("BELIEFSTATE_ENV", "").lower()
             if env == "production" or env == "prod":
                 logger.warning(
@@ -120,7 +121,7 @@ class AsyncioDispatcher:
                     "For production deployments, use CeleryDispatcher or RQDispatcher instead. "
                     "Set BELIEFSTATE_ENV=development to suppress this warning."
                 )
-    
+
     def dispatch(
         self,
         tracker: Any,
@@ -134,12 +135,12 @@ class AsyncioDispatcher:
                 call.model_dump(), response.model_dump(), session_id, turn
             )
         )
-        
+
         # Track task for this session
         if session_id not in self._in_flight_tasks:
             self._in_flight_tasks[session_id] = []
         self._in_flight_tasks[session_id].append(task)
-        
+
         # Clean up completed tasks
         def cleanup_task(t):
             if session_id in self._in_flight_tasks:
@@ -147,28 +148,30 @@ class AsyncioDispatcher:
                     self._in_flight_tasks[session_id].remove(task)
                 except (ValueError, KeyError):
                     pass
-        
+
         task.add_done_callback(lambda t: cleanup_task(t))
-    
+
     async def drain_session(self, session_id: str) -> int:
         """Wait for all in-flight tasks for a session to complete.
-        
+
         Returns:
             Number of tasks that were drained
         """
         if session_id not in self._in_flight_tasks:
             return 0
-        
+
         tasks = self._in_flight_tasks.get(session_id, [])
         count = len(tasks)
-        
+
         if tasks:
             try:
                 await asyncio.gather(*tasks, return_exceptions=True)
-                logger.debug(f"Drained {count} in-flight tasks for session {session_id}")
+                logger.debug(
+                    f"Drained {count} in-flight tasks for session {session_id}"
+                )
             except Exception as e:
                 logger.warning(f"Error draining tasks: {e}")
-        
+
         # Clean up
         self._in_flight_tasks.pop(session_id, None)
         return count
@@ -206,21 +209,21 @@ class SyncDispatcher:
 
 class CeleryDispatcher:
     """Dispatcher that serializes payloads and enqueues them via Celery.
-    
+
     SESSION CONTEXT PROPAGATION:
     ContextVar (session_context) does NOT propagate across process boundaries.
     This dispatcher explicitly serializes session_id into the task payload,
     ensuring it reaches the worker process intact.
-    
+
     Setup:
         1. Create dispatcher with celery app:
            dispatcher = CeleryDispatcher(celery_app=celery_app)
-        
+
         2. Register tracker in worker startup:
            # tasks.py or celery config
            from beliefstate.dispatcher import register_global_tracker
            register_global_tracker(tracker)
-        
+
         3. Define the Celery task:
            @celery_app.task(name="beliefstate.dispatcher.execute_tracking_task")
            def celery_tracking_worker(call_dict, response_dict, session_id, turn):
@@ -267,24 +270,24 @@ class CeleryDispatcher:
 
 class RQDispatcher:
     """Dispatcher that serializes payloads and enqueues them via Redis Queue (rq).
-    
+
     SESSION CONTEXT PROPAGATION:
     ContextVar (session_context) does NOT propagate across process boundaries.
     This dispatcher explicitly serializes session_id into the task payload,
     ensuring it reaches the worker process intact.
-    
+
     Setup:
         1. Create dispatcher with queue:
            from rq import Queue
            from redis import Redis
            queue = Queue('belief-tracking', connection=Redis())
            dispatcher = RQDispatcher(queue=queue)
-        
+
         2. Register tracker in worker startup:
            # worker_startup.py or before running worker
            from beliefstate.dispatcher import register_global_tracker
            register_global_tracker(tracker)
-        
+
         3. Start RQ worker:
            rq worker belief-tracking
     """

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class BeliefResolver:
     """Handles what to do when a contradiction is detected.
-    
+
     Implements escalation logic: ASK → BLOCK to prevent conflict note stacking.
     - First occurrence: ASK (inject conflict note into prompt)
     - If same conflict fires again after ASK: BLOCK (stop injecting, log warning)
@@ -22,7 +22,9 @@ class BeliefResolver:
         # Track conflicts: {session_id -> {(old_subject, old_pred, new_subject, new_pred) -> count}}
         self.conflict_history: Dict[str, Dict[Tuple[str, str, str, str], int]] = {}
 
-    def _get_conflict_key(self, old_b: Belief, new_b: Belief) -> Tuple[str, str, str, str]:
+    def _get_conflict_key(
+        self, old_b: Belief, new_b: Belief
+    ) -> Tuple[str, str, str, str]:
         """Create a unique key for a contradiction pair."""
         return (old_b.subject, old_b.predicate, new_b.subject, new_b.predicate)
 
@@ -52,7 +54,7 @@ class BeliefResolver:
                 )
                 await self.store.add_belief(session_id, new_b)
                 continue
-            
+
             conflict_key = self._get_conflict_key(old_b, new_b)
             current_count = self.conflict_history[session_id].get(conflict_key, 0)
 

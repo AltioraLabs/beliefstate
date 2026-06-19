@@ -9,13 +9,13 @@ Provides optional instrumentation for monitoring belief tracking pipeline:
 
 Usage:
     from beliefstate.observability import setup_otel
-    
+
     # Setup with default configuration
     setup_otel()
-    
+
     # Or with custom service name
     setup_otel(service_name="my-belief-tracker")
-    
+
     # Or disable entirely
     setup_otel(enabled=False)
 """
@@ -32,7 +32,9 @@ try:
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
+        OTLPMetricExporter,
+    )
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
     from opentelemetry.api.trace import Status, StatusCode
@@ -58,19 +60,19 @@ def setup_otel(
     otel_exporter_otlp_endpoint: str = "http://localhost:4317",
 ) -> None:
     """Initialize OpenTelemetry for BeliefState.
-    
+
     Args:
         enabled: Whether to enable OTel instrumentation
         service_name: Service name for traces/metrics
         otel_exporter_otlp_endpoint: OTLP gRPC exporter endpoint (Jaeger, DataDog, etc.)
-    
+
     Example:
         # Enable with defaults (sends to localhost:4317)
         setup_otel()
-        
+
         # Disable
         setup_otel(enabled=False)
-        
+
         # Custom endpoint (e.g., Datadog)
         setup_otel(otel_exporter_otlp_endpoint="http://datadog-agent:4317")
     """
@@ -116,11 +118,11 @@ def setup_otel(
 
 def trace_sync(operation_name: str, attributes: Optional[dict] = None) -> Callable:
     """Decorator to trace synchronous functions.
-    
+
     Args:
         operation_name: Name of the operation for tracing
         attributes: Optional dict of attributes to attach to span
-    
+
     Example:
         @trace_sync("belief_extraction", {"model": "gpt-4"})
         def extract_beliefs(text):
@@ -157,11 +159,11 @@ def trace_sync(operation_name: str, attributes: Optional[dict] = None) -> Callab
 
 def trace_async(operation_name: str, attributes: Optional[dict] = None) -> Callable:
     """Decorator to trace async functions.
-    
+
     Args:
         operation_name: Name of the operation for tracing
         attributes: Optional dict of attributes to attach to span
-    
+
     Example:
         @trace_async("contradiction_detection", {"session_id": "user-123"})
         async def detect_contradictions(beliefs):
@@ -169,7 +171,7 @@ def trace_async(operation_name: str, attributes: Optional[dict] = None) -> Calla
     """
 
     def decorator(
-        func: Callable[..., Coroutine[Any, Any, T]]
+        func: Callable[..., Coroutine[Any, Any, T]],
     ) -> Callable[..., Coroutine[Any, Any, T]]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> T:
@@ -200,7 +202,7 @@ def trace_async(operation_name: str, attributes: Optional[dict] = None) -> Calla
 
 class BeliefTrackerMetrics:
     """Metrics for BeliefState operations.
-    
+
     Tracks:
     - Beliefs extracted per call
     - Contradictions detected

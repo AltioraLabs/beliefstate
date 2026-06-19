@@ -1,4 +1,5 @@
 """Tests for InMemoryBeliefStore — CRUD, LRU eviction, search, stats."""
+
 import pytest
 
 from beliefstate.models import Belief
@@ -136,7 +137,9 @@ class TestInMemorySearch:
                 "s1",
                 _make_belief(predicate=f"fact_{i}", embedding=[1.0, 0.0, 0.0]),
             )
-        results = await store.search_beliefs("s1", [1.0, 0.0, 0.0], threshold=0.0, limit=3)
+        results = await store.search_beliefs(
+            "s1", [1.0, 0.0, 0.0], threshold=0.0, limit=3
+        )
         assert len(results) <= 3
 
 

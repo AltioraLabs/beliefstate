@@ -13,13 +13,13 @@ class FastAPIBeliefTrackerMiddleware(BeliefTrackerASGIMiddleware):
     FastAPI-branded ASGI middleware to automatically extract a session ID
     from request headers, set it in the tracker's context, and expose it
     via request.state.session_id.
-    
+
     Features:
     - Automatic session ID extraction from X-Session-ID header
     - Request-scoped context propagation
     - Structured logging
     - Error handling with graceful degradation
-    
+
     Usage:
         app = FastAPI()
         app.add_middleware(FastAPIBeliefTrackerMiddleware)
@@ -60,7 +60,9 @@ class FastAPIBeliefTrackerMiddleware(BeliefTrackerASGIMiddleware):
                 self.log.debug("Session context set", session_id=session_id)
                 await self.app(scope, receive, send)
             except Exception as e:
-                self.log.error("Error in middleware", session_id=session_id, error=str(e))
+                self.log.error(
+                    "Error in middleware", session_id=session_id, error=str(e)
+                )
                 raise
             finally:
                 session_context.reset(token)
@@ -78,26 +80,26 @@ async def get_session_id(
     FastAPI dependency injection helper to extract the session ID from the
     X-Session-ID header (or fallback to request.state) and bind it to the
     tracker context.
-    
+
     Features:
     - Graceful fallback if session ID is missing (allows optional sessions)
     - Request-scoped context propagation
     - Structured logging
-    
+
     Usage:
         @app.post("/chat")
         async def chat(message: str, session_id: str = Depends(get_session_id)):
             # session_id is automatically set in tracker context
             ...
-    
+
     Raises:
         ValueError: If session ID validation fails (can be caught by FastAPI error handlers)
     """
     log = IntegrationLogger(__name__, "FastAPI")
-    
+
     # Try to get session ID from header, then from request state
     sid = x_session_id or getattr(request.state, "session_id", None)
-    
+
     if sid:
         try:
             # Validate session ID
@@ -116,4 +118,3 @@ async def get_session_id(
         # Session ID is optional
         log.debug("No session ID provided in dependency (optional)")
         yield None
-

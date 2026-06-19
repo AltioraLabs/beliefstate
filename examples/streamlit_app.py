@@ -377,7 +377,7 @@ def main():
                     f"""
                     <div class="belief-box">
                     <strong>[{subject}]</strong> {predicate} <em>"{value}"</em><br/>
-                    <small>Confidence: {confidence:.2%} | Turn: {item['turn']}</small>
+                    <small>Confidence: {confidence:.2%} | Turn: {item["turn"]}</small>
                     </div>
                     """,
                     unsafe_allow_html=True,

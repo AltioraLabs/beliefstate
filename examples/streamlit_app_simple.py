@@ -112,10 +112,11 @@ def init_tracker(model: str, embed_model: str) -> Optional[BeliefTracker]:
 
         tracker = BeliefTracker(config=config, adapter=adapter)
         tracker.set_session(state["session_id"])
-        
+
         # Test the adapter to make sure it works
         try:
             import asyncio
+
             result = asyncio.run(adapter.health_check())
             if result:
                 st.write("✅ Ollama adapter health check passed")
@@ -123,12 +124,13 @@ def init_tracker(model: str, embed_model: str) -> Optional[BeliefTracker]:
                 st.warning("⚠️ Ollama health check failed - extraction may not work")
         except Exception as hc_error:
             st.warning(f"⚠️ Could not verify Ollama: {str(hc_error)}")
-        
+
         st.write("✅ Tracker initialized successfully")
         return tracker
     except Exception as e:
         st.error(f"❌ Tracker initialization failed: {str(e)}")
         import traceback
+
         st.write(traceback.format_exc())
         return None
 
@@ -211,7 +213,7 @@ def main():
         with st.spinner("Processing with BeliefState..."):
             try:
                 st.write(f"📤 Turn {state['turn']}: Sending to LLM...")
-                
+
                 # Define the LLM call function
                 async def chat_function():
                     """LLM call to be wrapped with BeliefState tracking."""
@@ -226,9 +228,9 @@ def main():
                         "You are a helpful assistant. Keep responses brief and natural. "
                         "Engage naturally with the user about their interests and background."
                     )
-                    messages = [
-                        {"role": "system", "content": system_msg}
-                    ] + state["messages"]
+                    messages = [{"role": "system", "content": system_msg}] + state[
+                        "messages"
+                    ]
 
                     response = await client.chat.completions.create(
                         model=state["model"],
@@ -242,7 +244,9 @@ def main():
                 # ✅ Apply tracker.wrap and execute
                 st.write("🔍 Applying @tracker.wrap...")
                 wrapped = state["tracker"].wrap(chat_function)
-                st.write("⏳ Executing wrapped function (belief extraction happens here)...")
+                st.write(
+                    "⏳ Executing wrapped function (belief extraction happens here)..."
+                )
                 response_obj = asyncio.run(wrapped())
                 st.write("✅ LLM response received and processing complete")
 
@@ -271,11 +275,15 @@ def main():
                         "turn": belief.turn,
                     }
                     state["beliefs"].append(b_item)
-                    st.write(f"  Belief {i+1}: [{belief.subject}] {belief.predicate} '{belief.value}' (conf: {belief.confidence:.0%}, turn: {belief.turn})")
-                
+                    st.write(
+                        f"  Belief {i + 1}: [{belief.subject}] {belief.predicate} '{belief.value}' (conf: {belief.confidence:.0%}, turn: {belief.turn})"
+                    )
+
                 new_count = len(state["beliefs"])
                 if new_count > old_count:
-                    st.success(f"✅ {new_count - old_count} new belief(s) extracted this turn")
+                    st.success(
+                        f"✅ {new_count - old_count} new belief(s) extracted this turn"
+                    )
                 else:
                     st.info(f"ℹ️ No new beliefs extracted (total: {new_count})")
 
@@ -299,9 +307,9 @@ def main():
                 st.markdown(
                     f"""
                     <div class="belief-item">
-                    <strong>[{belief['subject']}]</strong> {belief['predicate']} 
-                    <em>"{belief['value']}"</em><br/>
-                    <small>Confidence: {belief['confidence']:.0%} | Turn: {belief['turn']}</small>
+                    <strong>[{belief["subject"]}]</strong> {belief["predicate"]} 
+                    <em>"{belief["value"]}"</em><br/>
+                    <small>Confidence: {belief["confidence"]:.0%} | Turn: {belief["turn"]}</small>
                     </div>
                     """,
                     unsafe_allow_html=True,

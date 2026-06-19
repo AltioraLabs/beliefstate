@@ -10,13 +10,13 @@ class BeliefTrackerWSGIMiddleware:
     """
     WSGI Middleware (works with Flask, Django, etc.)
     to automatically extract a session ID from a request header and set it in the tracker's context.
-    
+
     Features:
     - Automatic session ID extraction from configurable header
     - Request-scoped context propagation
     - Structured logging
     - Error handling with graceful degradation
-    
+
     Usage:
         app = Flask(__name__)
         app.wsgi_app = BeliefTrackerWSGIMiddleware(app.wsgi_app)
@@ -24,7 +24,11 @@ class BeliefTrackerWSGIMiddleware:
 
     def __init__(self, app: Any, header_name: str = "X-Session-ID") -> None:
         self.app = app
-        self.header_name = header_name if isinstance(header_name, str) else header_name.decode("latin1")
+        self.header_name = (
+            header_name
+            if isinstance(header_name, str)
+            else header_name.decode("latin1")
+        )
         self.log = IntegrationLogger(__name__, "WSGI")
 
     def __call__(self, environ: Any, start_response: Any) -> Any:

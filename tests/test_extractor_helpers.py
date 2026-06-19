@@ -17,6 +17,7 @@ from beliefstate.extractor import (
 
 # ── Number Normalization ─────────────────────────────────────────────────
 
+
 class TestNormalizeNumbers:
     def test_comma_separated(self):
         assert normalize_numbers("5,000") == "5000"
@@ -35,6 +36,7 @@ class TestNormalizeNumbers:
 
 
 # ── Currency Normalization ───────────────────────────────────────────────
+
 
 class TestNormalizeCurrency:
     def test_dollar_sign(self):
@@ -67,6 +69,7 @@ class TestNormalizeCurrency:
 
 # ── Date Normalization ───────────────────────────────────────────────────
 
+
 class TestNormalizeDates:
     def test_month_name_day_year(self):
         result = normalize_dates("March 15, 2024")
@@ -90,6 +93,7 @@ class TestNormalizeDates:
 
 # ── Percentage Normalization ─────────────────────────────────────────────
 
+
 class TestNormalizePercentages:
     def test_integer_percent(self):
         result = normalize_percentages("15%")
@@ -110,6 +114,7 @@ class TestNormalizePercentages:
 
 # ── Combined normalize_value ─────────────────────────────────────────────
 
+
 class TestNormalizeValue:
     def test_empty_string(self):
         assert normalize_value("") == ""
@@ -124,6 +129,7 @@ class TestNormalizeValue:
 
 
 # ── Response Type Classification ─────────────────────────────────────────
+
 
 class TestClassifyResponseType:
     def test_empty_string(self):
@@ -142,7 +148,10 @@ class TestClassifyResponseType:
         assert classify_response_type("INSERT INTO users VALUES (1, 'Alice')") == "sql"
 
     def test_conversational_text(self):
-        assert classify_response_type("I really like programming in Python.") == "conversational"
+        assert (
+            classify_response_type("I really like programming in Python.")
+            == "conversational"
+        )
 
     def test_code_block_majority(self):
         text = "Here is code:\n```python\ndef foo():\n    return 1\n```\n"
@@ -150,7 +159,9 @@ class TestClassifyResponseType:
         assert result in ("code", "markdown_heavy")
 
     def test_markdown_with_inline_code(self):
-        text = "Use `foo()` and `bar()` and `baz()` and `qux()` and `quux()` to do things."
+        text = (
+            "Use `foo()` and `bar()` and `baz()` and `qux()` and `quux()` to do things."
+        )
         assert classify_response_type(text) == "markdown_heavy"
 
     def test_plain_json_invalid_not_json(self):
@@ -160,6 +171,7 @@ class TestClassifyResponseType:
 
 
 # ── Paragraph Chunking ───────────────────────────────────────────────────
+
 
 class TestChunkResponseByParagraphs:
     def test_short_text_single_chunk(self):
@@ -192,6 +204,7 @@ class TestChunkResponseByParagraphs:
 
 # ── JSON Recovery ────────────────────────────────────────────────────────
 
+
 class TestRecoverJsonFromResponse:
     def test_layer1_direct_parse_array(self):
         result = recover_json_from_response('[{"subject": "USER"}]')
@@ -216,7 +229,7 @@ class TestRecoverJsonFromResponse:
         assert result == [{"subject": "USER"}]
 
     def test_layer4_smart_quotes(self):
-        text = '[\u201c\u201d]'  # Smart quotes with empty content
+        text = "[\u201c\u201d]"  # Smart quotes with empty content
         # This may or may not parse depending on smart quote handling
         result = recover_json_from_response(text)
         # Just verify it doesn't crash
@@ -226,7 +239,7 @@ class TestRecoverJsonFromResponse:
         # Has both brackets, but trailing comma makes it invalid — Layer 5 handles this
         text = '[{"subject": "USER", "predicate": "likes", "value": "Python"},]'
         result = recover_json_from_response(text)
-        # Layer 3 extracts the substring, direct parse may handle trailing comma 
+        # Layer 3 extracts the substring, direct parse may handle trailing comma
         # depending on json parser — just verify it doesn't crash
         if result is not None:
             assert isinstance(result, list)

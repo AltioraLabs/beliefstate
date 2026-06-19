@@ -12,6 +12,7 @@ try:
         FastAPIBeliefTrackerMiddleware,
         get_session_id,
     )
+
     HAS_FASTAPI = True
 except ImportError:
     HAS_FASTAPI = False
@@ -21,12 +22,14 @@ try:
         FlaskBeliefTrackerMiddleware,
         register_flask_hooks,
     )
+
     HAS_FLASK = True
 except ImportError:
     HAS_FLASK = False
 
 try:
     from beliefstate import LlamaIndexBeliefTrackerCallback
+
     HAS_LLAMAINDEX = True
 except ImportError:
     HAS_LLAMAINDEX = False
@@ -36,12 +39,14 @@ try:
         process_openai_assistant_message,
         observe_run,
     )
+
     HAS_OPENAI_INTEGRATION = True
 except ImportError:
     HAS_OPENAI_INTEGRATION = False
 
 try:
     from beliefstate import BeliefTrackerLangchainCallback
+
     HAS_LANGCHAIN = True
 except ImportError:
     HAS_LANGCHAIN = False
@@ -253,7 +258,9 @@ class MockOpenAIMessage:
         }
 
 
-@pytest.mark.skipif(not HAS_OPENAI_INTEGRATION, reason="OpenAI integration not installed")
+@pytest.mark.skipif(
+    not HAS_OPENAI_INTEGRATION, reason="OpenAI integration not installed"
+)
 def test_process_openai_assistant_message():
     thread_messages = [
         MockOpenAIMessage(
@@ -277,7 +284,9 @@ def test_process_openai_assistant_message():
     assert call.messages[2]["content"] == "Who am I speaking with?"
 
 
-@pytest.mark.skipif(not HAS_OPENAI_INTEGRATION, reason="OpenAI integration not installed")
+@pytest.mark.skipif(
+    not HAS_OPENAI_INTEGRATION, reason="OpenAI integration not installed"
+)
 @pytest.mark.asyncio
 async def test_observe_run_polling_and_dispatch():
     mock_tracker = MagicMock()

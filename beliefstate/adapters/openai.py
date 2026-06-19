@@ -23,7 +23,7 @@ except ImportError:
 
 class OpenAIAdapter(ProviderAdapter):
     """Adapter for OpenAI API with production-ready robustness.
-    
+
     Features:
     - Automatic retry with exponential backoff for transient errors
     - Configurable request timeouts
@@ -122,14 +122,14 @@ class OpenAIAdapter(ProviderAdapter):
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
-        
+
         Args:
             call: LLMCall with messages and parameters
             response_format: Optional response schema (for structured output)
-            
+
         Returns:
             LLMResponse with generated text
-            
+
         Raises:
             RuntimeError: If OpenAI client is not configured
             asyncio.TimeoutError: If request exceeds timeout
@@ -152,7 +152,8 @@ class OpenAIAdapter(ProviderAdapter):
 
             result = await with_timeout(
                 api_call(),
-                self.timeout * (self.retry_config.max_retries + 1),  # Allow time for retries
+                self.timeout
+                * (self.retry_config.max_retries + 1),  # Allow time for retries
                 "OpenAI generate",
             )
             return result
@@ -164,7 +165,9 @@ class OpenAIAdapter(ProviderAdapter):
             self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
             raise
         except Exception as e:
-            self.log.error("Generate failed unexpectedly", error=str(e), model=self.model)
+            self.log.error(
+                "Generate failed unexpectedly", error=str(e), model=self.model
+            )
             raise
 
     async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
@@ -178,10 +181,10 @@ class OpenAIAdapter(ProviderAdapter):
 
     async def get_embedding(self, text: str) -> List[float]:
         """Get embedding for a single text.
-        
+
         Args:
             text: Text to embed
-            
+
         Returns:
             Embedding vector
         """
@@ -190,13 +193,13 @@ class OpenAIAdapter(ProviderAdapter):
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for multiple texts with automatic retry and timeout.
-        
+
         Args:
             texts: List of texts to embed
-            
+
         Returns:
             List of embedding vectors
-            
+
         Raises:
             RuntimeError: If OpenAI client is not configured
             asyncio.TimeoutError: If request exceeds timeout
@@ -210,6 +213,7 @@ class OpenAIAdapter(ProviderAdapter):
             return []
 
         try:
+
             async def api_call() -> List[List[float]]:
                 return await retry_with_backoff(
                     self._get_embeddings_with_backoff,
@@ -250,7 +254,7 @@ class OpenAIAdapter(ProviderAdapter):
 
     async def health_check(self) -> bool:
         """Check if OpenAI API is accessible and healthy.
-        
+
         Returns:
             True if healthy, False otherwise
         """

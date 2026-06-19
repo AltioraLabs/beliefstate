@@ -54,7 +54,7 @@ class SQLiteStore(Store):
                     os.makedirs(parent, exist_ok=True)
             self._conn = await aiosqlite.connect(self.db_path)
             self._conn.row_factory = aiosqlite.Row
-            
+
             # Enable WAL mode for robustness against abrupt shutdowns
             # WAL (Write-Ahead Log) survives crashes and allows concurrent reads during writes
             if self.db_path != ":memory:":
@@ -62,7 +62,7 @@ class SQLiteStore(Store):
                 await self._conn.execute("PRAGMA synchronous=NORMAL")
                 await self._conn.execute("PRAGMA foreign_keys=ON")
                 await self._conn.commit()
-            
+
             await self._conn.create_function(
                 "cosine_similarity", 2, cosine_similarity_py
             )
@@ -97,13 +97,11 @@ class SQLiteStore(Store):
         conn = self._conn
         if conn is None:
             return
-        
+
         # Check if table exists and what columns it has
-        async with conn.execute(
-            "PRAGMA table_info(beliefs)"
-        ) as cursor:
+        async with conn.execute("PRAGMA table_info(beliefs)") as cursor:
             existing_columns = await cursor.fetchall()
-        
+
         if not existing_columns:
             # Table doesn't exist, create fresh
             await conn.execute("""
@@ -130,7 +128,7 @@ class SQLiteStore(Store):
         else:
             # Table exists, migrate schema if needed
             existing_column_names = {row[1] for row in existing_columns}
-            
+
             # ALTER TABLE can't add DEFAULT CURRENT_TIMESTAMP, so use NULL instead
             columns_to_add = [
                 ("conversation_id", "TEXT NOT NULL DEFAULT ''"),
@@ -139,15 +137,17 @@ class SQLiteStore(Store):
                 ("is_hypothetical", "INTEGER DEFAULT 0"),
                 ("last_referenced_at", "TIMESTAMP"),
             ]
-            
+
             for col_name, col_def in columns_to_add:
                 if col_name not in existing_column_names:
                     try:
-                        await conn.execute(f"ALTER TABLE beliefs ADD COLUMN {col_name} {col_def}")
+                        await conn.execute(
+                            f"ALTER TABLE beliefs ADD COLUMN {col_name} {col_def}"
+                        )
                         logger.info(f"Added column '{col_name}' to beliefs table")
                     except Exception as e:
                         logger.warning(f"Could not add column '{col_name}': {e}")
-        
+
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_session ON beliefs(session_id)"
         )
@@ -168,10 +168,10 @@ class SQLiteStore(Store):
     async def add_belief(self, session_id: str, belief: Belief) -> None:
         conn = await self._get_connection()
         embedding_json = json.dumps(belief.embedding) if belief.embedding else "[]"
-        
+
         # Use empty string as default conversation_id for backwards compatibility
         conversation_id = belief.conversation_id or ""
-        
+
         await conn.execute(
             """
             INSERT INTO beliefs (session_id, conversation_id, subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at)
@@ -204,14 +204,18 @@ class SQLiteStore(Store):
                 belief.belief_type,
                 1 if belief.is_hypothetical else 0,
                 belief.created_at.isoformat() if belief.created_at else None,
-                belief.last_referenced_at.isoformat() if belief.last_referenced_at else None,
+                belief.last_referenced_at.isoformat()
+                if belief.last_referenced_at
+                else None,
             ),
         )
         await conn.commit()
 
-    async def get_beliefs(self, session_id: str, conversation_id: Optional[str] = None) -> List[Belief]:
+    async def get_beliefs(
+        self, session_id: str, conversation_id: Optional[str] = None
+    ) -> List[Belief]:
         conn = await self._get_connection()
-        
+
         if conversation_id:
             # Get beliefs for specific conversation
             async with conn.execute(
@@ -270,7 +274,7 @@ class SQLiteStore(Store):
     ) -> List[Belief]:
         conn = await self._get_connection()
         embedding_json = json.dumps(embedding)
-        
+
         if conversation_id:
             # Search within specific conversation
             async with conn.execute(
@@ -352,11 +356,11 @@ class SQLiteStore(Store):
         self, max_age_seconds: int, session_id: Optional[str] = None
     ) -> int:
         """Remove beliefs older than max_age_seconds.
-        
+
         Args:
             max_age_seconds: Age threshold in seconds
             session_id: Optional - prune only for specific session, None = all sessions
-        
+
         Returns:
             Number of beliefs deleted
         """
@@ -365,7 +369,9 @@ class SQLiteStore(Store):
 
         logger = logging.getLogger(__name__)
         conn = await self._get_connection()
-        cutoff_time = (datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)).isoformat()
+        cutoff_time = (
+            datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
+        ).isoformat()
 
         if session_id:
             cursor = await conn.execute(
@@ -380,12 +386,14 @@ class SQLiteStore(Store):
         await conn.commit()
         deleted_count = cursor.rowcount
         if deleted_count > 0:
-            logger.debug(f"Pruned {deleted_count} expired beliefs (older than {max_age_seconds}s)")
+            logger.debug(
+                f"Pruned {deleted_count} expired beliefs (older than {max_age_seconds}s)"
+            )
         return deleted_count
 
     async def get_session_belief_age_stats(self, session_id: str) -> dict:
         """Get age statistics for beliefs in a session.
-        
+
         Returns:
             Dict with: oldest_belief_age_seconds, newest_belief_age_seconds, avg_age_seconds
         """
@@ -403,7 +411,11 @@ class SQLiteStore(Store):
             row = await cursor.fetchone()
 
         if row is None or row["oldest_age"] is None:
-            return {"oldest_belief_age_seconds": 0, "newest_belief_age_seconds": 0, "avg_age_seconds": 0}
+            return {
+                "oldest_belief_age_seconds": 0,
+                "newest_belief_age_seconds": 0,
+                "avg_age_seconds": 0,
+            }
 
         return {
             "oldest_belief_age_seconds": row["oldest_age"] or 0,

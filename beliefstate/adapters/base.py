@@ -5,7 +5,7 @@ from beliefstate.call import LLMCall, LLMResponse
 @runtime_checkable
 class ProviderAdapter(Protocol):
     """Protocol for translating between native SDK formats and our universal models.
-    
+
     All adapters should implement:
     - to_llm_call: Convert native args to universal LLMCall
     - to_llm_response: Convert native response to universal LLMResponse
@@ -38,7 +38,7 @@ class ProviderAdapter(Protocol):
 
     async def health_check(self) -> bool:
         """Check if the provider is accessible and responding correctly.
-        
+
         Returns:
             True if provider is healthy, False otherwise.
         """

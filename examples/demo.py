@@ -79,7 +79,11 @@ async def setup_mock_responses(mock: respx.MockRouter) -> None:
                         "finish_reason": "stop",
                     }
                 ],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 15, "total_tokens": 25},
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 15,
+                    "total_tokens": 25,
+                },
             },
         )
     )
@@ -104,7 +108,9 @@ async def setup_mock_responses(mock: respx.MockRouter) -> None:
 async def main():
     """Run the demo with mocked HTTP responses (no external services needed)."""
     if respx is None:
-        print("Error: respx is required for this demo. Install with: pip install respx httpx")
+        print(
+            "Error: respx is required for this demo. Install with: pip install respx httpx"
+        )
         return
 
     # 1. Setup Tracker with OpenAI adapter (using mocked API)

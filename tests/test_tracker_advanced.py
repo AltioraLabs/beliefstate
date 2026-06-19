@@ -1,4 +1,5 @@
 """Advanced tests for BeliefTracker — helpers, GDPR, context injection, staleness, stats."""
+
 import pytest
 from unittest.mock import MagicMock
 from datetime import datetime, timezone, timedelta
@@ -18,10 +19,13 @@ from beliefstate.tracker import (
 
 def make_config(**kwargs):
     store_kwargs = kwargs.pop("store_kwargs", {"db_path": ":memory:"})
-    return TrackerConfig(enable_background_tasks=False, store_kwargs=store_kwargs, **kwargs)
+    return TrackerConfig(
+        enable_background_tasks=False, store_kwargs=store_kwargs, **kwargs
+    )
 
 
 # ── Pure helper function tests ───────────────────────────────────────────
+
 
 class TestEstimateTokens:
     def test_empty_string(self):
@@ -52,8 +56,12 @@ class TestEnsureAware:
 class TestCalculateStalenessScore:
     def test_recent_belief_high_score(self):
         b = Belief(
-            subject="U", predicate="p", value="v", confidence=1.0,
-            turn=1, source="user",
+            subject="U",
+            predicate="p",
+            value="v",
+            confidence=1.0,
+            turn=1,
+            source="user",
             last_referenced_at=datetime.now(timezone.utc),
         )
         score = calculate_staleness_score(b)
@@ -61,8 +69,12 @@ class TestCalculateStalenessScore:
 
     def test_old_belief_lower_score(self):
         b = Belief(
-            subject="U", predicate="p", value="v", confidence=1.0,
-            turn=1, source="user",
+            subject="U",
+            predicate="p",
+            value="v",
+            confidence=1.0,
+            turn=1,
+            source="user",
             last_referenced_at=datetime.now(timezone.utc) - timedelta(days=10),
         )
         score = calculate_staleness_score(b)
@@ -70,8 +82,12 @@ class TestCalculateStalenessScore:
 
     def test_low_confidence_capped(self):
         b = Belief(
-            subject="U", predicate="p", value="v", confidence=0.5,
-            turn=1, source="user",
+            subject="U",
+            predicate="p",
+            value="v",
+            confidence=0.5,
+            turn=1,
+            source="user",
             last_referenced_at=datetime.now(timezone.utc),
         )
         score = calculate_staleness_score(b)
@@ -100,6 +116,7 @@ class TestGetSessionLock:
 
 # ── Adapter auto-detection ───────────────────────────────────────────────
 
+
 class TestDetectAdapter:
     def test_unknown_type_returns_generic(self):
         result = MagicMock()
@@ -112,6 +129,7 @@ class TestDetectAdapter:
 
 
 # ── Session management ───────────────────────────────────────────────────
+
 
 class TestSessionManagement:
     def test_set_session(self):
@@ -126,14 +144,21 @@ class TestSessionManagement:
 
 # ── get_beliefs / get_stats / get_summary ────────────────────────────────
 
+
 class TestTrackerQueryMethods:
     @pytest.mark.asyncio
     async def test_get_beliefs_returns_stored(self):
         config = make_config()
         mock_adapter = MagicMock()
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
-        b = Belief(subject="USER", predicate="likes", value="Python",
-                    confidence=1.0, turn=1, source="user")
+        b = Belief(
+            subject="USER",
+            predicate="likes",
+            value="Python",
+            confidence=1.0,
+            turn=1,
+            source="user",
+        )
         await tracker.store.add_belief("s1", b)
 
         beliefs = await tracker.get_beliefs("s1")
@@ -156,10 +181,22 @@ class TestTrackerQueryMethods:
         mock_adapter = MagicMock()
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
-        b1 = Belief(subject="USER", predicate="likes", value="Python",
-                     confidence=0.8, turn=1, source="user")
-        b2 = Belief(subject="USER", predicate="lives in", value="Paris",
-                     confidence=1.0, turn=2, source="user")
+        b1 = Belief(
+            subject="USER",
+            predicate="likes",
+            value="Python",
+            confidence=0.8,
+            turn=1,
+            source="user",
+        )
+        b2 = Belief(
+            subject="USER",
+            predicate="lives in",
+            value="Paris",
+            confidence=1.0,
+            turn=2,
+            source="user",
+        )
         await tracker.store.add_belief("s1", b1)
         await tracker.store.add_belief("s1", b2)
 
@@ -184,8 +221,14 @@ class TestTrackerQueryMethods:
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
         for i in range(5):
-            b = Belief(subject="USER", predicate=f"fact_{i}", value=f"v{i}",
-                        confidence=1.0, turn=i, source="user")
+            b = Belief(
+                subject="USER",
+                predicate=f"fact_{i}",
+                value=f"v{i}",
+                confidence=1.0,
+                turn=i,
+                source="user",
+            )
             await tracker.store.add_belief("s1", b)
 
         summary = await tracker.get_summary("s1")
@@ -195,6 +238,7 @@ class TestTrackerQueryMethods:
 
 # ── GDPR clear_session ───────────────────────────────────────────────────
 
+
 class TestGDPRDeletion:
     @pytest.mark.asyncio
     async def test_clear_session_returns_receipt(self):
@@ -202,8 +246,14 @@ class TestGDPRDeletion:
         mock_adapter = MagicMock()
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
-        b = Belief(subject="USER", predicate="likes", value="Python",
-                    confidence=1.0, turn=1, source="user")
+        b = Belief(
+            subject="USER",
+            predicate="likes",
+            value="Python",
+            confidence=1.0,
+            turn=1,
+            source="user",
+        )
         await tracker.store.add_belief("gdpr_test_session", b)
 
         receipt = await tracker.clear_session("gdpr_test_session")
@@ -226,6 +276,7 @@ class TestGDPRDeletion:
 
 # ── Context injection ────────────────────────────────────────────────────
 
+
 class TestContextInjection:
     @pytest.mark.asyncio
     async def test_get_context_prompt_respects_max_beliefs(self):
@@ -237,8 +288,14 @@ class TestContextInjection:
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
         for i in range(10):
-            b = Belief(subject="USER", predicate=f"fact_{i}", value=f"v{i}",
-                        confidence=1.0, turn=i, source="user")
+            b = Belief(
+                subject="USER",
+                predicate=f"fact_{i}",
+                value=f"v{i}",
+                confidence=1.0,
+                turn=i,
+                source="user",
+            )
             await tracker.store.add_belief("s1", b)
 
         prompt = await tracker.get_context_prompt("s1")
@@ -253,10 +310,24 @@ class TestContextInjection:
         mock_adapter = MagicMock()
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
-        b_real = Belief(subject="USER", predicate="likes", value="Python",
-                         confidence=1.0, turn=1, source="user", is_hypothetical=False)
-        b_hypo = Belief(subject="USER", predicate="would_buy", value="Ferrari",
-                         confidence=0.9, turn=2, source="user", is_hypothetical=True)
+        b_real = Belief(
+            subject="USER",
+            predicate="likes",
+            value="Python",
+            confidence=1.0,
+            turn=1,
+            source="user",
+            is_hypothetical=False,
+        )
+        b_hypo = Belief(
+            subject="USER",
+            predicate="would_buy",
+            value="Ferrari",
+            confidence=0.9,
+            turn=2,
+            source="user",
+            is_hypothetical=True,
+        )
         await tracker.store.add_belief("s1", b_real)
         await tracker.store.add_belief("s1", b_hypo)
 
@@ -281,10 +352,22 @@ class TestContextInjection:
         mock_adapter = MagicMock()
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
-        b1 = Belief(subject="USER", predicate="likes", value="Python",
-                     confidence=1.0, turn=1, source="user")
-        b2 = Belief(subject="USER", predicate="hates", value="Java",
-                     confidence=1.0, turn=10, source="user")
+        b1 = Belief(
+            subject="USER",
+            predicate="likes",
+            value="Python",
+            confidence=1.0,
+            turn=1,
+            source="user",
+        )
+        b2 = Belief(
+            subject="USER",
+            predicate="hates",
+            value="Java",
+            confidence=1.0,
+            turn=10,
+            source="user",
+        )
         await tracker.store.add_belief("s1", b1)
         await tracker.store.add_belief("s1", b2)
 
@@ -297,6 +380,7 @@ class TestContextInjection:
 
 # ── clear_beliefs / remove_belief ────────────────────────────────────────
 
+
 class TestClearAndRemove:
     @pytest.mark.asyncio
     async def test_clear_beliefs(self):
@@ -304,8 +388,14 @@ class TestClearAndRemove:
         mock_adapter = MagicMock()
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
-        b = Belief(subject="USER", predicate="likes", value="Python",
-                    confidence=1.0, turn=1, source="user")
+        b = Belief(
+            subject="USER",
+            predicate="likes",
+            value="Python",
+            confidence=1.0,
+            turn=1,
+            source="user",
+        )
         await tracker.store.add_belief("s1", b)
         await tracker.clear_beliefs("s1")
         assert await tracker.get_beliefs("s1") == []
@@ -316,10 +406,22 @@ class TestClearAndRemove:
         mock_adapter = MagicMock()
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
-        b1 = Belief(subject="USER", predicate="likes", value="Python",
-                     confidence=1.0, turn=1, source="user")
-        b2 = Belief(subject="USER", predicate="lives in", value="Paris",
-                     confidence=1.0, turn=2, source="user")
+        b1 = Belief(
+            subject="USER",
+            predicate="likes",
+            value="Python",
+            confidence=1.0,
+            turn=1,
+            source="user",
+        )
+        b2 = Belief(
+            subject="USER",
+            predicate="lives in",
+            value="Paris",
+            confidence=1.0,
+            turn=2,
+            source="user",
+        )
         await tracker.store.add_belief("s1", b1)
         await tracker.store.add_belief("s1", b2)
 

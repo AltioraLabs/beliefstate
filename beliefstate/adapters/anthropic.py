@@ -23,7 +23,7 @@ except ImportError:
 
 class AnthropicAdapter(ProviderAdapter):
     """Adapter for Anthropic API with production-ready robustness.
-    
+
     Features:
     - Automatic retry with exponential backoff for transient errors
     - Configurable request timeouts
@@ -31,7 +31,7 @@ class AnthropicAdapter(ProviderAdapter):
     - Health check mechanism
     - API key validation at initialization
     - Informative error message for embeddings (Anthropic limitation)
-    
+
     NOTE: Anthropic does not provide native embeddings. Use OpenAI, Ollama, or
     configure an external embedding service for the internal tracker pipeline.
     """
@@ -133,14 +133,14 @@ class AnthropicAdapter(ProviderAdapter):
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
-        
+
         Args:
             call: LLMCall with messages and parameters
             response_format: Optional response schema (for structured output)
-            
+
         Returns:
             LLMResponse with generated text
-            
+
         Raises:
             RuntimeError: If Anthropic client is not configured
             asyncio.TimeoutError: If request exceeds timeout
@@ -152,6 +152,7 @@ class AnthropicAdapter(ProviderAdapter):
             )
 
         try:
+
             async def api_call() -> LLMResponse:
                 return await retry_with_backoff(
                     self._generate_with_backoff,
@@ -174,14 +175,16 @@ class AnthropicAdapter(ProviderAdapter):
             self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
             raise
         except Exception as e:
-            self.log.error("Generate failed unexpectedly", error=str(e), model=self.model)
+            self.log.error(
+                "Generate failed unexpectedly", error=str(e), model=self.model
+            )
             raise
 
     async def get_embedding(self, text: str) -> List[float]:
         """Get embedding for a single text.
-        
+
         NOTE: Anthropic does not provide native embeddings.
-        
+
         Raises:
             NotImplementedError: Always, as Anthropic doesn't support embeddings
         """
@@ -197,9 +200,9 @@ class AnthropicAdapter(ProviderAdapter):
 
     async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for multiple texts.
-        
+
         NOTE: Anthropic does not provide native embeddings.
-        
+
         Raises:
             NotImplementedError: Always, as Anthropic doesn't support embeddings
         """
@@ -215,7 +218,7 @@ class AnthropicAdapter(ProviderAdapter):
 
     async def health_check(self) -> bool:
         """Check if Anthropic API is accessible and healthy.
-        
+
         Returns:
             True if healthy, False otherwise
         """

@@ -51,24 +51,24 @@ NEGATION_TOKENS = {
 
 def has_negation(text: str) -> bool:
     """Check if text contains negation tokens.
-    
+
     Returns True if any negation token is found in the text (case-insensitive).
     Helps force negated beliefs to LLM judge to prevent cosine similarity
     false positives.
     """
     if not text:
         return False
-    
+
     text_lower = text.lower()
-    
+
     # Quick check for common negation patterns
     if "not " in text_lower or " not" in text_lower:
         return True
-    
+
     # Check for contractions like don't, doesn't, etc.
     if "n't" in text_lower:
         return True
-    
+
     # Check for negation tokens
     # Use word boundaries to avoid matching "nothing" in "something"
     for token in NEGATION_TOKENS:
@@ -76,19 +76,19 @@ def has_negation(text: str) -> bool:
         pattern = r"\b" + re.escape(token) + r"\b"
         if re.search(pattern, text_lower):
             return True
-    
+
     return False
 
 
 def cosine_similarity(v1: List[float], v2: List[float]) -> float:
     """Compute cosine similarity between two vectors.
-    
+
     Returns 0.0 if vectors have mismatched dimensions to prevent silent
     corruption.
     """
     if not v1 or not v2:
         return 0.0
-    
+
     # Guard against dimension mismatch
     if len(v1) != len(v2):
         logger.warning(
@@ -96,7 +96,7 @@ def cosine_similarity(v1: List[float], v2: List[float]) -> float:
             "This may indicate a model upgrade. Returning 0.0 similarity."
         )
         return 0.0
-    
+
     dot = sum(a * b for a, b in zip(v1, v2))
     mag1 = math.sqrt(sum(a * a for a in v1))
     mag2 = math.sqrt(sum(b * b for b in v2))
@@ -127,7 +127,7 @@ class ContradictionDetector:
         self, session_id: str, new_beliefs: List[Belief]
     ) -> List[Tuple[Belief, Belief, float, str]]:
         """Detect contradictions between new beliefs and existing store.
-        
+
         Checks for embedding model consistency to prevent silent dimension
         mismatch errors.
         """
@@ -160,9 +160,7 @@ class ContradictionDetector:
                     )
                     continue
 
-                is_contradiction, score, reason = (
-                    await self.judge.check(old_b, new_b)
-                )
+                is_contradiction, score, reason = await self.judge.check(old_b, new_b)
                 if is_contradiction:
                     contradictions.append((old_b, new_b, score, reason))
 
@@ -172,19 +170,19 @@ class ContradictionDetector:
         self, session_id: str, new_beliefs: List[Belief]
     ) -> Tuple[List[Tuple[Belief, Belief, float, str]], List[Belief]]:
         """Detect contradictions AND deduplicate entailed beliefs.
-        
+
         Returns:
             - List of contradictions (old, new, score, reason)
             - List of new beliefs entailed by existing beliefs (duplicates)
-        
+
         Entailment check: if judge returns relationship="entailment" with
         score >= entailment_threshold, the new belief is semantically entailed
         by the old belief and should be skipped (it's a duplicate).
-        
+
         Negation check: if belief contains negation tokens, bypasses cosine
         similarity gate and goes straight to LLM judge to prevent false
         positives (e.g., "likes X" vs "doesn't like X").
-        
+
         Guards against embedding dimension mismatch: if old and new beliefs
         have different embedding dimensions, skips cosine similarity check
         and goes straight to LLM judge to avoid silent corruption.
@@ -222,8 +220,8 @@ class ContradictionDetector:
                         f"Skipping vector comparison, using LLM judge instead."
                     )
                     # Skip cosine gate entirely, go straight to LLM judge
-                    is_contradiction, score, reason = (
-                        await self.judge.check(old_b, new_b)
+                    is_contradiction, score, reason = await self.judge.check(
+                        old_b, new_b
                     )
                     if is_contradiction:
                         contradictions.append((old_b, new_b, score, reason))
@@ -255,8 +253,8 @@ class ContradictionDetector:
                         f"Skipping vector comparison, using LLM judge instead."
                     )
                     # Skip cosine gate entirely, go straight to LLM judge
-                    is_contradiction, score, reason = (
-                        await self.judge.check(old_b, new_b)
+                    is_contradiction, score, reason = await self.judge.check(
+                        old_b, new_b
                     )
                     if is_contradiction:
                         contradictions.append((old_b, new_b, score, reason))
@@ -285,8 +283,8 @@ class ContradictionDetector:
                         f"Bypassing cosine similarity gate, using LLM judge."
                     )
                     # Skip cosine gate, use LLM judge directly
-                    is_contradiction, score, reason = (
-                        await self.judge.check(old_b, new_b)
+                    is_contradiction, score, reason = await self.judge.check(
+                        old_b, new_b
                     )
                     if is_contradiction:
                         contradictions.append((old_b, new_b, score, reason))
@@ -308,9 +306,7 @@ class ContradictionDetector:
                     continue
 
                 # Normal path: cosine similarity check
-                is_contradiction, score, reason = (
-                    await self.judge.check(old_b, new_b)
-                )
+                is_contradiction, score, reason = await self.judge.check(old_b, new_b)
 
                 if is_contradiction:
                     contradictions.append((old_b, new_b, score, reason))

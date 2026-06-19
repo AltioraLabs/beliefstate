@@ -10,14 +10,14 @@ class BeliefTrackerASGIMiddleware:
     """
     ASGI Middleware (works with FastAPI, Starlette, Litestar, Quart, etc.)
     to automatically extract a session ID from a request header and set it in the tracker's context.
-    
+
     Features:
     - Automatic session ID extraction from configurable header
     - Request-scoped context propagation
     - Structured logging
     - Error handling with graceful degradation
     - Support for HTTP and WebSocket connections
-    
+
     Usage:
         app = Starlette(...)
         app.add_middleware(BeliefTrackerASGIMiddleware)
