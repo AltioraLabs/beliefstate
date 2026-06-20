@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Reference & Changelog — BeliefState Documentation</title>
+  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+
+<div class="docs-layout">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🧠 BeliefState</div>
+    <div class="sidebar-version">v0.1.0</div>
+  </div>
+  <nav>
+    <ul class="sidebar-nav">
+      <li class="nav-section-title">Getting Started</li>
+      <li><a href="index.html#installation">Installation</a></li>
+      <li><a href="index.html#quickstart">Quickstart</a></li>
+      <li><a href="index.html#core-concepts">Core Concepts</a></li>
+
+      <li class="nav-section-title">Configuration</li>
+      <li><a href="configuration.html#tracker-config">TrackerConfig</a></li>
+      <li><a href="configuration.html#prompts">Custom Prompts</a></li>
+
+      <li class="nav-section-title">Adapters</li>
+      <li><a href="adapters.html#adapters">Overview</a></li>
+      <li><a href="adapters.html#openai">OpenAI</a></li>
+      <li><a href="adapters.html#anthropic">Anthropic</a></li>
+      <li><a href="adapters.html#gemini">Google Gemini</a></li>
+      <li><a href="adapters.html#ollama">Ollama</a></li>
+      <li><a href="adapters.html#litellm">LiteLLM</a></li>
+      <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
+
+      <li class="nav-section-title">Stores</li>
+      <li><a href="stores.html#stores">Overview</a></li>
+      <li><a href="stores.html#sqlite-store">SQLite</a></li>
+      <li><a href="stores.html#redis-store">Redis</a></li>
+      <li><a href="stores.html#memory-store">In-Memory</a></li>
+
+      <li class="nav-section-title">Integrations</li>
+      <li><a href="integrations.html#fastapi">FastAPI</a></li>
+      <li><a href="integrations.html#flask">Flask</a></li>
+      <li><a href="integrations.html#asgi">ASGI</a></li>
+      <li><a href="integrations.html#langchain">LangChain</a></li>
+      <li><a href="integrations.html#llamaindex">LlamaIndex</a></li>
+      <li><a href="integrations.html#openai-assistants">OpenAI Assistants</a></li>
+
+      <li class="nav-section-title">Advanced</li>
+      <li><a href="advanced.html#dispatchers">Background Workers</a></li>
+      <li><a href="advanced.html#resilience">Resilience</a></li>
+      <li><a href="advanced.html#observability">Observability</a></li>
+      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+
+      <li class="nav-section-title">Reference</li>
+      <li><a href="reference.html#api-reference">API Reference</a></li>
+      <li><a href="reference.html#changelog">Changelog</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Toggle sidebar">◀</button>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<main class="main-content">
+
+<!-- ── API REFERENCE ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="api-reference">
+  <h2>API Reference</h2>
+
+  <h3>BeliefTracker</h3>
+  <p>The main orchestrator class.</p>
+  <table class="param-table">
+    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>wrap(fn)</td><td>Callable</td><td>Decorator that intercepts LLM calls for belief extraction</td></tr>
+      <tr><td>set_session(id)</td><td>None</td><td>Set the active session ID for tracking</td></tr>
+      <tr><td>set_conversation(id)</td><td>None</td><td>Set the active conversation thread within a session</td></tr>
+      <tr><td>get_context_prompt()</td><td>str</td><td>Get formatted belief summary for injection into prompts</td></tr>
+      <tr><td>get_beliefs(session_id)</td><td>list[Belief]</td><td>Retrieve all beliefs for a session</td></tr>
+      <tr><td>delete_session(id)</td><td>DeletionReceipt</td><td>Delete all session data (GDPR)</td></tr>
+      <tr><td>prune_expired_beliefs()</td><td>int</td><td>Remove beliefs older than max_age_seconds</td></tr>
+      <tr><td>update_belief_reference()</td><td>None</td><td>Touch a belief's last_referenced_at timestamp</td></tr>
+    </tbody>
+  </table>
+
+  <h3>ProviderAdapter (Protocol)</h3>
+  <p>Interface that all adapters implement.</p>
+  <table class="param-table">
+    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>to_llm_call(*args, **kwargs)</td><td>LLMCall</td><td>Convert native SDK args to universal LLMCall</td></tr>
+      <tr><td>to_llm_response(response)</td><td>LLMResponse</td><td>Convert native SDK response to universal LLMResponse</td></tr>
+      <tr><td>generate(call, response_format)</td><td>LLMResponse</td><td>Execute generation with retry and timeout</td></tr>
+      <tr><td>get_embedding(text)</td><td>list[float]</td><td>Generate embedding for a single text</td></tr>
+      <tr><td>get_embeddings(texts)</td><td>list[list[float]]</td><td>Generate embeddings for multiple texts (batched)</td></tr>
+      <tr><td>health_check()</td><td>bool</td><td>Verify provider connectivity</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Store (Protocol)</h3>
+  <p>Interface for belief storage backends.</p>
+  <table class="param-table">
+    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>add_belief(session_id, belief)</td><td>None</td><td>Add or overwrite a belief</td></tr>
+      <tr><td>get_beliefs(session_id, conversation_id)</td><td>list[Belief]</td><td>Retrieve all beliefs for a session</td></tr>
+      <tr><td>search_beliefs(session_id, embedding, ...)</td><td>list[Belief]</td><td>Semantic similarity search</td></tr>
+      <tr><td>remove_belief(session_id, subject, predicate)</td><td>None</td><td>Remove a specific belief</td></tr>
+      <tr><td>update_belief(session_id, belief)</td><td>None</td><td>Update an existing belief</td></tr>
+      <tr><td>clear(session_id)</td><td>None</td><td>Clear all beliefs for a session</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Key Models</h3>
+  <table class="param-table">
+    <thead><tr><th>Class</th><th>Module</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>Belief</td><td>beliefstate.models</td><td>Subject-predicate-value triple with confidence and metadata</td></tr>
+      <tr><td>LLMCall</td><td>beliefstate.call</td><td>Universal representation of an LLM chat completion request</td></tr>
+      <tr><td>LLMResponse</td><td>beliefstate.call</td><td>Universal representation of an LLM chat completion response</td></tr>
+      <tr><td>TrackerConfig</td><td>beliefstate.config</td><td>Pydantic configuration model for the tracker</td></tr>
+      <tr><td>DeletionReceipt</td><td>beliefstate.models</td><td>Audit receipt returned by session deletion</td></tr>
+      <tr><td>RetryConfig</td><td>beliefstate.adapters.common</td><td>Per-adapter retry strategy configuration</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── CHANGELOG ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="changelog">
+  <h2>Changelog</h2>
+
+  <h3>v0.1.0 — Initial Release</h3>
+  <ul>
+    <li>Core belief extraction pipeline (extract → detect → resolve)</li>
+    <li>5 provider adapters: OpenAI, Anthropic, Gemini, Ollama, LiteLLM</li>
+    <li>3 storage backends: SQLite, Redis, In-Memory</li>
+    <li>7 framework integrations: FastAPI, Flask, ASGI, WSGI, LangChain, LlamaIndex, OpenAI Assistants</li>
+    <li>Dual-Adapter architecture for cost optimization</li>
+    <li>Pluggable dispatchers: asyncio, sync, Celery, RQ</li>
+    <li>Production resilience: retry, circuit breaker, health checks</li>
+    <li>OpenTelemetry observability</li>
+    <li>GDPR session deletion with audit receipts</li>
+    <li>Token-aware belief injection</li>
+    <li>Staleness scoring for session resumption</li>
+    <li>Full mypy type safety (0 errors)</li>
+    <li>205 unit tests</li>
+  </ul>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <p>
+    Built with ❤️ · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a> · MIT License
+  </p>
+</footer>
+
+</main>
+</div>
+
+<!-- ── Sidebar logic ── -->
+<script>
+  // Highlight active sidebar link based on current page and scroll position
+  const sections = document.querySelectorAll('.doc-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+  function highlightCurrentLink() {
+    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
+    const currentHash = window.location.hash;
+    
+    let matched = false;
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      const href = link.getAttribute('href');
+      
+      // If there's a hash, match the exact page + hash
+      if (currentHash && href.endsWith(currentHash)) {
+        link.classList.add('active');
+        matched = true;
+      }
+    });
+
+    // If no hash or no hash match, match the page itself (first link matching the page)
+    if (!matched) {
+      for (const link of navLinks) {
+        const href = link.getAttribute('href');
+        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
+          link.classList.add('active');
+          break;
+        }
+      }
+    }
+  }
+
+  // Highlight active sidebar link on scroll (for sections on the current page)
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const targetId = entry.target.id;
+        navLinks.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href.endsWith(`#${targetId}`)) {
+            navLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+          }
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(section => observer.observe(section));
+  
+  highlightCurrentLink();
+  window.addEventListener('hashchange', highlightCurrentLink);
+
+  // Close mobile sidebar on link click
+  navLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+    });
+  });
+
+  // Sidebar Collapse / Expand Logic
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  
+  // On load, restore state
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    document.body.classList.add('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '▶';
+  } else {
+    document.body.classList.remove('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '◀';
+  }
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sidebar-collapsed', isCollapsed);
+      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
+    });
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adapters — BeliefState Documentation</title>
+  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+
+<div class="docs-layout">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🧠 BeliefState</div>
+    <div class="sidebar-version">v0.1.0</div>
+  </div>
+  <nav>
+    <ul class="sidebar-nav">
+      <li class="nav-section-title">Getting Started</li>
+      <li><a href="index.html#installation">Installation</a></li>
+      <li><a href="index.html#quickstart">Quickstart</a></li>
+      <li><a href="index.html#core-concepts">Core Concepts</a></li>
+
+      <li class="nav-section-title">Configuration</li>
+      <li><a href="configuration.html#tracker-config">TrackerConfig</a></li>
+      <li><a href="configuration.html#prompts">Custom Prompts</a></li>
+
+      <li class="nav-section-title">Adapters</li>
+      <li><a href="adapters.html#adapters">Overview</a></li>
+      <li><a href="adapters.html#openai">OpenAI</a></li>
+      <li><a href="adapters.html#anthropic">Anthropic</a></li>
+      <li><a href="adapters.html#gemini">Google Gemini</a></li>
+      <li><a href="adapters.html#ollama">Ollama</a></li>
+      <li><a href="adapters.html#litellm">LiteLLM</a></li>
+      <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
+
+      <li class="nav-section-title">Stores</li>
+      <li><a href="stores.html#stores">Overview</a></li>
+      <li><a href="stores.html#sqlite-store">SQLite</a></li>
+      <li><a href="stores.html#redis-store">Redis</a></li>
+      <li><a href="stores.html#memory-store">In-Memory</a></li>
+
+      <li class="nav-section-title">Integrations</li>
+      <li><a href="integrations.html#fastapi">FastAPI</a></li>
+      <li><a href="integrations.html#flask">Flask</a></li>
+      <li><a href="integrations.html#asgi">ASGI</a></li>
+      <li><a href="integrations.html#langchain">LangChain</a></li>
+      <li><a href="integrations.html#llamaindex">LlamaIndex</a></li>
+      <li><a href="integrations.html#openai-assistants">OpenAI Assistants</a></li>
+
+      <li class="nav-section-title">Advanced</li>
+      <li><a href="advanced.html#dispatchers">Background Workers</a></li>
+      <li><a href="advanced.html#resilience">Resilience</a></li>
+      <li><a href="advanced.html#observability">Observability</a></li>
+      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+
+      <li class="nav-section-title">Reference</li>
+      <li><a href="reference.html#api-reference">API Reference</a></li>
+      <li><a href="reference.html#changelog">Changelog</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Toggle sidebar">◀</button>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<main class="main-content">
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── ADAPTERS ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="adapters">
+  <h2>Adapters</h2>
+  <p>Adapters translate between native LLM SDK formats and BeliefState's universal models. All adapters include:</p>
+  <div class="badge-row">
+    <span class="badge green">✅ Automatic Retry</span>
+    <span class="badge green">✅ Timeout Handling</span>
+    <span class="badge green">✅ Health Checks</span>
+    <span class="badge green">✅ Structured Logging</span>
+    <span class="badge green">✅ API Key Validation</span>
+  </div>
+
+  <div class="adapter-grid">
+    <div class="adapter-card"><div class="adapter-icon">🟢</div><h4>OpenAI</h4><p>GPT-4o, GPT-4, GPT-3.5</p></div>
+    <div class="adapter-card"><div class="adapter-icon">🟣</div><h4>Anthropic</h4><p>Claude 3.5, Claude 3</p></div>
+    <div class="adapter-card"><div class="adapter-icon">🔵</div><h4>Gemini</h4><p>Gemini 2.0, 1.5</p></div>
+    <div class="adapter-card"><div class="adapter-icon">🦙</div><h4>Ollama</h4><p>Llama 3, Mistral, etc.</p></div>
+    <div class="adapter-card"><div class="adapter-icon">🌐</div><h4>LiteLLM</h4><p>100+ providers</p></div>
+  </div>
+</section>
+
+<!-- ── OpenAI ── -->
+<section class="doc-section" id="openai">
+  <h3>OpenAI</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> OpenAIAdapter
+
+adapter = <span class="fn">OpenAIAdapter</span>(
+    model=<span class="st">"gpt-4o"</span>,                        <span class="cm"># Chat completion model</span>
+    embed_model=<span class="st">"text-embedding-3-small"</span>,   <span class="cm"># Embedding model</span>
+    timeout=<span class="nu">30.0</span>,                           <span class="cm"># Request timeout (seconds)</span>
+)
+
+<!-- Health check -->
+is_healthy = <span class="kw">await</span> adapter.<span class="fn">health_check</span>()
+
+<!-- Custom retry config -->
+<span class="kw">from</span> beliefstate.adapters.common <span class="kw">import</span> RetryConfig
+
+adapter = <span class="fn">OpenAIAdapter</span>(
+    model=<span class="st">"gpt-4o"</span>,
+    retry_config=<span class="fn">RetryConfig</span>(
+        max_retries=<span class="nu">3</span>,
+        initial_delay=<span class="nu">1.0</span>,
+        max_delay=<span class="nu">30.0</span>,
+        exponential_base=<span class="nu">2.0</span>,
+        jitter=<span class="nb">True</span>,           <span class="cm"># Prevents thundering herd</span>
+    )
+)</code></pre>
+  <p>Set <code>OPENAI_API_KEY</code> environment variable or pass via <code>api_key</code> parameter.</p>
+</section>
+
+<!-- ── Anthropic ── -->
+<section class="doc-section" id="anthropic">
+  <h3>Anthropic (Claude)</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> AnthropicAdapter
+
+adapter = <span class="fn">AnthropicAdapter</span>(
+    model=<span class="st">"claude-3-5-sonnet-latest"</span>,
+    timeout=<span class="nu">30.0</span>
+)</code></pre>
+  <div class="callout warning">
+    <p><strong>⚠️ Note:</strong> Anthropic does not provide an embeddings API. Use the <a href="#dual-adapter">Dual-Adapter</a> pattern with OpenAI or Ollama as the <code>internal_adapter</code> for embedding generation.</p>
+  </div>
+</section>
+
+<!-- ── Gemini ── -->
+<section class="doc-section" id="gemini">
+  <h3>Google Gemini</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> GeminiAdapter
+
+adapter = <span class="fn">GeminiAdapter</span>(
+    model=<span class="st">"gemini-2.0-flash"</span>,
+    embed_model=<span class="st">"text-embedding-004"</span>,
+    timeout=<span class="nu">30.0</span>
+)</code></pre>
+  <p>Set <code>GOOGLE_API_KEY</code> or <code>GEMINI_API_KEY</code> environment variable.</p>
+</section>
+
+<!-- ── Ollama ── -->
+<section class="doc-section" id="ollama">
+  <h3>Ollama (Local)</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> OllamaAdapter
+
+adapter = <span class="fn">OllamaAdapter</span>(
+    model=<span class="st">"llama3.2"</span>,
+    embed_model=<span class="st">"nomic-embed-text"</span>,
+    host=<span class="st">"http://localhost"</span>,
+    port=<span class="nu">11434</span>
+)</code></pre>
+  <div class="callout tip">
+    <p><strong>💡 Tip:</strong> Ollama is perfect as an <code>internal_adapter</code> in the Dual-Adapter pattern — completely free, fast, and runs locally.</p>
+  </div>
+</section>
+
+<!-- ── LiteLLM ── -->
+<section class="doc-section" id="litellm">
+  <h3>LiteLLM (Multi-Provider)</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> LiteLLMAdapter
+
+<!-- Route to any of 100+ providers via LiteLLM -->
+adapter = <span class="fn">LiteLLMAdapter</span>(
+    model=<span class="st">"azure/gpt-4"</span>,                    <span class="cm"># Azure OpenAI</span>
+    embed_model=<span class="st">"cohere/embed-english-v3.0"</span>  <span class="cm"># Cohere embeddings</span>
+)
+
+<!-- Or use AWS Bedrock -->
+adapter = <span class="fn">LiteLLMAdapter</span>(model=<span class="st">"bedrock/anthropic.claude-3-sonnet"</span>)</code></pre>
+</section>
+
+<!-- ── Dual-Adapter ── -->
+<section class="doc-section" id="dual-adapter">
+  <h3>Dual-Adapter Architecture</h3>
+  <p>Use a premium model for your application and a cheaper/local model for background tracking to optimize costs:</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> AnthropicAdapter, OllamaAdapter
+
+<!-- Your app uses Claude 3.5 Sonnet (premium) -->
+app_adapter = <span class="fn">AnthropicAdapter</span>(model=<span class="st">"claude-3-5-sonnet-latest"</span>)
+
+<!-- Background tracking uses local Llama 3 (free!) -->
+bg_adapter = <span class="fn">OllamaAdapter</span>(model=<span class="st">"llama3"</span>, embed_model=<span class="st">"nomic-embed-text"</span>)
+
+tracker = <span class="fn">BeliefTracker</span>(
+    config=config,
+    adapter=app_adapter,              <span class="cm"># Intercepts the Claude API payload</span>
+    internal_adapter=bg_adapter       <span class="cm"># Runs extraction, embeddings, and judge</span>
+)</code></pre>
+  <div class="architecture-diagram">
+    <pre>
+  ┌─────────────────────┐                 ┌─────────────────────┐
+  │   App Adapter       │                 │  Internal Adapter   │
+  │ (Claude 3.5 Sonnet) │                 │  (Ollama / Llama3)  │
+  │                     │                 │                     │
+  │  • to_llm_call()    │                 │  • generate()       │
+  │  • to_llm_response()│    ────────▶    │  • get_embeddings() │
+  │  (payload parsing)  │  belief tasks   │  • health_check()   │
+  └─────────────────────┘                 └─────────────────────┘</pre>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <p>
+    Built with ❤️ · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a> · MIT License
+  </p>
+</footer>
+
+</main>
+</div>
+
+<!-- ── Sidebar logic ── -->
+<script>
+  // Highlight active sidebar link based on current page and scroll position
+  const sections = document.querySelectorAll('.doc-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+  function highlightCurrentLink() {
+    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
+    const currentHash = window.location.hash;
+    
+    let matched = false;
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      const href = link.getAttribute('href');
+      
+      // If there's a hash, match the exact page + hash
+      if (currentHash && href.endsWith(currentHash)) {
+        link.classList.add('active');
+        matched = true;
+      }
+    });
+
+    // If no hash or no hash match, match the page itself (first link matching the page)
+    if (!matched) {
+      for (const link of navLinks) {
+        const href = link.getAttribute('href');
+        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
+          link.classList.add('active');
+          break;
+        }
+      }
+    }
+  }
+
+  // Highlight active sidebar link on scroll (for sections on the current page)
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const targetId = entry.target.id;
+        navLinks.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href.endsWith(`#${targetId}`)) {
+            navLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+          }
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(section => observer.observe(section));
+  
+  highlightCurrentLink();
+  window.addEventListener('hashchange', highlightCurrentLink);
+
+  // Close mobile sidebar on link click
+  navLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+    });
+  });
+
+  // Sidebar Collapse / Expand Logic
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  
+  // On load, restore state
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    document.body.classList.add('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '▶';
+  } else {
+    document.body.classList.remove('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '◀';
+  }
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sidebar-collapsed', isCollapsed);
+      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
+    });
+  }
+</script>
+
+</body>
+</html>

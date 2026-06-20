@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced Features — BeliefState Documentation</title>
+  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+
+<div class="docs-layout">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🧠 BeliefState</div>
+    <div class="sidebar-version">v0.1.0</div>
+  </div>
+  <nav>
+    <ul class="sidebar-nav">
+      <li class="nav-section-title">Getting Started</li>
+      <li><a href="index.html#installation">Installation</a></li>
+      <li><a href="index.html#quickstart">Quickstart</a></li>
+      <li><a href="index.html#core-concepts">Core Concepts</a></li>
+
+      <li class="nav-section-title">Configuration</li>
+      <li><a href="configuration.html#tracker-config">TrackerConfig</a></li>
+      <li><a href="configuration.html#prompts">Custom Prompts</a></li>
+
+      <li class="nav-section-title">Adapters</li>
+      <li><a href="adapters.html#adapters">Overview</a></li>
+      <li><a href="adapters.html#openai">OpenAI</a></li>
+      <li><a href="adapters.html#anthropic">Anthropic</a></li>
+      <li><a href="adapters.html#gemini">Google Gemini</a></li>
+      <li><a href="adapters.html#ollama">Ollama</a></li>
+      <li><a href="adapters.html#litellm">LiteLLM</a></li>
+      <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
+
+      <li class="nav-section-title">Stores</li>
+      <li><a href="stores.html#stores">Overview</a></li>
+      <li><a href="stores.html#sqlite-store">SQLite</a></li>
+      <li><a href="stores.html#redis-store">Redis</a></li>
+      <li><a href="stores.html#memory-store">In-Memory</a></li>
+
+      <li class="nav-section-title">Integrations</li>
+      <li><a href="integrations.html#fastapi">FastAPI</a></li>
+      <li><a href="integrations.html#flask">Flask</a></li>
+      <li><a href="integrations.html#asgi">ASGI</a></li>
+      <li><a href="integrations.html#langchain">LangChain</a></li>
+      <li><a href="integrations.html#llamaindex">LlamaIndex</a></li>
+      <li><a href="integrations.html#openai-assistants">OpenAI Assistants</a></li>
+
+      <li class="nav-section-title">Advanced</li>
+      <li><a href="advanced.html#dispatchers">Background Workers</a></li>
+      <li><a href="advanced.html#resilience">Resilience</a></li>
+      <li><a href="advanced.html#observability">Observability</a></li>
+      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+
+      <li class="nav-section-title">Reference</li>
+      <li><a href="reference.html#api-reference">API Reference</a></li>
+      <li><a href="reference.html#changelog">Changelog</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Toggle sidebar">◀</button>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<main class="main-content">
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── DISPATCHERS ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="dispatchers">
+  <h2>Background Workers</h2>
+  <p>By default, tracking runs as <code>asyncio</code> background tasks. For production durability, use Celery or RQ dispatchers.</p>
+
+  <h3>Celery Dispatcher</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> celery <span class="kw">import</span> Celery
+<span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTracker, TrackerConfig
+<span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> CeleryDispatcher
+
+celery_app = <span class="fn">Celery</span>(<span class="st">"tasks"</span>, broker=<span class="st">"redis://localhost:6379/0"</span>)
+
+tracker = <span class="fn">BeliefTracker</span>(
+    config=<span class="fn">TrackerConfig</span>(),
+    adapter=app_adapter,
+    dispatcher=<span class="fn">CeleryDispatcher</span>(celery_app=celery_app)
+)</code></pre>
+
+  <h3>RQ (Redis Queue) Dispatcher</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> redis <span class="kw">import</span> Redis
+<span class="kw">from</span> rq <span class="kw">import</span> Queue
+<span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> RQDispatcher
+
+queue = <span class="fn">Queue</span>(<span class="st">"belief-tasks"</span>, connection=<span class="fn">Redis</span>())
+
+tracker = <span class="fn">BeliefTracker</span>(
+    config=<span class="fn">TrackerConfig</span>(),
+    adapter=app_adapter,
+    dispatcher=<span class="fn">RQDispatcher</span>(queue=queue)
+)</code></pre>
+
+  <h3>Worker Setup</h3>
+  <p>In your worker process, register the global tracker so tasks can execute:</p>
+  <pre><code><span class="code-label">worker_startup.py</span><span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> register_global_tracker
+<span class="kw">from</span> my_app <span class="kw">import</span> tracker
+
+<!-- Register BEFORE processing any tasks -->
+<span class="fn">register_global_tracker</span>(tracker)</code></pre>
+  <div class="callout warning">
+    <p><strong>⚠️ Important:</strong> <code>ContextVar</code> (session_context) does NOT propagate across process boundaries. The dispatchers explicitly serialize <code>session_id</code> into task payloads to ensure it reaches worker processes.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── RESILIENCE ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="resilience">
+  <h2>Resilience</h2>
+  <p>BeliefState wraps internal adapter calls with production-grade resilience patterns:</p>
+
+  <h3>Retry with Exponential Backoff</h3>
+  <p>All adapter calls (generate, embeddings) automatically retry transient failures with jittered exponential backoff. Configure via <code>TrackerConfig</code> or per-adapter <code>RetryConfig</code>.</p>
+
+  <h3>Circuit Breaker</h3>
+  <p>When an LLM API goes down, the circuit breaker pattern prevents cascading failures:</p>
+  <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
+    enable_circuit_breaker=<span class="nb">True</span>,
+    circuit_breaker_failure_threshold=<span class="nu">5</span>,     <span class="cm"># Trip after 5 consecutive failures</span>
+    circuit_breaker_recovery_timeout=<span class="nu">30.0</span>,  <span class="cm"># Wait 30s before trying recovery</span>
+)
+
+<!-- Manually access the circuit breaker -->
+<span class="kw">from</span> beliefstate <span class="kw">import</span> CircuitBreaker, CircuitBreakerOpenException
+
+try:
+    result = <span class="kw">await</span> tracker.<span class="fn">track</span>(...)
+except CircuitBreakerOpenException:
+    <span class="nb">print</span>(<span class="st">"Circuit breaker is OPEN — failing fast"</span>)</code></pre>
+
+  <h3>Health Checks</h3>
+  <pre><code><span class="code-label">python</span><!-- Check if the LLM provider is reachable -->
+is_healthy = <span class="kw">await</span> adapter.<span class="fn">health_check</span>()
+if not is_healthy:
+    logger.<span class="fn">error</span>(<span class="st">"Provider is not responding — use fallback"</span>)</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── OBSERVABILITY ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="observability">
+  <h2>Observability</h2>
+  <p>BeliefState includes built-in OpenTelemetry instrumentation for distributed tracing.</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.observability <span class="kw">import</span> init_tracing
+
+<!-- Initialize OpenTelemetry tracing -->
+<span class="fn">init_tracing</span>(
+    service_name=<span class="st">"my-app"</span>,
+    endpoint=<span class="st">"http://jaeger:4317"</span>  <span class="cm"># OTLP endpoint</span>
+)
+
+<!-- All tracker operations (extract, detect, resolve) are automatically traced -->
+<!-- with spans named "beliefstate.*" --></code></pre>
+
+  <h3>Structured Logging</h3>
+  <p>All components emit structured log messages with relevant context:</p>
+  <pre><code><span class="code-label">log output</span>[OpenAI] Initialized model=gpt-4o-mini embed_model=text-embedding-3-small
+[OpenAI] Attempt 1/3: generate
+[FastAPI] Request started request_id=abc-123 session_id=user_123
+[FastAPI] Request completed request_id=abc-123 latency_seconds=0.234
+[BeliefExtractor] Extracted 3 beliefs from response (turn=5)
+[ContradictionDetector] Found 1 contradiction for session=user_123</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── GDPR ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="gdpr">
+  <h2>GDPR & Privacy</h2>
+  <p>BeliefState supports full session deletion with audit receipts for GDPR compliance:</p>
+  <pre><code><span class="code-label">python</span><!-- Delete all beliefs for a user (GDPR right to erasure) -->
+receipt = <span class="kw">await</span> tracker.<span class="fn">delete_session</span>(<span class="st">"user_123"</span>)
+
+<span class="nb">print</span>(receipt)
+<!-- DeletionReceipt( -->
+<!--   session_id="user_123", -->
+<!--   beliefs_deleted=42, -->
+<!--   in_flight_drained=2, -->
+<!--   timestamp=datetime(...) -->
+<!-- ) --></code></pre>
+
+  <p>The <code>DeletionReceipt</code> confirms:</p>
+  <ul>
+    <li>All stored beliefs were deleted from the store</li>
+    <li>All in-flight background tasks for the session were drained/completed</li>
+    <li>An auditable timestamp of when deletion occurred</li>
+  </ul>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <p>
+    Built with ❤️ · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a> · MIT License
+  </p>
+</footer>
+
+</main>
+</div>
+
+<!-- ── Sidebar logic ── -->
+<script>
+  // Highlight active sidebar link based on current page and scroll position
+  const sections = document.querySelectorAll('.doc-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+  function highlightCurrentLink() {
+    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
+    const currentHash = window.location.hash;
+    
+    let matched = false;
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      const href = link.getAttribute('href');
+      
+      // If there's a hash, match the exact page + hash
+      if (currentHash && href.endsWith(currentHash)) {
+        link.classList.add('active');
+        matched = true;
+      }
+    });
+
+    // If no hash or no hash match, match the page itself (first link matching the page)
+    if (!matched) {
+      for (const link of navLinks) {
+        const href = link.getAttribute('href');
+        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
+          link.classList.add('active');
+          break;
+        }
+      }
+    }
+  }
+
+  // Highlight active sidebar link on scroll (for sections on the current page)
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const targetId = entry.target.id;
+        navLinks.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href.endsWith(`#${targetId}`)) {
+            navLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+          }
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(section => observer.observe(section));
+  
+  highlightCurrentLink();
+  window.addEventListener('hashchange', highlightCurrentLink);
+
+  // Close mobile sidebar on link click
+  navLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+    });
+  });
+
+  // Sidebar Collapse / Expand Logic
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  
+  // On load, restore state
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    document.body.classList.add('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '▶';
+  } else {
+    document.body.classList.remove('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '◀';
+  }
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sidebar-collapsed', isCollapsed);
+      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
+    });
+  }
+</script>
+
+</body>
+</html>

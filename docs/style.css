@@ -83,6 +83,7 @@ img { max-width: 100%; display: block; }
   margin-right: auto;
   padding: 3rem 3rem 6rem 3.5rem;
   width: calc(100% - 280px);
+  transition: margin-left var(--transition-base), width var(--transition-base);
 }
 
 /* ── Sidebar ─────────────────────────────────── */
@@ -97,7 +98,94 @@ img { max-width: 100%; display: block; }
   padding: 1.5rem 0;
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
+  transition: transform var(--transition-base);
 }
+
+/* ── Sidebar Toggle Button ───────────────────── */
+.sidebar-toggle-btn {
+  position: fixed;
+  top: 1.5rem;
+  left: 265px; /* Overlaps sidebar border (280px - 15px) */
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  z-index: 110;
+  transition: left var(--transition-base), transform var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+  
+  /* Hide unicode arrow text */
+  font-size: 0;
+  color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Chevron arrow inside toggle button */
+.sidebar-toggle-btn::after {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid var(--color-text-muted);
+  border-left: 2px solid var(--color-text-muted);
+  transform: rotate(-45deg); /* Points left ◀ */
+  transition: transform var(--transition-base), border-color var(--transition-fast);
+  margin-left: 2px; /* optical adjustment for left arrow */
+}
+
+.sidebar-toggle-btn:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-glow);
+  background: var(--color-bg-alt);
+}
+
+.sidebar-toggle-btn:hover::after {
+  border-color: var(--color-primary-bright);
+}
+
+.sidebar-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+/* Rotated state when collapsed (pointing right ▶) */
+body.sidebar-collapsed .sidebar-toggle-btn::after {
+  transform: rotate(135deg); /* points right */
+  margin-left: -2px; /* optical adjustment for right arrow */
+}
+
+/* Collapsed state styles on desktop */
+@media (min-width: 901px) {
+  body.sidebar-collapsed .sidebar {
+    transform: translateX(-280px);
+  }
+
+  body.sidebar-collapsed .main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  body.sidebar-collapsed .sidebar-toggle-btn {
+    left: -15px; /* Overlap viewport edge when collapsed */
+  }
+
+  body.sidebar-collapsed .sidebar-toggle-btn:hover {
+    left: 0px; /* Slide out slightly on hover for a premium feel */
+  }
+}
+
+/* Hide desktop toggle button on mobile */
+@media (max-width: 900px) {
+  .sidebar-toggle-btn {
+    display: none;
+  }
+}
+
+
+
 
 .sidebar-header {
   padding: 0 1.5rem 1.5rem;

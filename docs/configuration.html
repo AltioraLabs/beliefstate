@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuration — BeliefState Documentation</title>
+  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+
+<div class="docs-layout">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🧠 BeliefState</div>
+    <div class="sidebar-version">v0.1.0</div>
+  </div>
+  <nav>
+    <ul class="sidebar-nav">
+      <li class="nav-section-title">Getting Started</li>
+      <li><a href="index.html#installation">Installation</a></li>
+      <li><a href="index.html#quickstart">Quickstart</a></li>
+      <li><a href="index.html#core-concepts">Core Concepts</a></li>
+
+      <li class="nav-section-title">Configuration</li>
+      <li><a href="configuration.html#tracker-config">TrackerConfig</a></li>
+      <li><a href="configuration.html#prompts">Custom Prompts</a></li>
+
+      <li class="nav-section-title">Adapters</li>
+      <li><a href="adapters.html#adapters">Overview</a></li>
+      <li><a href="adapters.html#openai">OpenAI</a></li>
+      <li><a href="adapters.html#anthropic">Anthropic</a></li>
+      <li><a href="adapters.html#gemini">Google Gemini</a></li>
+      <li><a href="adapters.html#ollama">Ollama</a></li>
+      <li><a href="adapters.html#litellm">LiteLLM</a></li>
+      <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
+
+      <li class="nav-section-title">Stores</li>
+      <li><a href="stores.html#stores">Overview</a></li>
+      <li><a href="stores.html#sqlite-store">SQLite</a></li>
+      <li><a href="stores.html#redis-store">Redis</a></li>
+      <li><a href="stores.html#memory-store">In-Memory</a></li>
+
+      <li class="nav-section-title">Integrations</li>
+      <li><a href="integrations.html#fastapi">FastAPI</a></li>
+      <li><a href="integrations.html#flask">Flask</a></li>
+      <li><a href="integrations.html#asgi">ASGI</a></li>
+      <li><a href="integrations.html#langchain">LangChain</a></li>
+      <li><a href="integrations.html#llamaindex">LlamaIndex</a></li>
+      <li><a href="integrations.html#openai-assistants">OpenAI Assistants</a></li>
+
+      <li class="nav-section-title">Advanced</li>
+      <li><a href="advanced.html#dispatchers">Background Workers</a></li>
+      <li><a href="advanced.html#resilience">Resilience</a></li>
+      <li><a href="advanced.html#observability">Observability</a></li>
+      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+
+      <li class="nav-section-title">Reference</li>
+      <li><a href="reference.html#api-reference">API Reference</a></li>
+      <li><a href="reference.html#changelog">Changelog</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Toggle sidebar">◀</button>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<main class="main-content">
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── TRACKER CONFIG ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="tracker-config">
+  <h2>TrackerConfig</h2>
+  <p><code>TrackerConfig</code> is a Pydantic model that controls all aspects of the tracker. All parameters have sensible defaults.</p>
+
+  <h3>Store Settings</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>store_type</td><td>str</td><td>"sqlite"</td><td>Storage backend: <code>"sqlite"</code> or <code>"redis"</code></td></tr>
+      <tr><td>store_kwargs</td><td>dict</td><td>{}</td><td>Extra arguments passed to the store constructor (e.g. <code>{"db_path": "beliefs.db"}</code>)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Detection Settings</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>similarity_threshold</td><td>float</td><td>0.82</td><td>Minimum cosine similarity to consider beliefs related</td></tr>
+      <tr><td>contradiction_threshold</td><td>float</td><td>0.70</td><td>Minimum NLI score to flag as contradiction</td></tr>
+      <tr><td>entailment_threshold</td><td>float</td><td>0.85</td><td>Minimum NLI score to detect semantic duplicates</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Resilience Settings</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>retry_max_attempts</td><td>int</td><td>5</td><td>Maximum retry attempts for LLM API calls</td></tr>
+      <tr><td>retry_min_wait</td><td>float</td><td>2.0</td><td>Minimum wait time between retries (seconds)</td></tr>
+      <tr><td>retry_max_wait</td><td>float</td><td>30.0</td><td>Maximum wait time between retries (seconds)</td></tr>
+      <tr><td>retry_multiplier</td><td>float</td><td>2.0</td><td>Exponential backoff multiplier</td></tr>
+      <tr><td>enable_circuit_breaker</td><td>bool</td><td>True</td><td>Enable circuit breaker protection</td></tr>
+      <tr><td>circuit_breaker_failure_threshold</td><td>int</td><td>5</td><td>Failures before tripping the circuit breaker</td></tr>
+      <tr><td>circuit_breaker_recovery_timeout</td><td>float</td><td>30.0</td><td>Cooldown before recovery attempt (seconds)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Task & Dispatcher Settings</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>enable_background_tasks</td><td>bool</td><td>True</td><td>Run tracking in fire-and-forget background tasks</td></tr>
+      <tr><td>task_dispatcher_type</td><td>str</td><td>"asyncio"</td><td>Dispatcher: <code>"asyncio"</code>, <code>"sync"</code>, <code>"celery"</code>, or <code>"rq"</code></td></tr>
+      <tr><td>dispatcher_kwargs</td><td>dict</td><td>{}</td><td>Arguments for dispatcher initialization</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Belief Storage & Injection</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>max_beliefs</td><td>int</td><td>50</td><td>Maximum beliefs injected into prompts</td></tr>
+      <tr><td>belief_sort_strategy</td><td>str</td><td>"confidence_recency"</td><td>Selection strategy: <code>"confidence_recency"</code>, <code>"recency"</code>, or <code>"confidence"</code></td></tr>
+      <tr><td>enable_belief_ttl</td><td>bool</td><td>False</td><td>Enable automatic belief pruning by age</td></tr>
+      <tr><td>belief_max_age_seconds</td><td>int</td><td>86400</td><td>Max age before pruning (default: 24 hours)</td></tr>
+      <tr><td>enable_staleness_scoring</td><td>bool</td><td>True</td><td>Deprioritize old beliefs during session resumption</td></tr>
+      <tr><td>staleness_threshold</td><td>float</td><td>0.1</td><td>Minimum staleness score to inject a belief</td></tr>
+      <tr><td>enable_token_aware_injection</td><td>bool</td><td>True</td><td>Use relevance filtering when beliefs exceed token budget</td></tr>
+      <tr><td>belief_budget_tokens</td><td>int</td><td>500</td><td>Maximum tokens reserved for belief injection</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── Custom Prompts ── -->
+<section class="doc-section" id="prompts">
+  <h2>Custom Prompts</h2>
+  <p>Override the built-in extraction or judge prompts via <code>TrackerConfig</code>:</p>
+  <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
+    extract_prompt_template=<span class="st">"""Extract beliefs from this text as JSON.
+Return [{"subject": "...", "predicate": "...", "value": "...", "confidence": 0.0-1.0}]
+Text: {response}"""</span>,
+
+    judge_prompt_template=<span class="st">"""Analyze these two claims.
+Premise: {premise}
+Hypothesis: {hypothesis}
+Return {"relationship": "contradiction|entailment|neutral", "score": 0.0-1.0}"""</span>
+)</code></pre>
+  <div class="callout info">
+    <p><strong>ℹ️ Note:</strong> The extraction prompt must include the <code>{response}</code> placeholder. The judge prompt must include <code>{premise}</code> and <code>{hypothesis}</code> placeholders.</p>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <p>
+    Built with ❤️ · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a> · MIT License
+  </p>
+</footer>
+
+</main>
+</div>
+
+<!-- ── Sidebar logic ── -->
+<script>
+  // Highlight active sidebar link based on current page and scroll position
+  const sections = document.querySelectorAll('.doc-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+  function highlightCurrentLink() {
+    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
+    const currentHash = window.location.hash;
+    
+    let matched = false;
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      const href = link.getAttribute('href');
+      
+      // If there's a hash, match the exact page + hash
+      if (currentHash && href.endsWith(currentHash)) {
+        link.classList.add('active');
+        matched = true;
+      }
+    });
+
+    // If no hash or no hash match, match the page itself (first link matching the page)
+    if (!matched) {
+      for (const link of navLinks) {
+        const href = link.getAttribute('href');
+        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
+          link.classList.add('active');
+          break;
+        }
+      }
+    }
+  }
+
+  // Highlight active sidebar link on scroll (for sections on the current page)
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const targetId = entry.target.id;
+        navLinks.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href.endsWith(`#${targetId}`)) {
+            navLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+          }
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(section => observer.observe(section));
+  
+  highlightCurrentLink();
+  window.addEventListener('hashchange', highlightCurrentLink);
+
+  // Close mobile sidebar on link click
+  navLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+    });
+  });
+
+  // Sidebar Collapse / Expand Logic
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  
+  // On load, restore state
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    document.body.classList.add('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '▶';
+  } else {
+    document.body.classList.remove('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '◀';
+  }
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sidebar-collapsed', isCollapsed);
+      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
+    });
+  }
+</script>
+
+</body>
+</html>

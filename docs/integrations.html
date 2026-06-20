@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrations — BeliefState Documentation</title>
+  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+
+<div class="docs-layout">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🧠 BeliefState</div>
+    <div class="sidebar-version">v0.1.0</div>
+  </div>
+  <nav>
+    <ul class="sidebar-nav">
+      <li class="nav-section-title">Getting Started</li>
+      <li><a href="index.html#installation">Installation</a></li>
+      <li><a href="index.html#quickstart">Quickstart</a></li>
+      <li><a href="index.html#core-concepts">Core Concepts</a></li>
+
+      <li class="nav-section-title">Configuration</li>
+      <li><a href="configuration.html#tracker-config">TrackerConfig</a></li>
+      <li><a href="configuration.html#prompts">Custom Prompts</a></li>
+
+      <li class="nav-section-title">Adapters</li>
+      <li><a href="adapters.html#adapters">Overview</a></li>
+      <li><a href="adapters.html#openai">OpenAI</a></li>
+      <li><a href="adapters.html#anthropic">Anthropic</a></li>
+      <li><a href="adapters.html#gemini">Google Gemini</a></li>
+      <li><a href="adapters.html#ollama">Ollama</a></li>
+      <li><a href="adapters.html#litellm">LiteLLM</a></li>
+      <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
+
+      <li class="nav-section-title">Stores</li>
+      <li><a href="stores.html#stores">Overview</a></li>
+      <li><a href="stores.html#sqlite-store">SQLite</a></li>
+      <li><a href="stores.html#redis-store">Redis</a></li>
+      <li><a href="stores.html#memory-store">In-Memory</a></li>
+
+      <li class="nav-section-title">Integrations</li>
+      <li><a href="integrations.html#fastapi">FastAPI</a></li>
+      <li><a href="integrations.html#flask">Flask</a></li>
+      <li><a href="integrations.html#asgi">ASGI</a></li>
+      <li><a href="integrations.html#langchain">LangChain</a></li>
+      <li><a href="integrations.html#llamaindex">LlamaIndex</a></li>
+      <li><a href="integrations.html#openai-assistants">OpenAI Assistants</a></li>
+
+      <li class="nav-section-title">Advanced</li>
+      <li><a href="advanced.html#dispatchers">Background Workers</a></li>
+      <li><a href="advanced.html#resilience">Resilience</a></li>
+      <li><a href="advanced.html#observability">Observability</a></li>
+      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+
+      <li class="nav-section-title">Reference</li>
+      <li><a href="reference.html#api-reference">API Reference</a></li>
+      <li><a href="reference.html#changelog">Changelog</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Toggle sidebar">◀</button>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<main class="main-content">
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── INTEGRATIONS ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="fastapi">
+  <h2>FastAPI Integration</h2>
+  <p>ASGI middleware that automatically extracts session IDs from request headers and sets them in the tracker context.</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI, Depends
+<span class="kw">from</span> beliefstate <span class="kw">import</span> FastAPIBeliefTrackerMiddleware, get_session_id
+
+app = <span class="fn">FastAPI</span>()
+
+<!-- Option 1: Middleware (sets session context automatically) -->
+app.<span class="fn">add_middleware</span>(
+    FastAPIBeliefTrackerMiddleware,
+    header_name=<span class="st">"X-Session-ID"</span>
+)
+
+<!-- Option 2: Dependency injection -->
+<span class="dc">@app.post</span>(<span class="st">"/chat"</span>)
+<span class="kw">async def</span> <span class="fn">chat</span>(message: <span class="nb">str</span>, session_id: <span class="nb">str</span> = <span class="fn">Depends</span>(get_session_id)):
+    <!-- session_id is extracted from X-Session-ID header -->
+    <!-- session context is automatically set -->
+    response = <span class="kw">await</span> <span class="fn">chat_with_llm</span>(message)
+    <span class="kw">return</span> {<span class="st">"response"</span>: response}</code></pre>
+</section>
+
+<section class="doc-section" id="flask">
+  <h3>Flask Integration</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> flask <span class="kw">import</span> Flask
+<span class="kw">from</span> beliefstate <span class="kw">import</span> FlaskBeliefTrackerMiddleware, register_flask_hooks
+
+app = <span class="fn">Flask</span>(__name__)
+
+<!-- WSGI middleware for context propagation -->
+app.wsgi_app = <span class="fn">FlaskBeliefTrackerMiddleware</span>(app.wsgi_app, header_name=<span class="st">"X-Session-ID"</span>)
+
+<!-- Flask request hooks (alternative or additional) -->
+<span class="fn">register_flask_hooks</span>(app, header_name=<span class="st">"X-Session-ID"</span>)</code></pre>
+</section>
+
+<section class="doc-section" id="asgi">
+  <h3>Generic ASGI Middleware</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> starlette.applications <span class="kw">import</span> Starlette
+<span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTrackerASGIMiddleware
+
+app = <span class="fn">Starlette</span>()
+app.<span class="fn">add_middleware</span>(BeliefTrackerASGIMiddleware, header_name=<span class="st">"X-Session-ID"</span>)
+<!-- Works with any ASGI framework: Starlette, Litestar, Quart, etc. --></code></pre>
+</section>
+
+<section class="doc-section" id="langchain">
+  <h3>LangChain Callback</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> session_context, BeliefTrackerLangchainCallback
+
+<!-- Set session context -->
+session_context.<span class="fn">set</span>(<span class="st">"user_123"</span>)
+
+<!-- Attach callback handler to your chain -->
+handler = <span class="fn">BeliefTrackerLangchainCallback</span>(tracker=tracker)
+<span class="kw">await</span> llm.<span class="fn">ainvoke</span>(<span class="st">"Hello!"</span>, config={<span class="st">"callbacks"</span>: [handler]})</code></pre>
+</section>
+
+<section class="doc-section" id="llamaindex">
+  <h3>LlamaIndex Callback</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> llama_index.core <span class="kw">import</span> Settings
+<span class="kw">from</span> llama_index.core.callbacks <span class="kw">import</span> CallbackManager
+<span class="kw">from</span> beliefstate <span class="kw">import</span> LlamaIndexBeliefTrackerCallback
+
+callback = <span class="fn">LlamaIndexBeliefTrackerCallback</span>(tracker=tracker)
+Settings.callback_manager = <span class="fn">CallbackManager</span>([callback])</code></pre>
+</section>
+
+<section class="doc-section" id="openai-assistants">
+  <h3>OpenAI Assistants Observer</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">import</span> asyncio
+<span class="kw">from</span> beliefstate <span class="kw">import</span> observe_run
+
+<!-- Observe assistant run and extract beliefs from thread messages -->
+asyncio.<span class="fn">create_task</span>(
+    <span class="fn">observe_run</span>(
+        tracker=tracker,
+        client=openai_client,
+        thread_id=thread_id,
+        run_id=run.id,
+        session_id=<span class="st">"session_123"</span>
+    )
+)</code></pre>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <p>
+    Built with ❤️ · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a> · MIT License
+  </p>
+</footer>
+
+</main>
+</div>
+
+<!-- ── Sidebar logic ── -->
+<script>
+  // Highlight active sidebar link based on current page and scroll position
+  const sections = document.querySelectorAll('.doc-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+  function highlightCurrentLink() {
+    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
+    const currentHash = window.location.hash;
+    
+    let matched = false;
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      const href = link.getAttribute('href');
+      
+      // If there's a hash, match the exact page + hash
+      if (currentHash && href.endsWith(currentHash)) {
+        link.classList.add('active');
+        matched = true;
+      }
+    });
+
+    // If no hash or no hash match, match the page itself (first link matching the page)
+    if (!matched) {
+      for (const link of navLinks) {
+        const href = link.getAttribute('href');
+        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
+          link.classList.add('active');
+          break;
+        }
+      }
+    }
+  }
+
+  // Highlight active sidebar link on scroll (for sections on the current page)
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const targetId = entry.target.id;
+        navLinks.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href.endsWith(`#${targetId}`)) {
+            navLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+          }
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(section => observer.observe(section));
+  
+  highlightCurrentLink();
+  window.addEventListener('hashchange', highlightCurrentLink);
+
+  // Close mobile sidebar on link click
+  navLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+    });
+  });
+
+  // Sidebar Collapse / Expand Logic
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  
+  // On load, restore state
+  if (localStorage.getItem('sidebar-collapsed') === 'true') {
+    document.body.classList.add('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '▶';
+  } else {
+    document.body.classList.remove('sidebar-collapsed');
+    if (sidebarToggle) sidebarToggle.textContent = '◀';
+  }
+
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sidebar-collapsed', isCollapsed);
+      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
+    });
+  }
+</script>
+
+</body>
+</html>
