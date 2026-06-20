@@ -4,16 +4,18 @@ from beliefstate.tracker import BeliefTracker, session_context
 from beliefstate.call import LLMCall, LLMResponse
 
 try:
-    from llama_index.core.callbacks import BaseCallbackHandler, CBEventType
+    from llama_index.core.callbacks import CBEventType, BaseCallbackHandler
 
     HAS_LLAMAINDEX = True
 except ImportError:
 
     class BaseCallbackHandler:  # type: ignore[no-redef]
+        """Stub for when llama-index is not installed."""
+
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-    CBEventType = Any
+    CBEventType = Any  # type: ignore[misc]
     HAS_LLAMAINDEX = False
 
 

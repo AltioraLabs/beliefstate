@@ -19,8 +19,8 @@ try:
     from google import genai
     from google.genai import types
 except ImportError:
-    genai = Any  # type: ignore[assignment]
-    types = Any  # type: ignore[assignment]
+    genai = None  # type: ignore[assignment]
+    types = None  # type: ignore[assignment]
 
 
 class GeminiAdapter(ProviderAdapter):

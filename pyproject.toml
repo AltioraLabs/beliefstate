@@ -89,6 +89,16 @@ strict = true
 python_version = "3.10"
 ignore_missing_imports = true
 
+# Optional-dependency modules: type:ignore comments are needed when the
+# dependency is missing, but flagged as "unused" when it IS installed.
+# Disable warn_unused_ignores for these specific modules.
+[[tool.mypy.overrides]]
+module = [
+    "beliefstate.adapters.gemini",
+    "beliefstate.integrations.llamaindex",
+]
+warn_unused_ignores = false
+
 [tool.ruff]
 line-length = 88
 target-version = "py310"
