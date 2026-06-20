@@ -4,7 +4,7 @@ from beliefstate.tracker import BeliefTracker, session_context
 from beliefstate.call import LLMCall, LLMResponse
 
 try:
-    from llama_index.core.callbacks import CBEventType, BaseCallbackHandler
+    from llama_index.core.callbacks import CBEventType, BaseCallbackHandler  # type: ignore[attr-defined]
 
     HAS_LLAMAINDEX = True
 except ImportError:
@@ -15,7 +15,7 @@ except ImportError:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-    CBEventType = Any  # type: ignore[misc]
+    CBEventType = Any  # type: ignore[misc,assignment]
     HAS_LLAMAINDEX = False
 
 
