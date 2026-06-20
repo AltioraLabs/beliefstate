@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BeliefState — Universal LLM Belief State Tracker</title>
+  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+
+<div class="docs-layout">
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🧠 BeliefState</div>
+    <div class="sidebar-version">v0.1.0</div>
+  </div>
+  <nav>
+    <ul class="sidebar-nav">
+      <li class="nav-section-title">Getting Started</li>
+      <li><a href="#installation">Installation</a></li>
+      <li><a href="#quickstart">Quickstart</a></li>
+      <li><a href="#core-concepts">Core Concepts</a></li>
+
+      <li class="nav-section-title">Configuration</li>
+      <li><a href="#tracker-config">TrackerConfig</a></li>
+      <li><a href="#prompts">Custom Prompts</a></li>
+
+      <li class="nav-section-title">Adapters</li>
+      <li><a href="#adapters">Overview</a></li>
+      <li><a href="#openai">OpenAI</a></li>
+      <li><a href="#anthropic">Anthropic</a></li>
+      <li><a href="#gemini">Google Gemini</a></li>
+      <li><a href="#ollama">Ollama</a></li>
+      <li><a href="#litellm">LiteLLM</a></li>
+      <li><a href="#dual-adapter">Dual-Adapter</a></li>
+
+      <li class="nav-section-title">Stores</li>
+      <li><a href="#stores">Overview</a></li>
+      <li><a href="#sqlite-store">SQLite</a></li>
+      <li><a href="#redis-store">Redis</a></li>
+      <li><a href="#memory-store">In-Memory</a></li>
+
+      <li class="nav-section-title">Integrations</li>
+      <li><a href="#fastapi">FastAPI</a></li>
+      <li><a href="#flask">Flask</a></li>
+      <li><a href="#asgi">ASGI</a></li>
+      <li><a href="#langchain">LangChain</a></li>
+      <li><a href="#llamaindex">LlamaIndex</a></li>
+      <li><a href="#openai-assistants">OpenAI Assistants</a></li>
+
+      <li class="nav-section-title">Advanced</li>
+      <li><a href="#dispatchers">Background Workers</a></li>
+      <li><a href="#resilience">Resilience</a></li>
+      <li><a href="#observability">Observability</a></li>
+      <li><a href="#gdpr">GDPR & Privacy</a></li>
+
+      <li class="nav-section-title">Reference</li>
+      <li><a href="#api-reference">API Reference</a></li>
+      <li><a href="#changelog">Changelog</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<main class="main-content">
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="hero-badge">✨ Open Source · MIT Licensed</div>
+  <h1>BeliefState</h1>
+  <p class="hero-tagline">
+    An asynchronous, zero-latency belief state tracking layer for Python.
+    Seamlessly intercepts LLM conversations, extracts factual beliefs, resolves contradictions,
+    and saves them to persistent storage — completely in the background.
+  </p>
+  <div class="hero-actions">
+    <div class="install-cmd" onclick="navigator.clipboard.writeText('pip install beliefstate')">
+      <span class="prompt">$</span> pip install beliefstate
+      <span style="color: var(--color-text-dim); font-size: 0.75rem;">📋</span>
+    </div>
+    <a href="#quickstart" class="btn-primary">Get Started →</a>
+  </div>
+</section>
+
+<!-- ── Feature Highlights ── -->
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="icon">⚡</div>
+    <h3>Zero-Latency</h3>
+    <p>Fire-and-forget background tasks. Your app never waits for extraction or contradiction detection.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🔌</div>
+    <h3>5 Providers</h3>
+    <p>Native adapters for OpenAI, Anthropic, Gemini, Ollama, and LiteLLM with automatic retry and health checks.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🧠</div>
+    <h3>Smart Contradictions</h3>
+    <p>Semantic embeddings + NLI judge to detect and resolve conflicting beliefs automatically.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🏗️</div>
+    <h3>Dual-Adapter</h3>
+    <p>Use an expensive model for your app and a cheap/local model for background tracking.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🛡️</div>
+    <h3>Production-Grade</h3>
+    <p>Circuit breakers, exponential backoff, health checks, OpenTelemetry tracing, and structured logging.</p>
+  </div>
+  <div class="feature-card">
+    <div class="icon">🔗</div>
+    <h3>Plug-and-Play</h3>
+    <p>Middleware for FastAPI, Flask, ASGI, and callbacks for LangChain, LlamaIndex, and OpenAI Assistants.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── INSTALLATION ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="installation">
+  <h2>Installation</h2>
+  <p>Install the core package with pip. BeliefState requires <strong>Python 3.10+</strong>.</p>
+
+  <h4>Core Package</h4>
+  <pre><code><span class="cm"># Core package (includes SQLite store, async tracker)</span>
+pip install beliefstate</code></pre>
+
+  <h4>With Extras</h4>
+  <p>Install optional provider adapters, stores, and integrations as needed:</p>
+  <pre><code><span class="cm"># Individual providers</span>
+pip install <span class="st">"beliefstate[openai]"</span>
+pip install <span class="st">"beliefstate[anthropic]"</span>
+pip install <span class="st">"beliefstate[gemini]"</span>
+pip install <span class="st">"beliefstate[ollama]"</span>
+pip install <span class="st">"beliefstate[litellm]"</span>
+
+<span class="cm"># Stores</span>
+pip install <span class="st">"beliefstate[redis]"</span>
+
+<span class="cm"># Framework integrations</span>
+pip install <span class="st">"beliefstate[fastapi]"</span>
+pip install <span class="st">"beliefstate[flask]"</span>
+pip install <span class="st">"beliefstate[langchain]"</span>
+pip install <span class="st">"beliefstate[llamaindex]"</span>
+
+<span class="cm"># Background workers</span>
+pip install <span class="st">"beliefstate[celery]"</span>
+pip install <span class="st">"beliefstate[rq]"</span>
+
+<span class="cm"># Everything</span>
+pip install <span class="st">"beliefstate[all]"</span></code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── QUICKSTART ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="quickstart">
+  <h2>Quickstart</h2>
+  <p>The fastest way to start tracking beliefs is the <code>@tracker.wrap</code> decorator. It transparently intercepts your LLM call, extracts beliefs from the conversation, and stores them — all without blocking your application.</p>
+
+  <pre><code><span class="code-label">python</span><span class="kw">import</span> asyncio
+<span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTracker, TrackerConfig
+<span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> OpenAIAdapter
+
+<span class="cm"># 1. Configure the tracker</span>
+config = <span class="fn">TrackerConfig</span>(
+    enable_background_tasks=<span class="nb">True</span>,
+    store_type=<span class="st">"sqlite"</span>,
+    store_kwargs={<span class="st">"db_path"</span>: <span class="st">"user_beliefs.db"</span>}
+)
+
+<span class="cm"># 2. Initialize adapter and tracker</span>
+adapter = <span class="fn">OpenAIAdapter</span>(model=<span class="st">"gpt-4o"</span>, embed_model=<span class="st">"text-embedding-3-small"</span>)
+tracker = <span class="fn">BeliefTracker</span>(config=config, adapter=adapter)
+
+<span class="cm"># 3. Wrap your LLM function — that's it!</span>
+<span class="dc">@tracker.wrap</span>
+<span class="kw">async def</span> <span class="fn">chat</span>(messages):
+    <span class="kw">import</span> openai
+    client = openai.<span class="fn">AsyncClient</span>()
+    response = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>(
+        model=<span class="st">"gpt-4o"</span>,
+        messages=messages
+    )
+    <span class="kw">return</span> response
+
+<span class="kw">async def</span> <span class="fn">main</span>():
+    <span class="cm"># Set the active session</span>
+    tracker.<span class="fn">set_session</span>(<span class="st">"user_123"</span>)
+
+    <span class="cm"># Run normally — beliefs are extracted silently in the background</span>
+    <span class="kw">await</span> <span class="fn">chat</span>([{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"I'm a Python developer living in Tokyo."</span>}])
+
+    <span class="cm"># Later, retrieve beliefs as a context prompt</span>
+    context = <span class="kw">await</span> tracker.<span class="fn">get_context_prompt</span>()
+    <span class="nb">print</span>(context)
+    <span class="cm"># Output: "USER is Python developer\nUSER lives in Tokyo"</span>
+
+<span class="kw">if</span> __name__ == <span class="st">"__main__"</span>:
+    asyncio.<span class="fn">run</span>(main())</code></pre>
+
+  <div class="callout tip">
+    <p><strong>💡 Tip:</strong> Call <code>tracker.get_context_prompt()</code> to get formatted beliefs for injecting into your system prompt. This gives your LLM persistent memory across conversations.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── CORE CONCEPTS ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="core-concepts">
+  <h2>Core Concepts</h2>
+  <p>BeliefState follows a simple 3-stage pipeline that runs entirely in the background:</p>
+
+  <div class="architecture-diagram">
+    <pre>
+  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+  │   LLM Call   │────▶│   Extract    │────▶│   Detect     │────▶│   Resolve    │
+  │ (Your App)   │     │   Beliefs    │     │ Contradicts  │     │ & Store      │
+  └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+        │                     │                    │                     │
+   @tracker.wrap        BeliefExtractor    ContradictionDetector   BeliefResolver
+   intercepts call      LLM-based parse    Embedding similarity    Overwrite /
+   non-blocking         subject-pred-val   + NLI Judge scoring     Keep / Raise</pre>
+  </div>
+
+  <h3>Beliefs</h3>
+  <p>A <code>Belief</code> is a structured fact extracted from conversation text. Each belief is a subject-predicate-value triple with metadata:</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> Belief
+
+belief = <span class="fn">Belief</span>(
+    subject=<span class="st">"USER"</span>,           <span class="cm"># Who/what this is about</span>
+    predicate=<span class="st">"lives in"</span>,      <span class="cm"># The relationship</span>
+    value=<span class="st">"Tokyo"</span>,             <span class="cm"># The value</span>
+    confidence=<span class="nu">1.0</span>,            <span class="cm"># 0.0–1.0 extraction confidence</span>
+    turn=<span class="nu">3</span>,                    <span class="cm"># Conversation turn number</span>
+    source=<span class="st">"user"</span>,             <span class="cm"># "user" or "assistant"</span>
+    belief_type=<span class="st">"assertion"</span>,    <span class="cm"># "assertion" or "update"</span>
+    is_hypothetical=<span class="nb">False</span>,     <span class="cm"># Skip hypothetical beliefs in prompts</span>
+)</code></pre>
+
+  <h3>Sessions & Conversations</h3>
+  <p>BeliefState uses a <strong>session</strong> model for grouping beliefs by user, and optionally by <strong>conversation thread</strong>:</p>
+  <pre><code><span class="code-label">python</span><span class="cm"># Set session (required)</span>
+tracker.<span class="fn">set_session</span>(<span class="st">"user_123"</span>)
+
+<span class="cm"># Optionally set conversation within the session</span>
+tracker.<span class="fn">set_conversation</span>(<span class="st">"conv_abc"</span>)
+
+<span class="cm"># Retrieve beliefs scoped to conversation</span>
+context = <span class="kw">await</span> tracker.<span class="fn">get_context_prompt</span>(conversation_id=<span class="st">"conv_abc"</span>)</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── TRACKER CONFIG ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="tracker-config">
+  <h2>TrackerConfig</h2>
+  <p><code>TrackerConfig</code> is a Pydantic model that controls all aspects of the tracker. All parameters have sensible defaults.</p>
+
+  <h3>Store Settings</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>store_type</td><td>str</td><td>"sqlite"</td><td>Storage backend: <code>"sqlite"</code> or <code>"redis"</code></td></tr>
+      <tr><td>store_kwargs</td><td>dict</td><td>{}</td><td>Extra arguments passed to the store constructor (e.g. <code>{"db_path": "beliefs.db"}</code>)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Detection Settings</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>similarity_threshold</td><td>float</td><td>0.82</td><td>Minimum cosine similarity to consider beliefs related</td></tr>
+      <tr><td>contradiction_threshold</td><td>float</td><td>0.70</td><td>Minimum NLI score to flag as contradiction</td></tr>
+      <tr><td>entailment_threshold</td><td>float</td><td>0.85</td><td>Minimum NLI score to detect semantic duplicates</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Resilience Settings</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>retry_max_attempts</td><td>int</td><td>5</td><td>Maximum retry attempts for LLM API calls</td></tr>
+      <tr><td>retry_min_wait</td><td>float</td><td>2.0</td><td>Minimum wait time between retries (seconds)</td></tr>
+      <tr><td>retry_max_wait</td><td>float</td><td>30.0</td><td>Maximum wait time between retries (seconds)</td></tr>
+      <tr><td>retry_multiplier</td><td>float</td><td>2.0</td><td>Exponential backoff multiplier</td></tr>
+      <tr><td>enable_circuit_breaker</td><td>bool</td><td>True</td><td>Enable circuit breaker protection</td></tr>
+      <tr><td>circuit_breaker_failure_threshold</td><td>int</td><td>5</td><td>Failures before tripping the circuit breaker</td></tr>
+      <tr><td>circuit_breaker_recovery_timeout</td><td>float</td><td>30.0</td><td>Cooldown before recovery attempt (seconds)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Task & Dispatcher Settings</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>enable_background_tasks</td><td>bool</td><td>True</td><td>Run tracking in fire-and-forget background tasks</td></tr>
+      <tr><td>task_dispatcher_type</td><td>str</td><td>"asyncio"</td><td>Dispatcher: <code>"asyncio"</code>, <code>"sync"</code>, <code>"celery"</code>, or <code>"rq"</code></td></tr>
+      <tr><td>dispatcher_kwargs</td><td>dict</td><td>{}</td><td>Arguments for dispatcher initialization</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Belief Storage & Injection</h3>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>max_beliefs</td><td>int</td><td>50</td><td>Maximum beliefs injected into prompts</td></tr>
+      <tr><td>belief_sort_strategy</td><td>str</td><td>"confidence_recency"</td><td>Selection strategy: <code>"confidence_recency"</code>, <code>"recency"</code>, or <code>"confidence"</code></td></tr>
+      <tr><td>enable_belief_ttl</td><td>bool</td><td>False</td><td>Enable automatic belief pruning by age</td></tr>
+      <tr><td>belief_max_age_seconds</td><td>int</td><td>86400</td><td>Max age before pruning (default: 24 hours)</td></tr>
+      <tr><td>enable_staleness_scoring</td><td>bool</td><td>True</td><td>Deprioritize old beliefs during session resumption</td></tr>
+      <tr><td>staleness_threshold</td><td>float</td><td>0.1</td><td>Minimum staleness score to inject a belief</td></tr>
+      <tr><td>enable_token_aware_injection</td><td>bool</td><td>True</td><td>Use relevance filtering when beliefs exceed token budget</td></tr>
+      <tr><td>belief_budget_tokens</td><td>int</td><td>500</td><td>Maximum tokens reserved for belief injection</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── Custom Prompts ── -->
+<section class="doc-section" id="prompts">
+  <h2>Custom Prompts</h2>
+  <p>Override the built-in extraction or judge prompts via <code>TrackerConfig</code>:</p>
+  <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
+    extract_prompt_template=<span class="st">"""Extract beliefs from this text as JSON.
+Return [{"subject": "...", "predicate": "...", "value": "...", "confidence": 0.0-1.0}]
+Text: {response}"""</span>,
+
+    judge_prompt_template=<span class="st">"""Analyze these two claims.
+Premise: {premise}
+Hypothesis: {hypothesis}
+Return {"relationship": "contradiction|entailment|neutral", "score": 0.0-1.0}"""</span>
+)</code></pre>
+  <div class="callout info">
+    <p><strong>ℹ️ Note:</strong> The extraction prompt must include the <code>{response}</code> placeholder. The judge prompt must include <code>{premise}</code> and <code>{hypothesis}</code> placeholders.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── ADAPTERS ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="adapters">
+  <h2>Adapters</h2>
+  <p>Adapters translate between native LLM SDK formats and BeliefState's universal models. All adapters include:</p>
+  <div class="badge-row">
+    <span class="badge green">✅ Automatic Retry</span>
+    <span class="badge green">✅ Timeout Handling</span>
+    <span class="badge green">✅ Health Checks</span>
+    <span class="badge green">✅ Structured Logging</span>
+    <span class="badge green">✅ API Key Validation</span>
+  </div>
+
+  <div class="adapter-grid">
+    <div class="adapter-card"><div class="adapter-icon">🟢</div><h4>OpenAI</h4><p>GPT-4o, GPT-4, GPT-3.5</p></div>
+    <div class="adapter-card"><div class="adapter-icon">🟣</div><h4>Anthropic</h4><p>Claude 3.5, Claude 3</p></div>
+    <div class="adapter-card"><div class="adapter-icon">🔵</div><h4>Gemini</h4><p>Gemini 2.0, 1.5</p></div>
+    <div class="adapter-card"><div class="adapter-icon">🦙</div><h4>Ollama</h4><p>Llama 3, Mistral, etc.</p></div>
+    <div class="adapter-card"><div class="adapter-icon">🌐</div><h4>LiteLLM</h4><p>100+ providers</p></div>
+  </div>
+</section>
+
+<!-- ── OpenAI ── -->
+<section class="doc-section" id="openai">
+  <h3>OpenAI</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> OpenAIAdapter
+
+adapter = <span class="fn">OpenAIAdapter</span>(
+    model=<span class="st">"gpt-4o"</span>,                        <span class="cm"># Chat completion model</span>
+    embed_model=<span class="st">"text-embedding-3-small"</span>,   <span class="cm"># Embedding model</span>
+    timeout=<span class="nu">30.0</span>,                           <span class="cm"># Request timeout (seconds)</span>
+)
+
+<span class="cm"># Health check</span>
+is_healthy = <span class="kw">await</span> adapter.<span class="fn">health_check</span>()
+
+<span class="cm"># Custom retry config</span>
+<span class="kw">from</span> beliefstate.adapters.common <span class="kw">import</span> RetryConfig
+
+adapter = <span class="fn">OpenAIAdapter</span>(
+    model=<span class="st">"gpt-4o"</span>,
+    retry_config=<span class="fn">RetryConfig</span>(
+        max_retries=<span class="nu">3</span>,
+        initial_delay=<span class="nu">1.0</span>,
+        max_delay=<span class="nu">30.0</span>,
+        exponential_base=<span class="nu">2.0</span>,
+        jitter=<span class="nb">True</span>,           <span class="cm"># Prevents thundering herd</span>
+    )
+)</code></pre>
+  <p>Set <code>OPENAI_API_KEY</code> environment variable or pass via <code>api_key</code> parameter.</p>
+</section>
+
+<!-- ── Anthropic ── -->
+<section class="doc-section" id="anthropic">
+  <h3>Anthropic (Claude)</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> AnthropicAdapter
+
+adapter = <span class="fn">AnthropicAdapter</span>(
+    model=<span class="st">"claude-3-5-sonnet-latest"</span>,
+    timeout=<span class="nu">30.0</span>
+)</code></pre>
+  <div class="callout warning">
+    <p><strong>⚠️ Note:</strong> Anthropic does not provide an embeddings API. Use the <a href="#dual-adapter">Dual-Adapter</a> pattern with OpenAI or Ollama as the <code>internal_adapter</code> for embedding generation.</p>
+  </div>
+</section>
+
+<!-- ── Gemini ── -->
+<section class="doc-section" id="gemini">
+  <h3>Google Gemini</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> GeminiAdapter
+
+adapter = <span class="fn">GeminiAdapter</span>(
+    model=<span class="st">"gemini-2.0-flash"</span>,
+    embed_model=<span class="st">"text-embedding-004"</span>,
+    timeout=<span class="nu">30.0</span>
+)</code></pre>
+  <p>Set <code>GOOGLE_API_KEY</code> or <code>GEMINI_API_KEY</code> environment variable.</p>
+</section>
+
+<!-- ── Ollama ── -->
+<section class="doc-section" id="ollama">
+  <h3>Ollama (Local)</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> OllamaAdapter
+
+adapter = <span class="fn">OllamaAdapter</span>(
+    model=<span class="st">"llama3.2"</span>,
+    embed_model=<span class="st">"nomic-embed-text"</span>,
+    host=<span class="st">"http://localhost"</span>,
+    port=<span class="nu">11434</span>
+)</code></pre>
+  <div class="callout tip">
+    <p><strong>💡 Tip:</strong> Ollama is perfect as an <code>internal_adapter</code> in the Dual-Adapter pattern — completely free, fast, and runs locally.</p>
+  </div>
+</section>
+
+<!-- ── LiteLLM ── -->
+<section class="doc-section" id="litellm">
+  <h3>LiteLLM (Multi-Provider)</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> LiteLLMAdapter
+
+<span class="cm"># Route to any of 100+ providers via LiteLLM</span>
+adapter = <span class="fn">LiteLLMAdapter</span>(
+    model=<span class="st">"azure/gpt-4"</span>,                    <span class="cm"># Azure OpenAI</span>
+    embed_model=<span class="st">"cohere/embed-english-v3.0"</span>  <span class="cm"># Cohere embeddings</span>
+)
+
+<span class="cm"># Or use AWS Bedrock</span>
+adapter = <span class="fn">LiteLLMAdapter</span>(model=<span class="st">"bedrock/anthropic.claude-3-sonnet"</span>)</code></pre>
+</section>
+
+<!-- ── Dual-Adapter ── -->
+<section class="doc-section" id="dual-adapter">
+  <h3>Dual-Adapter Architecture</h3>
+  <p>Use a premium model for your application and a cheaper/local model for background tracking to optimize costs:</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> AnthropicAdapter, OllamaAdapter
+
+<span class="cm"># Your app uses Claude 3.5 Sonnet (premium)</span>
+app_adapter = <span class="fn">AnthropicAdapter</span>(model=<span class="st">"claude-3-5-sonnet-latest"</span>)
+
+<span class="cm"># Background tracking uses local Llama 3 (free!)</span>
+bg_adapter = <span class="fn">OllamaAdapter</span>(model=<span class="st">"llama3"</span>, embed_model=<span class="st">"nomic-embed-text"</span>)
+
+tracker = <span class="fn">BeliefTracker</span>(
+    config=config,
+    adapter=app_adapter,              <span class="cm"># Intercepts the Claude API payload</span>
+    internal_adapter=bg_adapter       <span class="cm"># Runs extraction, embeddings, and judge</span>
+)</code></pre>
+  <div class="architecture-diagram">
+    <pre>
+  ┌─────────────────────┐                 ┌─────────────────────┐
+  │   App Adapter       │                 │  Internal Adapter   │
+  │ (Claude 3.5 Sonnet) │                 │  (Ollama / Llama3)  │
+  │                     │                 │                     │
+  │  • to_llm_call()    │                 │  • generate()       │
+  │  • to_llm_response()│    ────────▶    │  • get_embeddings() │
+  │  (payload parsing)  │  belief tasks   │  • health_check()   │
+  └─────────────────────┘                 └─────────────────────┘</pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── STORES ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="stores">
+  <h2>Stores</h2>
+  <p>Stores determine where extracted beliefs are persisted. Configure via <code>TrackerConfig(store_type="...")</code> or inject directly.</p>
+</section>
+
+<section class="doc-section" id="sqlite-store">
+  <h3>SQLite Store (Default)</h3>
+  <p>Asynchronous, persistent single-file database using <code>aiosqlite</code>. Supports cosine similarity search, belief pruning, and session statistics.</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> SQLiteStore
+
+<span class="cm"># Via config (automatic)</span>
+config = <span class="fn">TrackerConfig</span>(
+    store_type=<span class="st">"sqlite"</span>,
+    store_kwargs={<span class="st">"db_path"</span>: <span class="st">"user_beliefs.db"</span>}
+)
+
+<span class="cm"># Or inject directly</span>
+store = <span class="fn">SQLiteStore</span>(db_path=<span class="st">"user_beliefs.db"</span>)
+tracker = <span class="fn">BeliefTracker</span>(config=config, store=store)
+
+<span class="cm"># In-memory for testing</span>
+store = <span class="fn">SQLiteStore</span>(db_path=<span class="st">":memory:"</span>)</code></pre>
+</section>
+
+<section class="doc-section" id="redis-store">
+  <h3>Redis Store</h3>
+  <p>Distributed caching backend. Essential when running multiple application workers behind a load balancer.</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> RedisStore
+
+store = <span class="fn">RedisStore</span>(redis_url=<span class="st">"redis://localhost:6379/0"</span>)
+
+<span class="cm"># Set TTL on all beliefs in a session</span>
+<span class="kw">await</span> store.<span class="fn">set_session_ttl</span>(<span class="st">"user_123"</span>, ttl_seconds=<span class="nu">86400</span>)  <span class="cm"># 24 hours</span></code></pre>
+</section>
+
+<section class="doc-section" id="memory-store">
+  <h3>In-Memory Store</h3>
+  <p>Simple in-memory storage with LRU eviction. Ideal for testing and single-process development.</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> InMemoryBeliefStore
+
+store = <span class="fn">InMemoryBeliefStore</span>(max_bytes=<span class="nu">100</span> * <span class="nu">1024</span> * <span class="nu">1024</span>)  <span class="cm"># 100MB limit</span>
+
+<span class="cm"># Get usage stats</span>
+stats = store.<span class="fn">get_stats</span>()
+<span class="nb">print</span>(stats)  <span class="cm"># {"total_sessions": 5, "total_beliefs": 142, "utilization_percent": 12.3}</span></code></pre>
+  <div class="callout warning">
+    <p><strong>⚠️ Warning:</strong> In-memory store is NOT durable. All beliefs are lost on process restart. Use SQLite or Redis for production.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── INTEGRATIONS ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="fastapi">
+  <h2>FastAPI Integration</h2>
+  <p>ASGI middleware that automatically extracts session IDs from request headers and sets them in the tracker context.</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI, Depends
+<span class="kw">from</span> beliefstate <span class="kw">import</span> FastAPIBeliefTrackerMiddleware, get_session_id
+
+app = <span class="fn">FastAPI</span>()
+
+<span class="cm"># Option 1: Middleware (sets session context automatically)</span>
+app.<span class="fn">add_middleware</span>(
+    FastAPIBeliefTrackerMiddleware,
+    header_name=<span class="st">"X-Session-ID"</span>
+)
+
+<span class="cm"># Option 2: Dependency injection</span>
+<span class="dc">@app.post</span>(<span class="st">"/chat"</span>)
+<span class="kw">async def</span> <span class="fn">chat</span>(message: <span class="nb">str</span>, session_id: <span class="nb">str</span> = <span class="fn">Depends</span>(get_session_id)):
+    <span class="cm"># session_id is extracted from X-Session-ID header</span>
+    <span class="cm"># session context is automatically set</span>
+    response = <span class="kw">await</span> <span class="fn">chat_with_llm</span>(message)
+    <span class="kw">return</span> {<span class="st">"response"</span>: response}</code></pre>
+</section>
+
+<section class="doc-section" id="flask">
+  <h3>Flask Integration</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> flask <span class="kw">import</span> Flask
+<span class="kw">from</span> beliefstate <span class="kw">import</span> FlaskBeliefTrackerMiddleware, register_flask_hooks
+
+app = <span class="fn">Flask</span>(__name__)
+
+<span class="cm"># WSGI middleware for context propagation</span>
+app.wsgi_app = <span class="fn">FlaskBeliefTrackerMiddleware</span>(app.wsgi_app, header_name=<span class="st">"X-Session-ID"</span>)
+
+<span class="cm"># Flask request hooks (alternative or additional)</span>
+<span class="fn">register_flask_hooks</span>(app, header_name=<span class="st">"X-Session-ID"</span>)</code></pre>
+</section>
+
+<section class="doc-section" id="asgi">
+  <h3>Generic ASGI Middleware</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> starlette.applications <span class="kw">import</span> Starlette
+<span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTrackerASGIMiddleware
+
+app = <span class="fn">Starlette</span>()
+app.<span class="fn">add_middleware</span>(BeliefTrackerASGIMiddleware, header_name=<span class="st">"X-Session-ID"</span>)
+<span class="cm"># Works with any ASGI framework: Starlette, Litestar, Quart, etc.</span></code></pre>
+</section>
+
+<section class="doc-section" id="langchain">
+  <h3>LangChain Callback</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> session_context, BeliefTrackerLangchainCallback
+
+<span class="cm"># Set session context</span>
+session_context.<span class="fn">set</span>(<span class="st">"user_123"</span>)
+
+<span class="cm"># Attach callback handler to your chain</span>
+handler = <span class="fn">BeliefTrackerLangchainCallback</span>(tracker=tracker)
+<span class="kw">await</span> llm.<span class="fn">ainvoke</span>(<span class="st">"Hello!"</span>, config={<span class="st">"callbacks"</span>: [handler]})</code></pre>
+</section>
+
+<section class="doc-section" id="llamaindex">
+  <h3>LlamaIndex Callback</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> llama_index.core <span class="kw">import</span> Settings
+<span class="kw">from</span> llama_index.core.callbacks <span class="kw">import</span> CallbackManager
+<span class="kw">from</span> beliefstate <span class="kw">import</span> LlamaIndexBeliefTrackerCallback
+
+callback = <span class="fn">LlamaIndexBeliefTrackerCallback</span>(tracker=tracker)
+Settings.callback_manager = <span class="fn">CallbackManager</span>([callback])</code></pre>
+</section>
+
+<section class="doc-section" id="openai-assistants">
+  <h3>OpenAI Assistants Observer</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">import</span> asyncio
+<span class="kw">from</span> beliefstate <span class="kw">import</span> observe_run
+
+<span class="cm"># Observe assistant run and extract beliefs from thread messages</span>
+asyncio.<span class="fn">create_task</span>(
+    <span class="fn">observe_run</span>(
+        tracker=tracker,
+        client=openai_client,
+        thread_id=thread_id,
+        run_id=run.id,
+        session_id=<span class="st">"session_123"</span>
+    )
+)</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── DISPATCHERS ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="dispatchers">
+  <h2>Background Workers</h2>
+  <p>By default, tracking runs as <code>asyncio</code> background tasks. For production durability, use Celery or RQ dispatchers.</p>
+
+  <h3>Celery Dispatcher</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> celery <span class="kw">import</span> Celery
+<span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTracker, TrackerConfig
+<span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> CeleryDispatcher
+
+celery_app = <span class="fn">Celery</span>(<span class="st">"tasks"</span>, broker=<span class="st">"redis://localhost:6379/0"</span>)
+
+tracker = <span class="fn">BeliefTracker</span>(
+    config=<span class="fn">TrackerConfig</span>(),
+    adapter=app_adapter,
+    dispatcher=<span class="fn">CeleryDispatcher</span>(celery_app=celery_app)
+)</code></pre>
+
+  <h3>RQ (Redis Queue) Dispatcher</h3>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> redis <span class="kw">import</span> Redis
+<span class="kw">from</span> rq <span class="kw">import</span> Queue
+<span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> RQDispatcher
+
+queue = <span class="fn">Queue</span>(<span class="st">"belief-tasks"</span>, connection=<span class="fn">Redis</span>())
+
+tracker = <span class="fn">BeliefTracker</span>(
+    config=<span class="fn">TrackerConfig</span>(),
+    adapter=app_adapter,
+    dispatcher=<span class="fn">RQDispatcher</span>(queue=queue)
+)</code></pre>
+
+  <h3>Worker Setup</h3>
+  <p>In your worker process, register the global tracker so tasks can execute:</p>
+  <pre><code><span class="code-label">worker_startup.py</span><span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> register_global_tracker
+<span class="kw">from</span> my_app <span class="kw">import</span> tracker
+
+<span class="cm"># Register BEFORE processing any tasks</span>
+<span class="fn">register_global_tracker</span>(tracker)</code></pre>
+  <div class="callout warning">
+    <p><strong>⚠️ Important:</strong> <code>ContextVar</code> (session_context) does NOT propagate across process boundaries. The dispatchers explicitly serialize <code>session_id</code> into task payloads to ensure it reaches worker processes.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── RESILIENCE ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="resilience">
+  <h2>Resilience</h2>
+  <p>BeliefState wraps internal adapter calls with production-grade resilience patterns:</p>
+
+  <h3>Retry with Exponential Backoff</h3>
+  <p>All adapter calls (generate, embeddings) automatically retry transient failures with jittered exponential backoff. Configure via <code>TrackerConfig</code> or per-adapter <code>RetryConfig</code>.</p>
+
+  <h3>Circuit Breaker</h3>
+  <p>When an LLM API goes down, the circuit breaker pattern prevents cascading failures:</p>
+  <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
+    enable_circuit_breaker=<span class="nb">True</span>,
+    circuit_breaker_failure_threshold=<span class="nu">5</span>,     <span class="cm"># Trip after 5 consecutive failures</span>
+    circuit_breaker_recovery_timeout=<span class="nu">30.0</span>,  <span class="cm"># Wait 30s before trying recovery</span>
+)
+
+<span class="cm"># Manually access the circuit breaker</span>
+<span class="kw">from</span> beliefstate <span class="kw">import</span> CircuitBreaker, CircuitBreakerOpenException
+
+<span class="kw">try</span>:
+    result = <span class="kw">await</span> tracker.<span class="fn">track</span>(...)
+<span class="kw">except</span> CircuitBreakerOpenException:
+    <span class="nb">print</span>(<span class="st">"Circuit breaker is OPEN — failing fast"</span>)</code></pre>
+
+  <h3>Health Checks</h3>
+  <pre><code><span class="code-label">python</span><span class="cm"># Check if the LLM provider is reachable</span>
+is_healthy = <span class="kw">await</span> adapter.<span class="fn">health_check</span>()
+<span class="kw">if not</span> is_healthy:
+    logger.<span class="fn">error</span>(<span class="st">"Provider is not responding — use fallback"</span>)</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── OBSERVABILITY ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="observability">
+  <h2>Observability</h2>
+  <p>BeliefState includes built-in OpenTelemetry instrumentation for distributed tracing.</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.observability <span class="kw">import</span> init_tracing
+
+<span class="cm"># Initialize OpenTelemetry tracing</span>
+<span class="fn">init_tracing</span>(
+    service_name=<span class="st">"my-app"</span>,
+    endpoint=<span class="st">"http://jaeger:4317"</span>  <span class="cm"># OTLP endpoint</span>
+)
+
+<span class="cm"># All tracker operations (extract, detect, resolve) are automatically traced</span>
+<span class="cm"># with spans named "beliefstate.*"</span></code></pre>
+
+  <h3>Structured Logging</h3>
+  <p>All components emit structured log messages with relevant context:</p>
+  <pre><code><span class="code-label">log output</span>[OpenAI] Initialized model=gpt-4o-mini embed_model=text-embedding-3-small
+[OpenAI] Attempt 1/3: generate
+[FastAPI] Request started request_id=abc-123 session_id=user_123
+[FastAPI] Request completed request_id=abc-123 latency_seconds=0.234
+[BeliefExtractor] Extracted 3 beliefs from response (turn=5)
+[ContradictionDetector] Found 1 contradiction for session=user_123</code></pre>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── GDPR ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="gdpr">
+  <h2>GDPR & Privacy</h2>
+  <p>BeliefState supports full session deletion with audit receipts for GDPR compliance:</p>
+  <pre><code><span class="code-label">python</span><span class="cm"># Delete all beliefs for a user (GDPR right to erasure)</span>
+receipt = <span class="kw">await</span> tracker.<span class="fn">delete_session</span>(<span class="st">"user_123"</span>)
+
+<span class="nb">print</span>(receipt)
+<span class="cm"># DeletionReceipt(</span>
+<span class="cm">#   session_id="user_123",</span>
+<span class="cm">#   beliefs_deleted=42,</span>
+<span class="cm">#   in_flight_drained=2,</span>
+<span class="cm">#   timestamp=datetime(...)</span>
+<span class="cm"># )</span></code></pre>
+
+  <p>The <code>DeletionReceipt</code> confirms:</p>
+  <ul>
+    <li>All stored beliefs were deleted from the store</li>
+    <li>All in-flight background tasks for the session were drained/completed</li>
+    <li>An auditable timestamp of when deletion occurred</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── API REFERENCE ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="api-reference">
+  <h2>API Reference</h2>
+
+  <h3>BeliefTracker</h3>
+  <p>The main orchestrator class.</p>
+  <table class="param-table">
+    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>wrap(fn)</td><td>Callable</td><td>Decorator that intercepts LLM calls for belief extraction</td></tr>
+      <tr><td>set_session(id)</td><td>None</td><td>Set the active session ID for tracking</td></tr>
+      <tr><td>set_conversation(id)</td><td>None</td><td>Set the active conversation thread within a session</td></tr>
+      <tr><td>get_context_prompt()</td><td>str</td><td>Get formatted belief summary for injection into prompts</td></tr>
+      <tr><td>get_beliefs(session_id)</td><td>list[Belief]</td><td>Retrieve all beliefs for a session</td></tr>
+      <tr><td>delete_session(id)</td><td>DeletionReceipt</td><td>Delete all session data (GDPR)</td></tr>
+      <tr><td>prune_expired_beliefs()</td><td>int</td><td>Remove beliefs older than max_age_seconds</td></tr>
+      <tr><td>update_belief_reference()</td><td>None</td><td>Touch a belief's last_referenced_at timestamp</td></tr>
+    </tbody>
+  </table>
+
+  <h3>ProviderAdapter (Protocol)</h3>
+  <p>Interface that all adapters implement.</p>
+  <table class="param-table">
+    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>to_llm_call(*args, **kwargs)</td><td>LLMCall</td><td>Convert native SDK args to universal LLMCall</td></tr>
+      <tr><td>to_llm_response(response)</td><td>LLMResponse</td><td>Convert native SDK response to universal LLMResponse</td></tr>
+      <tr><td>generate(call, response_format)</td><td>LLMResponse</td><td>Execute generation with retry and timeout</td></tr>
+      <tr><td>get_embedding(text)</td><td>list[float]</td><td>Generate embedding for a single text</td></tr>
+      <tr><td>get_embeddings(texts)</td><td>list[list[float]]</td><td>Generate embeddings for multiple texts (batched)</td></tr>
+      <tr><td>health_check()</td><td>bool</td><td>Verify provider connectivity</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Store (Protocol)</h3>
+  <p>Interface for belief storage backends.</p>
+  <table class="param-table">
+    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>add_belief(session_id, belief)</td><td>None</td><td>Add or overwrite a belief</td></tr>
+      <tr><td>get_beliefs(session_id, conversation_id)</td><td>list[Belief]</td><td>Retrieve all beliefs for a session</td></tr>
+      <tr><td>search_beliefs(session_id, embedding, ...)</td><td>list[Belief]</td><td>Semantic similarity search</td></tr>
+      <tr><td>remove_belief(session_id, subject, predicate)</td><td>None</td><td>Remove a specific belief</td></tr>
+      <tr><td>update_belief(session_id, belief)</td><td>None</td><td>Update an existing belief</td></tr>
+      <tr><td>clear(session_id)</td><td>None</td><td>Clear all beliefs for a session</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Key Models</h3>
+  <table class="param-table">
+    <thead><tr><th>Class</th><th>Module</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>Belief</td><td>beliefstate.models</td><td>Subject-predicate-value triple with confidence and metadata</td></tr>
+      <tr><td>LLMCall</td><td>beliefstate.call</td><td>Universal representation of an LLM chat completion request</td></tr>
+      <tr><td>LLMResponse</td><td>beliefstate.call</td><td>Universal representation of an LLM chat completion response</td></tr>
+      <tr><td>TrackerConfig</td><td>beliefstate.config</td><td>Pydantic configuration model for the tracker</td></tr>
+      <tr><td>DeletionReceipt</td><td>beliefstate.models</td><td>Audit receipt returned by session deletion</td></tr>
+      <tr><td>RetryConfig</td><td>beliefstate.adapters.common</td><td>Per-adapter retry strategy configuration</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- ── CHANGELOG ── -->
+<!-- ═══════════════════════════════════════════════════ -->
+<section class="doc-section" id="changelog">
+  <h2>Changelog</h2>
+
+  <h3>v0.1.0 — Initial Release</h3>
+  <ul>
+    <li>Core belief extraction pipeline (extract → detect → resolve)</li>
+    <li>5 provider adapters: OpenAI, Anthropic, Gemini, Ollama, LiteLLM</li>
+    <li>3 storage backends: SQLite, Redis, In-Memory</li>
+    <li>7 framework integrations: FastAPI, Flask, ASGI, WSGI, LangChain, LlamaIndex, OpenAI Assistants</li>
+    <li>Dual-Adapter architecture for cost optimization</li>
+    <li>Pluggable dispatchers: asyncio, sync, Celery, RQ</li>
+    <li>Production resilience: retry, circuit breaker, health checks</li>
+    <li>OpenTelemetry observability</li>
+    <li>GDPR session deletion with audit receipts</li>
+    <li>Token-aware belief injection</li>
+    <li>Staleness scoring for session resumption</li>
+    <li>Full mypy type safety (0 errors)</li>
+    <li>205 unit tests</li>
+  </ul>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <p>
+    Built with ❤️ · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a> · MIT License
+  </p>
+</footer>
+
+</main>
+</div>
+
+<!-- ── Sidebar active link tracking ── -->
+<script>
+  // Highlight active sidebar link on scroll
+  const sections = document.querySelectorAll('.doc-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => link.classList.remove('active'));
+        const activeLink = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+        if (activeLink) activeLink.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(section => observer.observe(section));
+
+  // Close mobile sidebar on link click
+  navLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      document.querySelector('.sidebar').classList.remove('open');
+    });
+  });
+</script>
+
+</body>
+</html>

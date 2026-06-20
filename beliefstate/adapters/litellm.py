@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, List, Optional, Dict
+from typing import Any, Dict, List, Optional, cast
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
     RetryConfig,
@@ -144,11 +144,14 @@ class LiteLLMAdapter(ProviderAdapter):
         try:
 
             async def api_call() -> LLMResponse:
-                return await retry_with_backoff(
-                    self._generate_with_backoff,
-                    call,
-                    response_format,
-                    config=self.retry_config,
+                return cast(
+                    LLMResponse,
+                    await retry_with_backoff(
+                        self._generate_with_backoff,
+                        call,
+                        response_format,
+                        config=self.retry_config,
+                    ),
                 )
 
             result = await with_timeout(
@@ -156,7 +159,7 @@ class LiteLLMAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 f"LiteLLM generate via {self.model}",
             )
-            return result
+            return cast(LLMResponse, result)
 
         except PermanentError:
             self.log.error("Generate failed with permanent error", model=self.model)
@@ -222,10 +225,13 @@ class LiteLLMAdapter(ProviderAdapter):
         try:
 
             async def api_call() -> List[List[float]]:
-                return await retry_with_backoff(
-                    self._get_embeddings_with_backoff,
-                    texts,
-                    config=self.retry_config,
+                return cast(
+                    List[List[float]],
+                    await retry_with_backoff(
+                        self._get_embeddings_with_backoff,
+                        texts,
+                        config=self.retry_config,
+                    ),
                 )
 
             result = await with_timeout(
@@ -233,7 +239,7 @@ class LiteLLMAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 f"LiteLLM embeddings via {self.embed_model} ({len(texts)} texts)",
             )
-            return result
+            return cast(List[List[float]], result)
 
         except PermanentError:
             self.log.error(

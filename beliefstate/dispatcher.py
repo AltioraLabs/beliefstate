@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from typing import Any, Dict, Protocol, runtime_checkable
+from asyncio import Task as AsyncTask
 
 from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.tracker import session_context
@@ -108,7 +109,9 @@ class AsyncioDispatcher:
         Args:
             log_warning_in_production: If True, logs a warning if BELIEFSTATE_ENV=production is detected
         """
-        self._in_flight_tasks: Dict[str, list] = {}  # session_id -> [tasks]
+        self._in_flight_tasks: Dict[
+            str, list[AsyncTask[Any]]
+        ] = {}  # session_id -> [tasks]
 
         # Warn if running in production
         if log_warning_in_production:
@@ -142,14 +145,14 @@ class AsyncioDispatcher:
         self._in_flight_tasks[session_id].append(task)
 
         # Clean up completed tasks
-        def cleanup_task(t):
+        def cleanup_task(t: AsyncTask[Any]) -> None:
             if session_id in self._in_flight_tasks:
                 try:
                     self._in_flight_tasks[session_id].remove(task)
                 except (ValueError, KeyError):
                     pass
 
-        task.add_done_callback(lambda t: cleanup_task(t))
+        task.add_done_callback(cleanup_task)
 
     async def drain_session(self, session_id: str) -> int:
         """Wait for all in-flight tasks for a session to complete.

@@ -1,4 +1,4 @@
-from typing import List, Protocol, runtime_checkable
+from typing import List, Optional, Protocol, runtime_checkable
 from beliefstate.models import Belief
 
 
@@ -10,7 +10,9 @@ class Store(Protocol):
         """Add or overwrite a belief in the store."""
         ...
 
-    async def get_beliefs(self, session_id: str) -> List[Belief]:
+    async def get_beliefs(
+        self, session_id: str, conversation_id: Optional[str] = None
+    ) -> List[Belief]:
         """Retrieve all beliefs for a given session."""
         ...
 

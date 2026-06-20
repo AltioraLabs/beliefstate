@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import Dict, List, Optional, Any
 from collections import OrderedDict
 import logging
 from beliefstate.store.base import Store
@@ -86,13 +86,18 @@ class InMemoryBeliefStore(Store):
             f"Added belief: {field} (session {session_id}, size {belief_size}, total {self.current_bytes}/{self.max_bytes})"
         )
 
-    async def get_beliefs(self, session_id: str) -> List[Belief]:
+    async def get_beliefs(
+        self, session_id: str, conversation_id: Optional[str] = None
+    ) -> List[Belief]:
         """Get all beliefs for a session."""
         if session_id not in self._beliefs:
             return []
 
         # Return as list, preserving order
         beliefs = list(self._beliefs[session_id].values())
+
+        if conversation_id:
+            beliefs = [b for b in beliefs if b.conversation_id == conversation_id]
 
         # Update access order for LRU (move all to end = most recently used)
         for field in list(self._beliefs[session_id].keys()):

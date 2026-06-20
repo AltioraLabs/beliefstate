@@ -25,7 +25,7 @@ class FastAPIBeliefTrackerMiddleware(BeliefTrackerASGIMiddleware):
         app.add_middleware(FastAPIBeliefTrackerMiddleware)
     """
 
-    def __init__(self, app: Any, header_name: bytes = b"x-session-id"):
+    def __init__(self, app: Any, header_name: str = "x-session-id"):
         super().__init__(app, header_name)
         self.log = IntegrationLogger(__name__, "FastAPI")
 

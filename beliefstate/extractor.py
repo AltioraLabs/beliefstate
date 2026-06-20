@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 from beliefstate.config import TrackerConfig
 from beliefstate.call import LLMCall
 from beliefstate.models import Belief
@@ -67,7 +67,7 @@ def normalize_dates(text: str) -> str:
     }
 
     # Pattern: "March 15, 2024" -> 2024-03-15
-    def replace_date_long(match):
+    def replace_date_long(match: re.Match[str]) -> str:
         month_name = match.group(1).lower()
         day = match.group(2).zfill(2)
         year = match.group(3)
@@ -82,7 +82,7 @@ def normalize_dates(text: str) -> str:
     )
 
     # Pattern: "15 March 2024" -> 2024-03-15
-    def replace_date_dmy(match):
+    def replace_date_dmy(match: re.Match[str]) -> str:
         day = match.group(1).zfill(2)
         month_name = match.group(2).lower()
         year = match.group(3)
@@ -110,7 +110,7 @@ def normalize_percentages(text: str) -> str:
     """Normalize percentages to decimal format: 0.15 instead of 15%."""
 
     # Pattern: "15%" -> "0.15"
-    def replace_percent(match):
+    def replace_percent(match: re.Match[str]) -> str:
         value = float(match.group(1)) / 100
         return f"{value:.2f}".rstrip("0").rstrip(".")
 
@@ -211,7 +211,7 @@ def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> Lis
 
     # Group paragraphs into chunks respecting max_chunk_length
     chunks = []
-    current_chunk = []
+    current_chunk: list[str] = []
     current_length = 0
 
     for para in paragraphs:
@@ -241,7 +241,7 @@ def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> Lis
     return chunks
 
 
-def recover_json_from_response(text: str) -> Optional[List]:
+def recover_json_from_response(text: str) -> Optional[List[Any]]:
     """Multi-layer JSON recovery for malformed LLM responses.
 
     Implements progressive recovery strategies:
@@ -398,7 +398,7 @@ class BeliefExtractor:
 
         # Fallback: query adapter if it supports dimension discovery
         if hasattr(self.adapter, "embedding_dim"):
-            return self.adapter.embedding_dim
+            return int(self.adapter.embedding_dim)
 
         return 0  # Unknown dimensionality
 

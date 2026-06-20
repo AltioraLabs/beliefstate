@@ -116,7 +116,9 @@ def setup_otel(
         _otel_enabled = False
 
 
-def trace_sync(operation_name: str, attributes: Optional[dict] = None) -> Callable:
+def trace_sync(
+    operation_name: str, attributes: Optional[dict[str, Any]] = None
+) -> Callable[..., Any]:
     """Decorator to trace synchronous functions.
 
     Args:
@@ -129,7 +131,7 @@ def trace_sync(operation_name: str, attributes: Optional[dict] = None) -> Callab
             return ...
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not _otel_enabled or _tracer is None:
@@ -157,7 +159,9 @@ def trace_sync(operation_name: str, attributes: Optional[dict] = None) -> Callab
     return decorator
 
 
-def trace_async(operation_name: str, attributes: Optional[dict] = None) -> Callable:
+def trace_async(
+    operation_name: str, attributes: Optional[dict[str, Any]] = None
+) -> Callable[..., Any]:
     """Decorator to trace async functions.
 
     Args:

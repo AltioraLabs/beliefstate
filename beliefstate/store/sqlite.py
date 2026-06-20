@@ -1,7 +1,7 @@
 import json
 import logging
 from typing import List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from beliefstate.store.base import Store
 from beliefstate.models import Belief
 
@@ -74,7 +74,7 @@ class SQLiteStore(Store):
             await self._conn.close()
             self._conn = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "SQLiteStore":
         """Async context manager entry."""
         await self.open()
         return self
@@ -254,10 +254,10 @@ class SQLiteStore(Store):
                     is_hypothetical=bool(r["is_hypothetical"]),
                     created_at=datetime.fromisoformat(r["created_at"])
                     if r["created_at"]
-                    else None,
+                    else datetime.now(timezone.utc),
                     last_referenced_at=datetime.fromisoformat(r["last_referenced_at"])
                     if r["last_referenced_at"]
-                    else None,
+                    else datetime.now(timezone.utc),
                     session_id=r["session_id"],
                     conversation_id=r["conversation_id"],
                 )
@@ -321,10 +321,10 @@ class SQLiteStore(Store):
                     is_hypothetical=bool(r["is_hypothetical"]),
                     created_at=datetime.fromisoformat(r["created_at"])
                     if r["created_at"]
-                    else None,
+                    else datetime.now(timezone.utc),
                     last_referenced_at=datetime.fromisoformat(r["last_referenced_at"])
                     if r["last_referenced_at"]
-                    else None,
+                    else datetime.now(timezone.utc),
                     session_id=r["session_id"],
                     conversation_id=r["conversation_id"],
                 )
@@ -389,9 +389,9 @@ class SQLiteStore(Store):
             logger.debug(
                 f"Pruned {deleted_count} expired beliefs (older than {max_age_seconds}s)"
             )
-        return deleted_count
+        return int(deleted_count)
 
-    async def get_session_belief_age_stats(self, session_id: str) -> dict:
+    async def get_session_belief_age_stats(self, session_id: str) -> dict[str, Any]:
         """Get age statistics for beliefs in a session.
 
         Returns:

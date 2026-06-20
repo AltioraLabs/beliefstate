@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
     RetryConfig,
@@ -143,11 +143,14 @@ class OpenAIAdapter(ProviderAdapter):
         try:
             # Wrap the retry logic with timeout
             async def api_call() -> LLMResponse:
-                return await retry_with_backoff(
-                    self._generate_with_backoff,
-                    call,
-                    response_format,
-                    config=self.retry_config,
+                return cast(
+                    LLMResponse,
+                    await retry_with_backoff(
+                        self._generate_with_backoff,
+                        call,
+                        response_format,
+                        config=self.retry_config,
+                    ),
                 )
 
             result = await with_timeout(
@@ -156,7 +159,7 @@ class OpenAIAdapter(ProviderAdapter):
                 * (self.retry_config.max_retries + 1),  # Allow time for retries
                 "OpenAI generate",
             )
-            return result
+            return cast(LLMResponse, result)
 
         except PermanentError:
             self.log.error("Generate failed with permanent error", model=self.model)
@@ -215,10 +218,13 @@ class OpenAIAdapter(ProviderAdapter):
         try:
 
             async def api_call() -> List[List[float]]:
-                return await retry_with_backoff(
-                    self._get_embeddings_with_backoff,
-                    texts,
-                    config=self.retry_config,
+                return cast(
+                    List[List[float]],
+                    await retry_with_backoff(
+                        self._get_embeddings_with_backoff,
+                        texts,
+                        config=self.retry_config,
+                    ),
                 )
 
             result = await with_timeout(
@@ -226,7 +232,7 @@ class OpenAIAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 f"OpenAI embeddings ({len(texts)} texts)",
             )
-            return result
+            return cast(List[List[float]], result)
 
         except PermanentError:
             self.log.error(

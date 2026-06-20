@@ -45,7 +45,7 @@ class RequestIDGenerator:
         return str(uuid.uuid4())
 
 
-def track_request(integration_type: str = "integration") -> Callable:
+def track_request(integration_type: str = "integration") -> Callable[..., Any]:
     """Decorator to track request latency and errors.
 
     Usage:
@@ -55,7 +55,7 @@ def track_request(integration_type: str = "integration") -> Callable:
     """
     log = IntegrationLogger(__name__, integration_type)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             request_id = RequestIDGenerator.generate()

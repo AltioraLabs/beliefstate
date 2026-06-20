@@ -43,7 +43,9 @@ class RedisStore(Store):
         # If you want per-belief TTL, store each belief as a separate key
         # For now, we store as a hash but don't auto-expire by default
 
-    async def get_beliefs(self, session_id: str) -> List[Belief]:
+    async def get_beliefs(
+        self, session_id: str, conversation_id: Optional[str] = None
+    ) -> List[Belief]:
         if not self._client:
             raise RuntimeError(
                 "redis package is not installed. Run `pip install redis`"
@@ -52,7 +54,10 @@ class RedisStore(Store):
         data = await self._client.hgetall(self._get_key(session_id))
         beliefs = []
         for value_str in data.values():
-            beliefs.append(Belief.model_validate_json(value_str))
+            belief = Belief.model_validate_json(value_str)
+            if conversation_id and belief.conversation_id != conversation_id:
+                continue
+            beliefs.append(belief)
         return beliefs
 
     async def search_beliefs(

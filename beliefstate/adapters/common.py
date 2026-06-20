@@ -149,7 +149,7 @@ async def retry_with_backoff(
         raise last_error
 
 
-def async_retry(config: Optional[RetryConfig] = None) -> Callable:
+def async_retry(config: Optional[RetryConfig] = None) -> Callable[..., Any]:
     """Decorator for async functions to add retry logic.
 
     Usage:
@@ -158,7 +158,7 @@ def async_retry(config: Optional[RetryConfig] = None) -> Callable:
             ...
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             return await retry_with_backoff(
@@ -216,7 +216,7 @@ def validate_api_key(api_key: Optional[str], provider: str) -> None:
 
 
 async def validate_model_availability(
-    list_models_func: Callable,
+    list_models_func: Callable[..., Any],
     model_name: str,
     provider: str,
     timeout: float = 5.0,

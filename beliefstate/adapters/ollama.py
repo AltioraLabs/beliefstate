@@ -199,11 +199,14 @@ class OllamaAdapter(ProviderAdapter):
         try:
 
             async def api_call() -> LLMResponse:
-                return await retry_with_backoff(
-                    self._generate_with_backoff,
-                    call,
-                    response_format,
-                    config=self.retry_config,
+                return cast(
+                    LLMResponse,
+                    await retry_with_backoff(
+                        self._generate_with_backoff,
+                        call,
+                        response_format,
+                        config=self.retry_config,
+                    ),
                 )
 
             result = await with_timeout(
@@ -211,7 +214,7 @@ class OllamaAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 "Ollama generate",
             )
-            return result
+            return cast(LLMResponse, result)
 
         except PermanentError:
             self.log.error("Generate failed with permanent error", model=self.model)
@@ -252,10 +255,13 @@ class OllamaAdapter(ProviderAdapter):
         try:
 
             async def api_call() -> List[float]:
-                return await retry_with_backoff(
-                    self._get_embedding_with_backoff,
-                    text,
-                    config=self.retry_config,
+                return cast(
+                    List[float],
+                    await retry_with_backoff(
+                        self._get_embedding_with_backoff,
+                        text,
+                        config=self.retry_config,
+                    ),
                 )
 
             result = await with_timeout(
@@ -263,7 +269,7 @@ class OllamaAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 "Ollama embedding",
             )
-            return result
+            return cast(List[float], result)
 
         except PermanentError:
             self.log.error(
@@ -327,10 +333,13 @@ class OllamaAdapter(ProviderAdapter):
         try:
 
             async def api_call() -> List[List[float]]:
-                return await retry_with_backoff(
-                    self._get_embeddings_with_backoff,
-                    texts,
-                    config=self.retry_config,
+                return cast(
+                    List[List[float]],
+                    await retry_with_backoff(
+                        self._get_embeddings_with_backoff,
+                        texts,
+                        config=self.retry_config,
+                    ),
                 )
 
             result = await with_timeout(
@@ -338,7 +347,7 @@ class OllamaAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 f"Ollama embeddings ({len(texts)} texts)",
             )
-            return result
+            return cast(List[List[float]], result)
 
         except PermanentError:
             self.log.error(

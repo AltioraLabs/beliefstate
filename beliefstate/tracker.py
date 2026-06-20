@@ -8,7 +8,7 @@ from contextvars import ContextVar
 from beliefstate.config import TrackerConfig
 from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.adapters.base import ProviderAdapter
-from beliefstate.models import DeletionReceipt
+from beliefstate.models import Belief, DeletionReceipt
 from beliefstate.store.base import Store
 from beliefstate.store.sqlite import SQLiteStore
 from beliefstate.extractor import BeliefExtractor
@@ -200,6 +200,9 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
                 "Please specify adapter explicitly."
             )
 
+        async def health_check(self) -> bool:
+            return False
+
     return GenericAdapter()
 
 
@@ -247,7 +250,7 @@ class BeliefTracker:
         elif adapter is not None:
             raw_internal = adapter
         else:
-            raw_internal = None  # type: ignore[assignment]
+            raw_internal = None
 
         self.internal_adapter = (
             ResilientAdapterWrapper(raw_internal, self.config)
@@ -311,7 +314,8 @@ class BeliefTracker:
                     "or pass adapter explicitly."
                 )
             self.extractor = BeliefExtractor(
-                adapter=self.internal_adapter, config=self.config
+                adapter=self.internal_adapter,  # type: ignore[arg-type]
+                config=self.config,
             )
 
         if self.detector is None:
@@ -610,9 +614,9 @@ class BeliefTracker:
 
         # If session_id provided, prune only that session; else prune all
         if session_id:
-            return await self.store.prune_expired_beliefs(max_age, sid)
+            return int(await self.store.prune_expired_beliefs(max_age, sid))
         else:
-            return await self.store.prune_expired_beliefs(max_age, None)
+            return int(await self.store.prune_expired_beliefs(max_age, None))
 
     async def update_belief_reference(
         self, session_id: Optional[str], subject: str, predicate: str
@@ -837,7 +841,7 @@ class BeliefTracker:
             # Ensure components are initialized
             self._ensure_initialized()
 
-            new_beliefs = []
+            new_beliefs: list[Belief] = []
 
             # 1a. Extract from the user's latest message
             last_user_msg = ""
@@ -847,12 +851,14 @@ class BeliefTracker:
                     break
 
             if last_user_msg:
+                assert self.extractor is not None
                 user_beliefs = await self.extractor.extract(
                     last_user_msg, turn=turn, source="user"
                 )
                 new_beliefs.extend(user_beliefs)
 
             # 1b. Extract from the assistant's response
+            assert self.extractor is not None
             assistant_beliefs = await self.extractor.extract(
                 response.text, turn=turn, source="assistant"
             )
@@ -862,6 +868,7 @@ class BeliefTracker:
                 return
 
             # 2. Detect contradictions and deduplicate entailed beliefs
+            assert self.detector is not None
             contradictions, duplicates = await self.detector.detect_with_deduplication(
                 session_id, new_beliefs
             )

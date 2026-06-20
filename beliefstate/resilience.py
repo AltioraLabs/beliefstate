@@ -247,3 +247,9 @@ class ResilientAdapterWrapper(ProviderAdapter):
                 breaker.record_failure()
             logger.error(f"All retry attempts failed for operation '{op_name}': {e}")
             raise e
+
+    async def health_check(self) -> bool:
+        """Delegate health check to wrapped adapter."""
+        if hasattr(self.adapter, "health_check"):
+            return await self.adapter.health_check()
+        return False
