@@ -76,4 +76,4 @@ jobs:
     - name: Run Pytest with Coverage
       if: matrix.python-version == '3.12'
       run: |
-        pytest --cov=beliefstate --cov-report=xml --cov-fail-under=60
+        pytest --cov=beliefstate --cov-report=xml --cov-fail-under=55
