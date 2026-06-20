@@ -12,7 +12,7 @@ jobs:
 
     permissions:
       id-token: write  # Mandatory for PyPI Trusted Publishing OIDC
-      contents: read
+      contents: write
 
     steps:
     - uses: actions/checkout@v4
