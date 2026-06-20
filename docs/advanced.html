@@ -143,6 +143,16 @@ try:
 except CircuitBreakerOpenException:
     <span class="nb">print</span>(<span class="st">"Circuit breaker is OPEN — failing fast"</span>)</code></pre>
 
+  <div class="callout tip">
+    <p><strong>ℹ️ Circuit Breaker States:</strong> The circuit breaker operates as a state machine:
+    <ul>
+      <li><strong>CLOSED:</strong> Normal state. All requests flow through. If consecutive failures exceed the threshold (default 5), the circuit trips to OPEN.</li>
+      <li><strong>OPEN:</strong> Trips blockingly. All requests immediately raise <code>CircuitBreakerOpenException</code> without hitting the LLM provider, saving rate limits and latency.</li>
+      <li><strong>HALF-OPEN:</strong> Initiated once the recovery cooldown timeout (default 30 seconds) has elapsed. The next request acts as a probe: if it succeeds, the breaker resets to CLOSED; if it fails, it returns to OPEN for another cooldown cycle.</li>
+    </ul>
+    </p>
+  </div>
+
   <h3>Health Checks</h3>
   <pre><code><span class="code-label">python</span><!-- Check if the LLM provider is reachable -->
 is_healthy = <span class="kw">await</span> adapter.<span class="fn">health_check</span>()
@@ -155,26 +165,42 @@ if not is_healthy:
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="observability">
   <h2>Observability</h2>
-  <p>BeliefState includes built-in OpenTelemetry instrumentation for distributed tracing.</p>
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.observability <span class="kw">import</span> init_tracing
+  <p>BeliefState includes built-in OpenTelemetry instrumentation for distributed tracing and metric collection.</p>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.observability <span class="kw">import</span> setup_otel
 
-<!-- Initialize OpenTelemetry tracing -->
-<span class="fn">init_tracing</span>(
+<!-- Initialize OpenTelemetry tracing and metrics -->
+<span class="fn">setup_otel</span>(
+    enabled=<span class="nb">True</span>,
     service_name=<span class="st">"my-app"</span>,
-    endpoint=<span class="st">"http://jaeger:4317"</span>  <span class="cm"># OTLP endpoint</span>
-)
+    otel_exporter_otlp_endpoint=<span class="st">"http://localhost:4317"</span>
+)</code></pre>
 
-<!-- All tracker operations (extract, detect, resolve) are automatically traced -->
-<!-- with spans named "beliefstate.*" --></code></pre>
+  <div class="callout tip">
+    <p><strong>ℹ️ Traces & Metrics Breakdown:</strong>
+    <ul>
+      <li><strong>Distributed Tracing Spans:</strong> Captures hierarchical execution traces with performance metadata:
+        <ul>
+          <li><code>beliefstate.extract_beliefs</code>: Measures fact extraction prompt latency and token usage.</li>
+          <li><code>beliefstate.detect_contradiction</code>: Tracks time taken by semantic filters and the NLI logic check.</li>
+          <li><code>beliefstate.resolve_beliefs</code>: Tracks store write times and resolution conflicts.</li>
+        </ul>
+      </li>
+      <li><strong>Exported Metrics:</strong>
+        <ul>
+          <li><code>beliefstate.beliefs_extracted</code>: Counter for total facts parsed.</li>
+          <li><code>beliefstate.contradictions_detected</code>: Counter for triggered logical conflicts.</li>
+          <li><code>beliefstate.beliefs_in_store</code>: Gauge showing current active facts per session database.</li>
+          <li><code>beliefstate.*_latency_ms</code>: Histograms tracking latency percentiles (p50, p90, p99) for database operations and provider calls.</li>
+        </ul>
+      </li>
+    </ul>
+    </p>
+  </div>
 
   <h3>Structured Logging</h3>
-  <p>All components emit structured log messages with relevant context:</p>
-  <pre><code><span class="code-label">log output</span>[OpenAI] Initialized model=gpt-4o-mini embed_model=text-embedding-3-small
-[OpenAI] Attempt 1/3: generate
-[FastAPI] Request started request_id=abc-123 session_id=user_123
-[FastAPI] Request completed request_id=abc-123 latency_seconds=0.234
-[BeliefExtractor] Extracted 3 beliefs from response (turn=5)
-[ContradictionDetector] Found 1 contradiction for session=user_123</code></pre>
+  <p>All components emit structured JSON log events via <code>logging_utils.TrackerEvent</code> for cloud collectors (Datadog, CloudWatch):</p>
+  <pre><code><span class="code-label">log output</span>{"session_id": "user_123", "operation": "extract_beliefs", "turn": 5, "detail": "Extracted 3 beliefs", "latency_ms": 142.5}
+{"session_id": "user_123", "operation": "detect", "turn": 5, "detail": "Found 1 contradiction"}</code></pre>
 </section>
 
 <!-- ═══════════════════════════════════════════════════ -->
@@ -184,15 +210,21 @@ if not is_healthy:
   <h2>GDPR & Privacy</h2>
   <p>BeliefState supports full session deletion with audit receipts for GDPR compliance:</p>
   <pre><code><span class="code-label">python</span><!-- Delete all beliefs for a user (GDPR right to erasure) -->
-receipt = <span class="kw">await</span> tracker.<span class="fn">delete_session</span>(<span class="st">"user_123"</span>)
+receipt = <span class="kw">await</span> tracker.<span class="fn">clear_session</span>(<span class="st">"user_123"</span>)
 
 <span class="nb">print</span>(receipt)
 <!-- DeletionReceipt( -->
 <!--   session_id="user_123", -->
 <!--   beliefs_deleted=42, -->
-<!--   in_flight_drained=2, -->
-<!--   timestamp=datetime(...) -->
+<!--   in_flight_tasks_drained=2, -->
+<!--   deleted_at=datetime(...) -->
 <!-- ) --></code></pre>
+
+  <div class="callout warning">
+    <p><strong>⚠️ Concurrency & Deletion Race Conditions:</strong> If a user requests account deletion while background belief extraction tasks are still running in the asyncio event loop, those tasks could complete and write new facts <em>after</em> the database is cleared.
+    To prevent this, <code>clear_session()</code> calls the dispatcher's <code>drain_session(session_id)</code> method first, which cancels or waits for all active tracking tasks for that session ID before executing the SQL or Redis delete commands.
+    </p>
+  </div>
 
   <p>The <code>DeletionReceipt</code> confirms:</p>
   <ul>

@@ -96,6 +96,17 @@ app.<span class="fn">add_middleware</span>(
     <!-- session context is automatically set -->
     response = <span class="kw">await</span> <span class="fn">chat_with_llm</span>(message)
     <span class="kw">return</span> {<span class="st">"response"</span>: response}</code></pre>
+
+  <div class="callout tip">
+    <p><strong>ℹ️ Context Propagation Mechanics:</strong> Web frameworks process multiple requests concurrently on different asynchronous task contexts. BeliefState uses Python's standard <code>contextvars.ContextVar</code> (<code>session_context</code>) to store and isolate session identifiers.
+    When a request comes in:
+    <ol>
+      <li>The ASGI middleware intercepts the request headers and extracts the session key.</li>
+      <li>It sets the value via <code>token = session_context.set(session_id)</code>, propagating the variable down the active execution flow.</li>
+      <li>When the request handler finishes, the middleware executes a <code>finally</code> block to call <code>session_context.reset(token)</code>, ensuring zero context leakage across different requests.</li>
+    </ol>
+    </p>
+  </div>
 </section>
 
 <section class="doc-section" id="flask">
@@ -159,6 +170,17 @@ asyncio.<span class="fn">create_task</span>(
         session_id=<span class="st">"session_123"</span>
     )
 )</code></pre>
+
+  <div class="callout tip">
+    <p><strong>ℹ️ Callback Hook Lifecycles:</strong> The LangChain and LlamaIndex callback handlers inherit from their respective framework lifecycle hooks (e.g. <code>on_llm_end</code> or <code>on_event_end</code>).
+    When the model finishes generating a response:
+    <ol>
+      <li>The callback intercepts the output response text and input prompt history.</li>
+      <li>It grabs the active <code>session_id</code> and <code>conversation_id</code> from thread context variables.</li>
+      <li>It packages this payload and schedules a background belief tracking task asynchronously via the tracker dispatcher, keeping the application response pipeline completely non-blocking.</li>
+    </ol>
+    </p>
+  </div>
 </section>
 
 <!-- ── Footer ── -->

@@ -211,6 +211,24 @@ tracker = <span class="fn">BeliefTracker</span>(
   │  (payload parsing)  │  belief tasks   │  • health_check()   │
   └─────────────────────┘                 └─────────────────────┘</pre>
   </div>
+
+  <h3>Payload Normalization Design</h3>
+  <p>Different model providers use radically different SDK payload signatures. For example:</p>
+  <ul>
+    <li><strong>OpenAI:</strong> Accesses response text via <code>response.choices[0].message.content</code>.</li>
+    <li><strong>Anthropic:</strong> Accesses response text via <code>response.content[0].text</code>.</li>
+    <li><strong>Google Gemini:</strong> Accesses response text via <code>response.text</code>.</li>
+  </ul>
+  <p>To enable universal tracking, each adapter implements the <code>ProviderAdapter</code> protocol to normalize inputs and outputs:</p>
+  <ul>
+    <li>
+      <strong><code>to_llm_call(*args, **kwargs):</code></strong> Intercepts raw arguments passed to the provider SDK and extracts the conversation history, converting them into a standardized <code>LLMCall</code> structure containing a unified list of message dictionaries.
+    </li>
+    <li>
+      <strong><code>to_llm_response(raw_response):</code></strong> Normalizes the provider's returned response object into an <code>LLMResponse</code> structure, exposing the message content, model name, and token usage metadata.
+    </li>
+  </ul>
+  <p>This decoupling is what enables the **Dual-Adapter** pattern: the premium adapter parses the main application LLM calls, while the internal adapter handles all background vector embeddings, fact extractions, and logical checks using completely different API calls (or a local instance like Ollama).</p>
 </section>
 
 <!-- ── Footer ── -->

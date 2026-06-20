@@ -228,10 +228,34 @@ if __name__ == "__main__":
   │ (Your App)   │     │   Beliefs    │     │ Contradicts  │     │ & Store      │
   └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
         │                     │                    │                     │
-   @tracker.wrap        BeliefExtractor    ContradictionDetector   BeliefResolver
-   intercepts call      LLM-based parse    Embedding similarity    Overwrite /
-   non-blocking         subject-pred-val   + NLI Judge scoring     Keep / Raise</pre>
+    @tracker.wrap        BeliefExtractor    ContradictionDetector   BeliefResolver
+    intercepts call      LLM-based parse    Embedding similarity    Overwrite /
+    non-blocking         subject-pred-val   + NLI Judge scoring     Keep / Raise</pre>
   </div>
+
+  <h3>Pipeline Mechanics</h3>
+  <p>The belief state tracking process executes asynchronously through five discrete stages:</p>
+  <ul>
+    <li>
+      <strong>1. Interception:</strong> The <code>@tracker.wrap</code> decorator (or web framework middleware) intercepts the request payload and response text of your application's LLM calls, recording the conversation turns without modifying the application's runtime.
+    </li>
+    <li>
+      <strong>2. Asynchronous Dispatch:</strong> To achieve zero-latency overhead for your end users, the tracking payload is passed to a pluggable <code>Dispatcher</code>. In default <code>asyncio</code> mode, this registers a background task in the running event loop; in distributed environments, it serializes and offloads the task to Celery or RQ workers.
+    </li>
+    <li>
+      <strong>3. Fact Extraction:</strong> The <code>BeliefExtractor</code> processes the turn history and queries the configured <code>internal_adapter</code>. The model parses the conversation context and extracts declarative facts structured as subject-predicate-value triples, along with confidence estimations.
+    </li>
+    <li>
+      <strong>4. Contradiction Detection:</strong> Newly extracted facts are compared against existing beliefs for the session. The <code>ContradictionDetector</code> runs a two-step filter:
+      <ul>
+        <li><em>Semantic Filtering:</em> Filters stored beliefs using cosine similarity of embedding vectors, focusing only on conceptually related claims.</li>
+        <li><em>Logical Judgment:</em> Selected candidate pairs are analyzed by a Natural Language Inference (NLI) judge to determine if they entail (duplicate) or contradict the existing state.</li>
+      </ul>
+    </li>
+    <li>
+      <strong>5. Conflict Resolution & Storage:</strong> If a contradiction is detected, the <code>BeliefResolver</code> applies a resolution policy (such as overwriting with the newer claim, retaining the old belief, or raising an exception). Resolved facts are then persisted to the store.
+    </li>
+  </ul>
 
   <h3>Beliefs</h3>
   <p>A <code>Belief</code> is a structured fact extracted from conversation text. Each belief is a subject-predicate-value triple with metadata:</p>

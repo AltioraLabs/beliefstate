@@ -136,6 +136,36 @@
       <tr><td>belief_budget_tokens</td><td>int</td><td>500</td><td>Maximum tokens reserved for belief injection</td></tr>
     </tbody>
   </table>
+
+  <h3>Technical Mechanics & Calculations</h3>
+  
+  <h4>1. Threshold Calibration</h4>
+  <p>To avoid querying the expensive NLI judge on every single stored fact, BeliefState uses a two-tiered check:</p>
+  <ul>
+    <li>
+      <strong>Similarity Threshold (<code>similarity_threshold</code>):</strong> Checks the cosine similarity between the vector embeddings of the new fact and existing stored facts. If the similarity is below this value (default 0.82), the facts are deemed conceptually unrelated, and the NLI check is skipped.
+    </li>
+    <li>
+      <strong>Contradiction & Entailment Thresholds:</strong> The Natural Language Inference (NLI) model scores logical relation on a 0.0 to 1.0 scale:
+      <ul>
+        <li>If <code>contradiction_score >= contradiction_threshold</code>, the facts are treated as contradicting (e.g. <em>"lives in London"</em> vs. <em>"lives in Paris"</em>).</li>
+        <li>If <code>entailment_score >= entailment_threshold</code>, the facts are duplicates (e.g. <em>"likes Python"</em> vs. <em>"enjoys Python programming"</em>) and the new record is ignored or merged.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h4>2. Staleness Decay Formula</h4>
+  <p>When resuming an old conversation session, stale beliefs (e.g., intermediate tasks the user finished days ago) should not clutter the prompt context. If <code>enable_staleness_scoring</code> is active, each belief is rated using:</p>
+  <pre><code>Staleness Score = Confidence / (Days Since Referenced + 1)</code></pre>
+  <p>If the calculated score falls below the <code>staleness_threshold</code> (default 0.1), the belief is excluded from prompt context injection. If all beliefs are too stale, the tracker falls back to injecting the top 5 most confident, recent facts as a safety measure.</p>
+
+  <h4>3. Token-Aware Relevance Filtering</h4>
+  <p>To keep LLM API token consumption low, the tracker estimates the size of the formatted prompt using a fast character-based heuristic: <code>1 token ≈ 4 characters</code>. If this estimated size exceeds <code>belief_budget_tokens</code>, relevance filtering is triggered:</p>
+  <ol>
+    <li>The current user query is embedded into a vector.</li>
+    <li>All candidate beliefs for the session are ranked by the cosine similarity between their stored embedding and the query embedding.</li>
+    <li>Beliefs are filled into the prompt from highest to lowest similarity, stopping as soon as the token budget is reached.</li>
+  </ol>
 </section>
 
 <!-- ── Custom Prompts ── -->

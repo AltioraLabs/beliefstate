@@ -83,43 +83,83 @@
 <section class="doc-section" id="sqlite-store">
   <h3>SQLite Store (Default)</h3>
   <p>Asynchronous, persistent single-file database using <code>aiosqlite</code>. Supports cosine similarity search, belief pruning, and session statistics.</p>
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> SQLiteStore
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import SQLiteStore
 
-<!-- Via config (automatic) -->
+# Via config (automatic)
 config = <span class="fn">TrackerConfig</span>(
     store_type=<span class="st">"sqlite"</span>,
     store_kwargs={<span class="st">"db_path"</span>: <span class="st">"user_beliefs.db"</span>}
 )
 
-<!-- Or inject directly -->
+# Or inject directly
 store = <span class="fn">SQLiteStore</span>(db_path=<span class="st">"user_beliefs.db"</span>)
 tracker = <span class="fn">BeliefTracker</span>(config=config, store=store)
 
-<!-- In-memory for testing -->
+# In-memory for testing
 store = <span class="fn">SQLiteStore</span>(db_path=<span class="st">":memory:"</span>)</code></pre>
+
+  <div class="callout tip">
+    <p><strong>ℹ️ SQLite Schema & WAL mode:</strong> The database creates a schema optimized for session isolation and turn order:
+    <pre><code>CREATE TABLE IF NOT EXISTS beliefs (
+    session_id TEXT,
+    subject TEXT,
+    predicate TEXT,
+    value TEXT,
+    confidence REAL,
+    turn INTEGER,
+    source TEXT,
+    embedding TEXT,
+    created_at TIMESTAMP,
+    last_referenced_at TIMESTAMP,
+    PRIMARY KEY (session_id, subject, predicate)
+);</code></pre>
+    Composite primary keys and unique indexes prevent duplicate subject-predicate mappings. Write-Ahead Logging (WAL) is enabled on database startup, allowing concurrent readers (your user threads) to query beliefs without being blocked by background write tasks.
+    </p>
+  </div>
 </section>
 
 <section class="doc-section" id="redis-store">
   <h3>Redis Store</h3>
   <p>Distributed caching backend. Essential when running multiple application workers behind a load balancer.</p>
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> RedisStore
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import RedisStore
 
 store = <span class="fn">RedisStore</span>(redis_url=<span class="st">"redis://localhost:6379/0"</span>)
 
 <!-- Set TTL on all beliefs in a session -->
 <span class="kw">await</span> store.<span class="fn">set_session_ttl</span>(<span class="st">"user_123"</span>, ttl_seconds=<span class="nu">86400</span>)  <span class="cm"># 24 hours</span></code></pre>
+
+  <div class="callout tip">
+    <p><strong>ℹ️ Redis Hash layout & Session Expiry:</strong> Data is organized cleanly to prevent key namespace bloat:
+    <ul>
+      <li>Each session is represented by a single Redis HASH at key <code>beliefstate:session:{session_id}</code>.</li>
+      <li>Each belief is stored inside the hash, using <code>subject::predicate</code> as the hash field and the serialized belief object as the value.</li>
+      <li>Using HASH structures allows TTLs to be set on the parent key via <code>EXPIRE</code>, enabling automatic expiration cleanup of the entire session state at once.</li>
+    </ul>
+    </p>
+  </div>
 </section>
 
 <section class="doc-section" id="memory-store">
   <h3>In-Memory Store</h3>
   <p>Simple in-memory storage with LRU eviction. Ideal for testing and single-process development.</p>
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> InMemoryBeliefStore
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import InMemoryBeliefStore
 
 store = <span class="fn">InMemoryBeliefStore</span>(max_bytes=<span class="nu">100</span> * <span class="nu">1024</span> * <span class="nu">1024</span>)  <span class="cm"># 100MB limit</span>
 
-<!-- Get usage stats -->
+# Get usage stats
 stats = store.<span class="fn">get_stats</span>()
-<span class="nb">print</span>(stats)  <span class="cm"># {"total_sessions": 5, "total_beliefs": 142, "utilization_percent": 12.3}</span></code></pre>
+<span class="nb">print</span>(stats)  # {"total_sessions": 5, "total_beliefs": 142, "utilization_percent": 12.3}</code></pre>
+
+  <div class="callout tip">
+    <p><strong>ℹ️ LRU Eviction & Footprint Estimation:</strong> The in-memory store uses a Python <code>collections.OrderedDict</code>:
+    <ol>
+      <li>Reading or writing a belief updates its usage rank, moving the key to the end of the dictionary (MRU).</li>
+      <li>The memory footprint of each Pydantic model is estimated in bytes by checking the length of its JSON string representation.</li>
+      <li>When size limit is reached, it evicts least-recently-used beliefs from the oldest sessions until the memory footprint fits inside the <code>max_bytes</code> budget.</li>
+    </ol>
+    </p>
+  </div>
+
   <div class="callout warning">
     <p><strong>⚠️ Warning:</strong> In-memory store is NOT durable. All beliefs are lost on process restart. Use SQLite or Redis for production.</p>
   </div>
