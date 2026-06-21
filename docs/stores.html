@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stores — BeliefState Documentation</title>
-  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <meta name="description" content="Complete store reference for BeliefState. SQLite, Redis, and In-Memory store constructor parameters, protocol methods, and decision guide.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v0.1.0</div>
+    <div class="sidebar-version">v1.0.0</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -58,7 +58,7 @@
       <li><a href="advanced.html#dispatchers">Background Workers</a></li>
       <li><a href="advanced.html#resilience">Resilience</a></li>
       <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+      <li><a href="advanced.html#gdpr">GDPR &amp; Privacy</a></li>
 
       <li class="nav-section-title">Reference</li>
       <li><a href="reference.html#api-reference">API Reference</a></li>
@@ -73,33 +73,70 @@
 <main class="main-content">
 
 <!-- ═══════════════════════════════════════════════════ -->
-<!-- ── STORES ── -->
+<!-- ── STORES OVERVIEW ── -->
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="stores">
   <h2>Stores</h2>
-  <p>Stores determine where extracted beliefs are persisted. Configure via <code>TrackerConfig(store_type="...")</code> or inject directly.</p>
+  <p>Stores are the persistence layer where extracted beliefs are saved. All stores implement the <code>Store</code> protocol, providing a uniform API for adding, querying, searching, and removing beliefs. You can configure the store via <code>TrackerConfig(store_type="...")</code> or inject a store instance directly into the <code>BeliefTracker</code> constructor.</p>
+
+  <h3>Choosing a Store</h3>
+  <table class="param-table">
+    <thead><tr><th>Store</th><th>Persistence</th><th>Multi-Worker</th><th>Best For</th><th>Setup</th></tr></thead>
+    <tbody>
+      <tr><td><strong>SQLite</strong></td><td>✅ Disk file</td><td>❌ Single process</td><td>Local dev, prototyping, single-server apps</td><td>Zero — included with Python</td></tr>
+      <tr><td><strong>Redis</strong></td><td>✅ Redis server</td><td>✅ Distributed</td><td>Production, multi-worker, load-balanced</td><td>Requires Redis server</td></tr>
+      <tr><td><strong>In-Memory</strong></td><td>❌ Lost on restart</td><td>❌ Single process</td><td>Unit testing, ephemeral sessions</td><td>Zero — pure Python</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Store Protocol Methods</h3>
+  <p>All stores implement these async methods. You can use them directly if you need to interact with the store outside of the normal tracking pipeline:</p>
+  <table class="param-table">
+    <thead><tr><th>Method</th><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>add_belief</code></td><td><code>(session_id: str, belief: Belief)</code></td><td><code>None</code></td><td>Add or upsert a belief into the store. If a belief with the same <code>session_id</code>, <code>subject</code>, and <code>predicate</code> already exists, it is overwritten.</td></tr>
+      <tr><td><code>get_beliefs</code></td><td><code>(session_id: str, conversation_id: Optional[str])</code></td><td><code>list[Belief]</code></td><td>Retrieve all beliefs for a session. Optionally filter by <code>conversation_id</code> for multi-thread sessions.</td></tr>
+      <tr><td><code>search_beliefs</code></td><td><code>(session_id: str, embedding: list[float], threshold: float, limit: int)</code></td><td><code>list[Belief]</code></td><td>Semantic similarity search. Returns beliefs whose embedding vectors have cosine similarity ≥ <code>threshold</code> with the query vector. Used internally by the contradiction detector.</td></tr>
+      <tr><td><code>remove_belief</code></td><td><code>(session_id: str, subject: str, predicate: str)</code></td><td><code>None</code></td><td>Remove a specific belief identified by its session, subject, and predicate keys.</td></tr>
+      <tr><td><code>update_belief</code></td><td><code>(session_id: str, belief: Belief)</code></td><td><code>None</code></td><td>Update an existing belief (e.g., update confidence, value, or <code>last_referenced_at</code> timestamp).</td></tr>
+      <tr><td><code>clear</code></td><td><code>(session_id: str)</code></td><td><code>None</code></td><td>Delete all beliefs for a session. Used by <code>clear_session()</code> for GDPR erasure.</td></tr>
+      <tr><td><code>belief_count</code></td><td><code>(session_id: str)</code></td><td><code>int</code></td><td>Count beliefs without loading them into memory. Uses <code>SELECT COUNT(*)</code> (SQLite), <code>HLEN</code> (Redis), or <code>len()</code> (Memory). Much faster than <code>len(await get_beliefs(...))</code>.</td></tr>
+      <tr><td><code>health_check</code></td><td><code>()</code></td><td><code>bool</code></td><td>Verify the store backend is reachable and operational. Returns <code>True</code> if healthy. Uses <code>SELECT 1</code> (SQLite), <code>PING</code> (Redis), or always <code>True</code> (Memory).</td></tr>
+    </tbody>
+  </table>
 </section>
 
+<!-- ── SQLite Store ── -->
 <section class="doc-section" id="sqlite-store">
   <h3>SQLite Store (Default)</h3>
-  <p>Asynchronous, persistent single-file database using <code>aiosqlite</code>. Supports cosine similarity search, belief pruning, and session statistics.</p>
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import SQLiteStore
+  <p>The SQLite store uses <code>aiosqlite</code> for fully async, non-blocking database access. Data is persisted to a single file on disk, making it ideal for single-process applications, local development, and prototyping. No external services required.</p>
 
-# Via config (automatic)
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>db_path</code></td><td><code>str</code></td><td><code>"beliefstate.db"</code></td><td>Path to the SQLite database file. The file is created automatically if it doesn't exist. Use <code>":memory:"</code> for a non-persistent in-memory database (useful for testing).</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> SQLiteStore, BeliefTracker, TrackerConfig
+
+<span class="cm"># Via config (automatic initialization)</span>
 config = <span class="fn">TrackerConfig</span>(
     store_type=<span class="st">"sqlite"</span>,
     store_kwargs={<span class="st">"db_path"</span>: <span class="st">"user_beliefs.db"</span>}
 )
+tracker = <span class="fn">BeliefTracker</span>(config=config, adapter=adapter)
 
-# Or inject directly
+<span class="cm"># Or inject a store instance directly</span>
 store = <span class="fn">SQLiteStore</span>(db_path=<span class="st">"user_beliefs.db"</span>)
 tracker = <span class="fn">BeliefTracker</span>(config=config, store=store)
 
-# In-memory for testing
+<span class="cm"># In-memory SQLite for unit testing</span>
 store = <span class="fn">SQLiteStore</span>(db_path=<span class="st">":memory:"</span>)</code></pre>
 
   <div class="callout tip">
-    <p><strong>ℹ️ SQLite Schema & WAL mode:</strong> The database creates a schema optimized for session isolation and turn order:
+    <p><strong>ℹ️ Database Schema &amp; WAL Mode:</strong> The database creates a schema optimized for session isolation and turn order:
     <pre><code>CREATE TABLE IF NOT EXISTS beliefs (
     session_id TEXT,
     subject TEXT,
@@ -113,56 +150,112 @@ store = <span class="fn">SQLiteStore</span>(db_path=<span class="st">":memory:"<
     last_referenced_at TIMESTAMP,
     PRIMARY KEY (session_id, subject, predicate)
 );</code></pre>
-    Composite primary keys and unique indexes prevent duplicate subject-predicate mappings. Write-Ahead Logging (WAL) is enabled on database startup, allowing concurrent readers (your user threads) to query beliefs without being blocked by background write tasks.
-    </p>
-  </div>
-</section>
-
-<section class="doc-section" id="redis-store">
-  <h3>Redis Store</h3>
-  <p>Distributed caching backend. Essential when running multiple application workers behind a load balancer.</p>
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import RedisStore
-
-store = <span class="fn">RedisStore</span>(redis_url=<span class="st">"redis://localhost:6379/0"</span>)
-
-<!-- Set TTL on all beliefs in a session -->
-<span class="kw">await</span> store.<span class="fn">set_session_ttl</span>(<span class="st">"user_123"</span>, ttl_seconds=<span class="nu">86400</span>)  <span class="cm"># 24 hours</span></code></pre>
-
-  <div class="callout tip">
-    <p><strong>ℹ️ Redis Hash layout & Session Expiry:</strong> Data is organized cleanly to prevent key namespace bloat:
     <ul>
-      <li>Each session is represented by a single Redis HASH at key <code>beliefstate:session:{session_id}</code>.</li>
-      <li>Each belief is stored inside the hash, using <code>subject::predicate</code> as the hash field and the serialized belief object as the value.</li>
-      <li>Using HASH structures allows TTLs to be set on the parent key via <code>EXPIRE</code>, enabling automatic expiration cleanup of the entire session state at once.</li>
+      <li><strong>Composite primary key</strong> <code>(session_id, subject, predicate)</code> prevents duplicate beliefs and enables efficient upserts.</li>
+      <li><strong>WAL mode</strong> (Write-Ahead Logging) is enabled on startup, allowing concurrent readers (your user threads) to query beliefs without being blocked by background write tasks.</li>
+      <li><strong>Embedding storage:</strong> Embedding vectors are serialized as JSON text in the <code>embedding</code> column. Cosine similarity search is performed in Python (not via SQL extension).</li>
     </ul>
     </p>
   </div>
+
+  <h4>Performance Characteristics</h4>
+  <ul>
+    <li><strong>Read latency:</strong> ~1ms for <code>get_beliefs()</code> with a few hundred beliefs per session.</li>
+    <li><strong>Write latency:</strong> ~2-5ms for <code>add_belief()</code> (single INSERT OR REPLACE).</li>
+    <li><strong>Similarity search:</strong> O(N) — loads all beliefs for the session and computes cosine similarity in Python. Efficient for up to ~10,000 beliefs per session.</li>
+    <li><strong>Limitation:</strong> Single-writer. Multiple processes writing to the same file may cause lock contention. Use Redis for multi-worker deployments.</li>
+  </ul>
 </section>
 
-<section class="doc-section" id="memory-store">
-  <h3>In-Memory Store</h3>
-  <p>Simple in-memory storage with LRU eviction. Ideal for testing and single-process development.</p>
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import InMemoryBeliefStore
+<!-- ── Redis Store ── -->
+<section class="doc-section" id="redis-store">
+  <h3>Redis Store</h3>
+  <p>The Redis store is designed for <strong>distributed, multi-worker production deployments</strong>. When your application runs multiple processes behind a load balancer (e.g., Gunicorn with multiple workers, Kubernetes pods), all workers share the same Redis-backed belief state. Redis also provides native TTL support for automatic session expiry.</p>
 
-store = <span class="fn">InMemoryBeliefStore</span>(max_bytes=<span class="nu">100</span> * <span class="nu">1024</span> * <span class="nu">1024</span>)  <span class="cm"># 100MB limit</span>
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>redis_url</code></td><td><code>str</code></td><td><code>"redis://localhost:6379/0"</code></td><td>Redis connection URI. Supports standard Redis URIs: <code>redis://host:port/db</code>, <code>rediss://</code> (TLS), <code>redis+sentinel://</code>. Password auth: <code>redis://:password@host:port/db</code>.</td></tr>
+    </tbody>
+  </table>
 
-# Get usage stats
-stats = store.<span class="fn">get_stats</span>()
-<span class="nb">print</span>(stats)  # {"total_sessions": 5, "total_beliefs": 142, "utilization_percent": 12.3}</code></pre>
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> RedisStore
+
+store = <span class="fn">RedisStore</span>(redis_url=<span class="st">"redis://localhost:6379/0"</span>)
+
+<span class="cm"># Set TTL on all beliefs in a session (auto-expire after 24 hours)</span>
+<span class="kw">await</span> store.<span class="fn">set_session_ttl</span>(<span class="st">"user_123"</span>, ttl_seconds=<span class="nu">86400</span>)</code></pre>
 
   <div class="callout tip">
-    <p><strong>ℹ️ LRU Eviction & Footprint Estimation:</strong> The in-memory store uses a Python <code>collections.OrderedDict</code>:
+    <p><strong>ℹ️ Redis Hash Layout &amp; Session Expiry:</strong> Data is organized cleanly to prevent key namespace bloat:
+    <ul>
+      <li>Each session is stored as a single Redis <strong>HASH</strong> at key <code>beliefstate:session:{session_id}</code>.</li>
+      <li>Each belief within the hash uses <code>subject::predicate</code> as the hash field and the serialized belief JSON as the value.</li>
+      <li><code>set_session_ttl()</code> calls Redis <code>EXPIRE</code> on the parent HASH key, enabling automatic expiration of the entire session state at once.</li>
+      <li><code>belief_count()</code> uses <code>HLEN</code> — O(1) operation, no deserialization needed.</li>
+      <li><code>health_check()</code> uses <code>PING</code> — verifies Redis connectivity.</li>
+    </ul>
+    </p>
+  </div>
+
+  <h4>Performance Characteristics</h4>
+  <ul>
+    <li><strong>Read/Write latency:</strong> ~0.5ms per operation (network round-trip dependent).</li>
+    <li><strong>Multi-worker safe:</strong> Redis handles concurrent access natively. No file locking issues.</li>
+    <li><strong>Similarity search:</strong> O(N) — all beliefs for a session are loaded and compared in Python (same as SQLite). For very large sessions, consider using Redis vector search extensions.</li>
+    <li><strong>Requires:</strong> A running Redis server (v5.0+ recommended).</li>
+  </ul>
+</section>
+
+<!-- ── In-Memory Store ── -->
+<section class="doc-section" id="memory-store">
+  <h3>In-Memory Store</h3>
+  <p>The in-memory store keeps all beliefs in Python process memory using an ordered dictionary. It provides the fastest possible access but <strong>data is lost on process restart</strong>. Ideal for unit testing, short-lived sessions, or applications where belief persistence isn't needed.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>max_bytes</code></td><td><code>int</code></td><td><code>104857600</code> (100 MB)</td><td>Maximum memory budget in bytes. When total belief data exceeds this limit, the store evicts least-recently-used (LRU) beliefs from the oldest sessions until the footprint fits. Set to <code>0</code> for unlimited (not recommended in production).</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> InMemoryBeliefStore
+
+store = <span class="fn">InMemoryBeliefStore</span>(max_bytes=<span class="nu">100</span> * <span class="nu">1024</span> * <span class="nu">1024</span>)  <span class="cm"># 100 MB limit</span>
+
+<span class="cm"># Get usage stats</span>
+stats = store.<span class="fn">get_stats</span>()
+<span class="nb">print</span>(stats)  <span class="cm"># {"total_sessions": 5, "total_beliefs": 142, "utilization_percent": 12.3}</span></code></pre>
+
+  <div class="callout tip">
+    <p><strong>ℹ️ LRU Eviction &amp; Footprint Estimation:</strong> The in-memory store uses a Python <code>collections.OrderedDict</code>:
     <ol>
-      <li>Reading or writing a belief updates its usage rank, moving the key to the end of the dictionary (MRU).</li>
-      <li>The memory footprint of each Pydantic model is estimated in bytes by checking the length of its JSON string representation.</li>
-      <li>When size limit is reached, it evicts least-recently-used beliefs from the oldest sessions until the memory footprint fits inside the <code>max_bytes</code> budget.</li>
+      <li><strong>Usage tracking:</strong> Reading or writing a belief updates its usage rank, moving the key to the end of the dictionary (MRU position).</li>
+      <li><strong>Memory estimation:</strong> Each belief's memory footprint is estimated by checking the byte length of its JSON string representation (<code>len(belief.model_dump_json())</code>).</li>
+      <li><strong>Eviction:</strong> When the size limit is reached, the store evicts least-recently-used beliefs from the oldest sessions until the memory footprint fits inside the <code>max_bytes</code> budget.</li>
     </ol>
     </p>
   </div>
 
   <div class="callout warning">
-    <p><strong>⚠️ Warning:</strong> In-memory store is NOT durable. All beliefs are lost on process restart. Use SQLite or Redis for production.</p>
+    <p><strong>⚠️ Not Durable:</strong> In-memory store is NOT persistent. All beliefs are lost on process restart or crash. Use SQLite or Redis for any application that needs belief persistence.</p>
   </div>
+
+  <h3>Implementing a Custom Store</h3>
+  <p>You can implement your own store by following the <code>Store</code> protocol. Your class must implement all the methods listed in the <a href="#stores">Store Protocol Methods</a> table above. Inject your custom store into the tracker:</p>
+  <pre><code><span class="code-label">python</span><span class="kw">class</span> <span class="fn">MyCustomStore</span>:
+    <span class="kw">async def</span> <span class="fn">add_belief</span>(self, session_id: <span class="nb">str</span>, belief: Belief) -> <span class="nb">None</span>: ...
+    <span class="kw">async def</span> <span class="fn">get_beliefs</span>(self, session_id: <span class="nb">str</span>, conversation_id=<span class="nb">None</span>) -> list[Belief]: ...
+    <span class="kw">async def</span> <span class="fn">search_beliefs</span>(self, session_id, embedding, threshold, limit) -> list[Belief]: ...
+    <span class="kw">async def</span> <span class="fn">remove_belief</span>(self, session_id, subject, predicate) -> <span class="nb">None</span>: ...
+    <span class="kw">async def</span> <span class="fn">update_belief</span>(self, session_id, belief) -> <span class="nb">None</span>: ...
+    <span class="kw">async def</span> <span class="fn">clear</span>(self, session_id) -> <span class="nb">None</span>: ...
+    <span class="kw">async def</span> <span class="fn">belief_count</span>(self, session_id) -> <span class="nb">int</span>: ...
+    <span class="kw">async def</span> <span class="fn">health_check</span>(self) -> <span class="nb">bool</span>: ...
+
+tracker = <span class="fn">BeliefTracker</span>(config=config, store=<span class="fn">MyCustomStore</span>())</code></pre>
 </section>
 
 <!-- ── Footer ── -->
@@ -177,86 +270,23 @@ stats = store.<span class="fn">get_stats</span>()
 
 <!-- ── Sidebar logic ── -->
 <script>
-  // Highlight active sidebar link based on current page and scroll position
   const sections = document.querySelectorAll('.doc-section');
   const navLinks = document.querySelectorAll('.sidebar-nav a');
-
   function highlightCurrentLink() {
     const currentPath = window.location.pathname.split('/').pop() || 'index.html';
     const currentHash = window.location.hash;
-    
     let matched = false;
-    navLinks.forEach(link => {
-      link.classList.remove('active');
-      const href = link.getAttribute('href');
-      
-      // If there's a hash, match the exact page + hash
-      if (currentHash && href.endsWith(currentHash)) {
-        link.classList.add('active');
-        matched = true;
-      }
-    });
-
-    // If no hash or no hash match, match the page itself (first link matching the page)
-    if (!matched) {
-      for (const link of navLinks) {
-        const href = link.getAttribute('href');
-        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
-          link.classList.add('active');
-          break;
-        }
-      }
-    }
+    navLinks.forEach(link => { link.classList.remove('active'); const href = link.getAttribute('href'); if (currentHash && href.endsWith(currentHash)) { link.classList.add('active'); matched = true; } });
+    if (!matched) { for (const link of navLinks) { const href = link.getAttribute('href'); if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) { link.classList.add('active'); break; } } }
   }
-
-  // Highlight active sidebar link on scroll (for sections on the current page)
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const targetId = entry.target.id;
-        navLinks.forEach(link => {
-          const href = link.getAttribute('href');
-          if (href.endsWith(`#${targetId}`)) {
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-          }
-        });
-      }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-
+  const observer = new IntersectionObserver((entries) => { entries.forEach(entry => { if (entry.isIntersecting) { const targetId = entry.target.id; navLinks.forEach(link => { const href = link.getAttribute('href'); if (href.endsWith(`#${targetId}`)) { navLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); } }); } }); }, { rootMargin: '-20% 0px -70% 0px' });
   sections.forEach(section => observer.observe(section));
-  
   highlightCurrentLink();
   window.addEventListener('hashchange', highlightCurrentLink);
-
-  // Close mobile sidebar on link click
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.remove('open');
-    });
-  });
-
-  // Sidebar Collapse / Expand Logic
+  navLinks.forEach(link => { link.addEventListener('click', () => { const sidebar = document.querySelector('.sidebar'); if (sidebar) sidebar.classList.remove('open'); }); });
   const sidebarToggle = document.getElementById('sidebar-toggle');
-  
-  // On load, restore state
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
-    document.body.classList.add('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '▶';
-  } else {
-    document.body.classList.remove('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '◀';
-  }
-
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
-      localStorage.setItem('sidebar-collapsed', isCollapsed);
-      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
-    });
-  }
+  if (localStorage.getItem('sidebar-collapsed') === 'true') { document.body.classList.add('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '▶'; } else { document.body.classList.remove('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '◀'; }
+  if (sidebarToggle) { sidebarToggle.addEventListener('click', () => { const isCollapsed = document.body.classList.toggle('sidebar-collapsed'); localStorage.setItem('sidebar-collapsed', isCollapsed); sidebarToggle.textContent = isCollapsed ? '▶' : '◀'; }); }
 </script>
 
 </body>

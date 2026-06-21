@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Advanced Features — BeliefState Documentation</title>
-  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <meta name="description" content="Advanced BeliefState features: background workers, resilience patterns, observability with OpenTelemetry, and GDPR compliance.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v0.1.0</div>
+    <div class="sidebar-version">v1.0.0</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -58,7 +58,7 @@
       <li><a href="advanced.html#dispatchers">Background Workers</a></li>
       <li><a href="advanced.html#resilience">Resilience</a></li>
       <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+      <li><a href="advanced.html#gdpr">GDPR &amp; Privacy</a></li>
 
       <li class="nav-section-title">Reference</li>
       <li><a href="reference.html#api-reference">API Reference</a></li>
@@ -77,9 +77,28 @@
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="dispatchers">
   <h2>Background Workers</h2>
-  <p>By default, tracking runs as <code>asyncio</code> background tasks. For production durability, use Celery or RQ dispatchers.</p>
+  <p>By default, belief tracking runs as <code>asyncio</code> background tasks in the same event loop as your application. For production deployments that require <strong>task durability</strong> (surviving process restarts, guaranteed delivery, retry queues), you can offload tracking to Celery or RQ distributed workers.</p>
+
+  <h3>Dispatcher Comparison</h3>
+  <table class="param-table">
+    <thead><tr><th>Dispatcher</th><th>Durability</th><th>Setup</th><th>Best For</th></tr></thead>
+    <tbody>
+      <tr><td><code>asyncio</code></td><td>❌ Lost on crash</td><td>Zero — built-in</td><td>Default. Single-process apps, development, low-stakes tracking.</td></tr>
+      <tr><td><code>sync</code></td><td>✅ Inline (blocking)</td><td>Zero — built-in</td><td>Debugging, unit testing, synchronous applications.</td></tr>
+      <tr><td><code>celery</code></td><td>✅ Persisted in broker</td><td>Redis/RabbitMQ + workers</td><td>Production. Task retry, monitoring (Flower), multi-worker.</td></tr>
+      <tr><td><code>rq</code></td><td>✅ Persisted in Redis</td><td>Redis + workers</td><td>Simpler alternative to Celery. Fewer features, easier setup.</td></tr>
+    </tbody>
+  </table>
 
   <h3>Celery Dispatcher</h3>
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>celery_app</code></td><td><code>Celery</code></td><td><em>(required)</em></td><td>A configured Celery application instance. Must have a broker configured (Redis or RabbitMQ). The dispatcher registers a Celery task that executes the tracking pipeline.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> celery <span class="kw">import</span> Celery
 <span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTracker, TrackerConfig
 <span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> CeleryDispatcher
@@ -93,6 +112,14 @@ tracker = <span class="fn">BeliefTracker</span>(
 )</code></pre>
 
   <h3>RQ (Redis Queue) Dispatcher</h3>
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>queue</code></td><td><code>rq.Queue</code></td><td><em>(required)</em></td><td>A configured RQ <code>Queue</code> instance. Must be connected to a Redis server. The dispatcher enqueues tracking tasks onto this queue for worker processing.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> redis <span class="kw">import</span> Redis
 <span class="kw">from</span> rq <span class="kw">import</span> Queue
 <span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> RQDispatcher
@@ -110,10 +137,10 @@ tracker = <span class="fn">BeliefTracker</span>(
   <pre><code><span class="code-label">worker_startup.py</span><span class="kw">from</span> beliefstate.dispatcher <span class="kw">import</span> register_global_tracker
 <span class="kw">from</span> my_app <span class="kw">import</span> tracker
 
-<!-- Register BEFORE processing any tasks -->
+<span class="cm"># Register BEFORE processing any tasks</span>
 <span class="fn">register_global_tracker</span>(tracker)</code></pre>
   <div class="callout warning">
-    <p><strong>⚠️ Important:</strong> <code>ContextVar</code> (session_context) does NOT propagate across process boundaries. The dispatchers explicitly serialize <code>session_id</code> into task payloads to ensure it reaches worker processes.</p>
+    <p><strong>⚠️ Context Propagation:</strong> <code>ContextVar</code> (<code>session_context</code>) does NOT propagate across process boundaries. The dispatchers explicitly serialize <code>session_id</code> into task payloads to ensure it reaches worker processes correctly.</p>
   </div>
 </section>
 
@@ -122,20 +149,20 @@ tracker = <span class="fn">BeliefTracker</span>(
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="resilience">
   <h2>Resilience</h2>
-  <p>BeliefState wraps internal adapter calls with production-grade resilience patterns:</p>
+  <p>BeliefState wraps internal adapter calls with production-grade resilience patterns to handle API failures gracefully. These patterns ensure that transient provider outages don't silently drop beliefs or cascade failures into your application.</p>
 
   <h3>Retry with Exponential Backoff</h3>
-  <p>All adapter calls (generate, embeddings) automatically retry transient failures with jittered exponential backoff. Configure via <code>TrackerConfig</code> or per-adapter <code>RetryConfig</code>.</p>
+  <p>All adapter calls (generate, embeddings) automatically retry transient failures with jittered exponential backoff. Configure via <code>TrackerConfig</code> (global) or per-adapter <code>RetryConfig</code> (adapter-level). Transient errors include rate limits (HTTP 429), server errors (5xx), timeouts, and connection errors. Permanent errors (invalid API key, malformed request) are raised immediately.</p>
 
   <h3>Circuit Breaker</h3>
-  <p>When an LLM API goes down, the circuit breaker pattern prevents cascading failures:</p>
+  <p>When an LLM API goes down, the circuit breaker pattern prevents cascading failures by fast-failing requests instead of queuing retries indefinitely:</p>
   <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
     enable_circuit_breaker=<span class="nb">True</span>,
     circuit_breaker_failure_threshold=<span class="nu">5</span>,     <span class="cm"># Trip after 5 consecutive failures</span>
     circuit_breaker_recovery_timeout=<span class="nu">30.0</span>,  <span class="cm"># Wait 30s before trying recovery</span>
 )
 
-<!-- Manually access the circuit breaker -->
+<span class="cm"># Catch circuit breaker open state</span>
 <span class="kw">from</span> beliefstate <span class="kw">import</span> CircuitBreaker, CircuitBreakerOpenException
 
 try:
@@ -144,17 +171,22 @@ except CircuitBreakerOpenException:
     <span class="nb">print</span>(<span class="st">"Circuit breaker is OPEN — failing fast"</span>)</code></pre>
 
   <div class="callout tip">
-    <p><strong>ℹ️ Circuit Breaker States:</strong> The circuit breaker operates as a state machine:
+    <p><strong>ℹ️ Circuit Breaker State Machine:</strong>
     <ul>
-      <li><strong>CLOSED:</strong> Normal state. All requests flow through. If consecutive failures exceed the threshold (default 5), the circuit trips to OPEN.</li>
-      <li><strong>OPEN:</strong> Trips blockingly. All requests immediately raise <code>CircuitBreakerOpenException</code> without hitting the LLM provider, saving rate limits and latency.</li>
-      <li><strong>HALF-OPEN:</strong> Initiated once the recovery cooldown timeout (default 30 seconds) has elapsed. The next request acts as a probe: if it succeeds, the breaker resets to CLOSED; if it fails, it returns to OPEN for another cooldown cycle.</li>
+      <li><strong>CLOSED</strong> (Normal): All requests flow through. If consecutive failures exceed <code>circuit_breaker_failure_threshold</code> (default 5), the circuit trips to OPEN.</li>
+      <li><strong>OPEN</strong> (Tripped): All requests immediately raise <code>CircuitBreakerOpenException</code> without hitting the LLM provider, saving rate limits and latency.</li>
+      <li><strong>HALF-OPEN</strong> (Recovery probe): After <code>circuit_breaker_recovery_timeout</code> (default 30s) elapses, the breaker allows a single probe request. If it succeeds → CLOSED. If it fails → back to OPEN for another cooldown cycle.</li>
     </ul>
     </p>
   </div>
 
   <h3>Health Checks</h3>
-  <pre><code><span class="code-label">python</span><!-- Check if the LLM provider is reachable -->
+  <p>Use health checks to verify store and adapter connectivity at application startup or in readiness probes (Kubernetes <code>/healthz</code> endpoint):</p>
+  <pre><code><span class="code-label">python</span><span class="cm"># Check full tracker health (store + adapter)</span>
+health = <span class="kw">await</span> tracker.<span class="fn">health_check</span>()
+<span class="nb">print</span>(health)  <span class="cm"># {"store": True, "adapter": True}</span>
+
+<span class="cm"># Check individual adapter</span>
 is_healthy = <span class="kw">await</span> adapter.<span class="fn">health_check</span>()
 if not is_healthy:
     logger.<span class="fn">error</span>(<span class="st">"Provider is not responding — use fallback"</span>)</code></pre>
@@ -165,72 +197,131 @@ if not is_healthy:
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="observability">
   <h2>Observability</h2>
-  <p>BeliefState includes built-in OpenTelemetry instrumentation for distributed tracing and metric collection.</p>
+  <p>BeliefState includes built-in <a href="https://opentelemetry.io/">OpenTelemetry</a> instrumentation for distributed tracing and metric collection, plus structured JSON logging for cloud log aggregators.</p>
+
+  <h3>OpenTelemetry Setup</h3>
+
+  <h4><code>setup_otel()</code> Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>enabled</code></td><td><code>bool</code></td><td><code>True</code></td><td>Master switch for OpenTelemetry instrumentation. Set to <code>False</code> to completely disable tracing and metrics collection (zero overhead).</td></tr>
+      <tr><td><code>service_name</code></td><td><code>str</code></td><td><code>"beliefstate"</code></td><td>Service name reported in traces and metrics. Set this to your application's name to identify traces in your observability dashboard (e.g., <code>"my-chatbot-api"</code>).</td></tr>
+      <tr><td><code>otel_exporter_otlp_endpoint</code></td><td><code>str</code></td><td><code>"http://localhost:4317"</code></td><td>OTLP gRPC endpoint for exporting traces and metrics. Point this to your collector (Jaeger, Grafana Tempo, Datadog Agent, etc.).</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.observability <span class="kw">import</span> setup_otel
 
-<!-- Initialize OpenTelemetry tracing and metrics -->
+<span class="cm"># Initialize OpenTelemetry tracing and metrics</span>
 <span class="fn">setup_otel</span>(
     enabled=<span class="nb">True</span>,
     service_name=<span class="st">"my-app"</span>,
     otel_exporter_otlp_endpoint=<span class="st">"http://localhost:4317"</span>
 )</code></pre>
 
-  <div class="callout tip">
-    <p><strong>ℹ️ Traces & Metrics Breakdown:</strong>
-    <ul>
-      <li><strong>Distributed Tracing Spans:</strong> Captures hierarchical execution traces with performance metadata:
-        <ul>
-          <li><code>beliefstate.extract_beliefs</code>: Measures fact extraction prompt latency and token usage.</li>
-          <li><code>beliefstate.detect_contradiction</code>: Tracks time taken by semantic filters and the NLI logic check.</li>
-          <li><code>beliefstate.resolve_beliefs</code>: Tracks store write times and resolution conflicts.</li>
-        </ul>
-      </li>
-      <li><strong>Exported Metrics:</strong>
-        <ul>
-          <li><code>beliefstate.beliefs_extracted</code>: Counter for total facts parsed.</li>
-          <li><code>beliefstate.contradictions_detected</code>: Counter for triggered logical conflicts.</li>
-          <li><code>beliefstate.beliefs_in_store</code>: Gauge showing current active facts per session database.</li>
-          <li><code>beliefstate.*_latency_ms</code>: Histograms tracking latency percentiles (p50, p90, p99) for database operations and provider calls.</li>
-        </ul>
-      </li>
-    </ul>
-    </p>
-  </div>
+  <h4>Distributed Tracing Spans</h4>
+  <p>BeliefState creates hierarchical spans that trace the full lifecycle of each belief tracking task:</p>
+  <table class="param-table">
+    <thead><tr><th>Span Name</th><th>Description</th><th>Attributes</th></tr></thead>
+    <tbody>
+      <tr><td><code>beliefstate.extract_beliefs</code></td><td>Measures fact extraction prompt latency and token usage.</td><td><code>session_id</code>, <code>turn</code>, <code>beliefs_count</code>, <code>latency_ms</code></td></tr>
+      <tr><td><code>beliefstate.detect_contradiction</code></td><td>Tracks time taken by semantic filters and NLI logic check.</td><td><code>session_id</code>, <code>candidates_checked</code>, <code>contradictions_found</code></td></tr>
+      <tr><td><code>beliefstate.resolve_beliefs</code></td><td>Tracks store write times and resolution conflicts.</td><td><code>session_id</code>, <code>beliefs_added</code>, <code>beliefs_updated</code></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Exported Metrics</h4>
+  <table class="param-table">
+    <thead><tr><th>Metric Name</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>beliefstate.beliefs_extracted</code></td><td>Counter</td><td>Total number of facts parsed from conversation text.</td></tr>
+      <tr><td><code>beliefstate.contradictions_detected</code></td><td>Counter</td><td>Total number of logical contradictions detected.</td></tr>
+      <tr><td><code>beliefstate.beliefs_in_store</code></td><td>Gauge</td><td>Current number of active beliefs in the store.</td></tr>
+      <tr><td><code>beliefstate.*_latency_ms</code></td><td>Histogram</td><td>Latency percentiles (p50, p90, p99) for database operations and provider calls.</td></tr>
+    </tbody>
+  </table>
 
   <h3>Structured Logging</h3>
-  <p>All components emit structured JSON log events via <code>logging_utils.TrackerEvent</code> for cloud collectors (Datadog, CloudWatch):</p>
+  <p>All components emit structured JSON log events via the <code>TrackerEvent</code> dataclass. These events are designed for cloud log aggregators like Datadog, CloudWatch, and Loki.</p>
+
+  <h4><code>TrackerEvent</code> Fields</h4>
+  <table class="param-table">
+    <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>session_id</code></td><td><code>str</code></td><td>The session ID this event relates to.</td></tr>
+      <tr><td><code>operation</code></td><td><code>str</code></td><td>The pipeline stage: <code>"extract_beliefs"</code>, <code>"detect"</code>, <code>"resolve"</code>, <code>"store_write"</code>, etc.</td></tr>
+      <tr><td><code>turn</code></td><td><code>int</code></td><td>The conversation turn number that triggered this event.</td></tr>
+      <tr><td><code>latency_ms</code></td><td><code>float</code></td><td>Execution time in milliseconds for this operation.</td></tr>
+      <tr><td><code>detail</code></td><td><code>str</code></td><td>Human-readable description of what happened (e.g., <code>"Extracted 3 beliefs"</code>, <code>"Found 1 contradiction"</code>).</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">log output</span>{"session_id": "user_123", "operation": "extract_beliefs", "turn": 5, "detail": "Extracted 3 beliefs", "latency_ms": 142.5}
-{"session_id": "user_123", "operation": "detect", "turn": 5, "detail": "Found 1 contradiction"}</code></pre>
+{"session_id": "user_123", "operation": "detect", "turn": 5, "detail": "Found 1 contradiction"}
+{"session_id": "user_123", "operation": "resolve", "turn": 5, "detail": "Overwrote 1 belief", "latency_ms": 8.2}</code></pre>
+
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.logging_utils <span class="kw">import</span> TrackerEvent, log_event
+
+<span class="cm"># Emit a custom tracker event</span>
+event = <span class="fn">TrackerEvent</span>(
+    session_id=<span class="st">"user_123"</span>,
+    operation=<span class="st">"custom_check"</span>,
+    turn=<span class="nu">5</span>,
+    latency_ms=<span class="nu">42.0</span>,
+    detail=<span class="st">"Ran custom validation"</span>
+)
+<span class="fn">log_event</span>(event)</code></pre>
 </section>
 
 <!-- ═══════════════════════════════════════════════════ -->
 <!-- ── GDPR ── -->
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="gdpr">
-  <h2>GDPR & Privacy</h2>
-  <p>BeliefState supports full session deletion with audit receipts for GDPR compliance:</p>
-  <pre><code><span class="code-label">python</span><!-- Delete all beliefs for a user (GDPR right to erasure) -->
+  <h2>GDPR &amp; Privacy</h2>
+  <p>BeliefState supports full session deletion with auditable receipts for GDPR compliance (right to erasure, Article 17). The <code>clear_session()</code> method ensures complete data removal including draining any in-flight background tasks.</p>
+
+  <pre><code><span class="code-label">python</span><span class="cm"># Delete all beliefs for a user (GDPR right to erasure)</span>
 receipt = <span class="kw">await</span> tracker.<span class="fn">clear_session</span>(<span class="st">"user_123"</span>)
 
 <span class="nb">print</span>(receipt)
-<!-- DeletionReceipt( -->
-<!--   session_id="user_123", -->
-<!--   beliefs_deleted=42, -->
-<!--   in_flight_tasks_drained=2, -->
-<!--   deleted_at=datetime(...) -->
-<!-- ) --></code></pre>
+<span class="cm"># DeletionReceipt(</span>
+<span class="cm">#   session_id="user_123",</span>
+<span class="cm">#   beliefs_deleted=42,</span>
+<span class="cm">#   in_flight_tasks_drained=2,</span>
+<span class="cm">#   deleted_at=datetime(...)</span>
+<span class="cm"># )</span></code></pre>
+
+  <h3><code>DeletionReceipt</code> Fields</h3>
+  <table class="param-table">
+    <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>session_id</code></td><td><code>str</code></td><td>The session ID whose data was deleted.</td></tr>
+      <tr><td><code>beliefs_deleted</code></td><td><code>int</code></td><td>Number of belief records permanently removed from the store.</td></tr>
+      <tr><td><code>in_flight_tasks_drained</code></td><td><code>int</code></td><td>Number of background tracking tasks that were cancelled or waited for completion before deletion. Ensures no new beliefs are written after the delete.</td></tr>
+      <tr><td><code>deleted_at</code></td><td><code>datetime</code></td><td>UTC timestamp of when the deletion was executed. Serves as an auditable record for compliance.</td></tr>
+    </tbody>
+  </table>
 
   <div class="callout warning">
-    <p><strong>⚠️ Concurrency & Deletion Race Conditions:</strong> If a user requests account deletion while background belief extraction tasks are still running in the asyncio event loop, those tasks could complete and write new facts <em>after</em> the database is cleared.
+    <p><strong>⚠️ Concurrency &amp; Deletion Race Conditions:</strong> If a user requests account deletion while background belief extraction tasks are still running in the asyncio event loop, those tasks could complete and write new facts <em>after</em> the database is cleared.
     To prevent this, <code>clear_session()</code> calls the dispatcher's <code>drain_session(session_id)</code> method first, which cancels or waits for all active tracking tasks for that session ID before executing the SQL or Redis delete commands.
     </p>
   </div>
 
-  <p>The <code>DeletionReceipt</code> confirms:</p>
+  <h3>Deletion Workflow</h3>
+  <ol>
+    <li><strong>Drain in-flight tasks:</strong> The dispatcher cancels or awaits all active tracking tasks for the session.</li>
+    <li><strong>Delete from store:</strong> All beliefs for the session are permanently removed from the store (SQLite DELETE, Redis DEL).</li>
+    <li><strong>Clean up locks:</strong> Session-specific async locks, turn counters, and provider tracking entries are removed from memory.</li>
+    <li><strong>Generate receipt:</strong> A <code>DeletionReceipt</code> is returned with the count of deleted records and timestamp.</li>
+  </ol>
+
+  <h3>Best Practices</h3>
   <ul>
-    <li>All stored beliefs were deleted from the store</li>
-    <li>All in-flight background tasks for the session were drained/completed</li>
-    <li>An auditable timestamp of when deletion occurred</li>
+    <li><strong>Store receipts:</strong> Log or persist <code>DeletionReceipt</code> objects as audit evidence for GDPR compliance reviews.</li>
+    <li><strong>Redis TTL:</strong> For Redis stores, combine <code>clear_session()</code> with <code>set_session_ttl()</code> to auto-expire sessions that aren't explicitly deleted.</li>
+    <li><strong>Celery/RQ workers:</strong> The drain mechanism works across distributed workers — it signals the task queue to cancel pending tasks for the session.</li>
   </ul>
 </section>
 
@@ -246,86 +337,23 @@ receipt = <span class="kw">await</span> tracker.<span class="fn">clear_session</
 
 <!-- ── Sidebar logic ── -->
 <script>
-  // Highlight active sidebar link based on current page and scroll position
   const sections = document.querySelectorAll('.doc-section');
   const navLinks = document.querySelectorAll('.sidebar-nav a');
-
   function highlightCurrentLink() {
     const currentPath = window.location.pathname.split('/').pop() || 'index.html';
     const currentHash = window.location.hash;
-    
     let matched = false;
-    navLinks.forEach(link => {
-      link.classList.remove('active');
-      const href = link.getAttribute('href');
-      
-      // If there's a hash, match the exact page + hash
-      if (currentHash && href.endsWith(currentHash)) {
-        link.classList.add('active');
-        matched = true;
-      }
-    });
-
-    // If no hash or no hash match, match the page itself (first link matching the page)
-    if (!matched) {
-      for (const link of navLinks) {
-        const href = link.getAttribute('href');
-        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
-          link.classList.add('active');
-          break;
-        }
-      }
-    }
+    navLinks.forEach(link => { link.classList.remove('active'); const href = link.getAttribute('href'); if (currentHash && href.endsWith(currentHash)) { link.classList.add('active'); matched = true; } });
+    if (!matched) { for (const link of navLinks) { const href = link.getAttribute('href'); if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) { link.classList.add('active'); break; } } }
   }
-
-  // Highlight active sidebar link on scroll (for sections on the current page)
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const targetId = entry.target.id;
-        navLinks.forEach(link => {
-          const href = link.getAttribute('href');
-          if (href.endsWith(`#${targetId}`)) {
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-          }
-        });
-      }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-
+  const observer = new IntersectionObserver((entries) => { entries.forEach(entry => { if (entry.isIntersecting) { const targetId = entry.target.id; navLinks.forEach(link => { const href = link.getAttribute('href'); if (href.endsWith(`#${targetId}`)) { navLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); } }); } }); }, { rootMargin: '-20% 0px -70% 0px' });
   sections.forEach(section => observer.observe(section));
-  
   highlightCurrentLink();
   window.addEventListener('hashchange', highlightCurrentLink);
-
-  // Close mobile sidebar on link click
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.remove('open');
-    });
-  });
-
-  // Sidebar Collapse / Expand Logic
+  navLinks.forEach(link => { link.addEventListener('click', () => { const sidebar = document.querySelector('.sidebar'); if (sidebar) sidebar.classList.remove('open'); }); });
   const sidebarToggle = document.getElementById('sidebar-toggle');
-  
-  // On load, restore state
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
-    document.body.classList.add('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '▶';
-  } else {
-    document.body.classList.remove('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '◀';
-  }
-
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
-      localStorage.setItem('sidebar-collapsed', isCollapsed);
-      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
-    });
-  }
+  if (localStorage.getItem('sidebar-collapsed') === 'true') { document.body.classList.add('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '▶'; } else { document.body.classList.remove('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '◀'; }
+  if (sidebarToggle) { sidebarToggle.addEventListener('click', () => { const isCollapsed = document.body.classList.toggle('sidebar-collapsed'); localStorage.setItem('sidebar-collapsed', isCollapsed); sidebarToggle.textContent = isCollapsed ? '▶' : '◀'; }); }
 </script>
 
 </body>

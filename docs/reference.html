@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>API Reference & Changelog — BeliefState Documentation</title>
-  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <title>API Reference &amp; Changelog — BeliefState Documentation</title>
+  <meta name="description" content="Complete API reference for BeliefState. Method signatures, model fields, and changelog for all versions.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v0.1.0</div>
+    <div class="sidebar-version">v1.0.0</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -58,7 +58,7 @@
       <li><a href="advanced.html#dispatchers">Background Workers</a></li>
       <li><a href="advanced.html#resilience">Resilience</a></li>
       <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+      <li><a href="advanced.html#gdpr">GDPR &amp; Privacy</a></li>
 
       <li class="nav-section-title">Reference</li>
       <li><a href="reference.html#api-reference">API Reference</a></li>
@@ -77,60 +77,127 @@
 <section class="doc-section" id="api-reference">
   <h2>API Reference</h2>
 
+  <!-- ── BeliefTracker ── -->
   <h3>BeliefTracker</h3>
-  <p>The main orchestrator class.</p>
+  <p>The main orchestrator class. Manages the full belief tracking pipeline: interception, extraction, contradiction detection, resolution, and storage.</p>
+
+  <h4>Constructor</h4>
   <table class="param-table">
-    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td>wrap(fn)</td><td>Callable</td><td>Decorator that intercepts LLM calls for belief extraction</td></tr>
-      <tr><td>set_session(id)</td><td>None</td><td>Set the active session ID for tracking</td></tr>
-      <tr><td>set_conversation(id)</td><td>None</td><td>Set the active conversation thread within a session</td></tr>
-      <tr><td>get_context_prompt()</td><td>str</td><td>Get formatted belief summary for injection into prompts</td></tr>
-      <tr><td>get_beliefs(session_id)</td><td>list[Belief]</td><td>Retrieve all beliefs for a session</td></tr>
-      <tr><td>delete_session(id)</td><td>DeletionReceipt</td><td>Delete all session data (GDPR)</td></tr>
-      <tr><td>prune_expired_beliefs()</td><td>int</td><td>Remove beliefs older than max_age_seconds</td></tr>
-      <tr><td>update_belief_reference()</td><td>None</td><td>Touch a belief's last_referenced_at timestamp</td></tr>
+      <tr><td><code>config</code></td><td><code>TrackerConfig</code></td><td><em>(required)</em></td><td>Configuration object controlling all tracker behavior. See <a href="configuration.html#tracker-config">TrackerConfig</a>.</td></tr>
+      <tr><td><code>adapter</code></td><td><code>Optional[ProviderAdapter]</code></td><td><code>None</code></td><td>The main application adapter for payload normalization. If <code>None</code>, auto-detected from the first wrapped LLM call's response type.</td></tr>
+      <tr><td><code>store</code></td><td><code>Optional[Store]</code></td><td><code>None</code></td><td>Belief storage backend. If <code>None</code>, created from <code>config.store_type</code> and <code>config.store_kwargs</code>.</td></tr>
+      <tr><td><code>internal_adapter</code></td><td><code>Optional[ProviderAdapter]</code></td><td><code>None</code></td><td>Adapter for background tracking operations (extraction, judge, embeddings). If <code>None</code>, uses <code>adapter</code>. Set to a cheaper/local model for cost optimization.</td></tr>
+      <tr><td><code>dispatcher</code></td><td><code>Optional[Dispatcher]</code></td><td><code>None</code></td><td>Task dispatcher for background execution. If <code>None</code>, created from <code>config.task_dispatcher_type</code>.</td></tr>
     </tbody>
   </table>
 
+  <h4>Methods</h4>
+  <table class="param-table">
+    <thead><tr><th>Method</th><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>wrap</code></td><td><code>(fn: Callable)</code></td><td><code>Callable</code></td><td>Decorator that intercepts an async LLM function. Captures the input messages and output response, then dispatches a background tracking task. The original function's return value is passed through unchanged.</td></tr>
+      <tr><td><code>set_session</code></td><td><code>(session_id: str)</code></td><td><code>None</code></td><td>Set the active session ID in the context variable. All subsequent <code>@wrap</code> calls and <code>get_context_prompt()</code> calls will use this session.</td></tr>
+      <tr><td><code>set_conversation</code></td><td><code>(conversation_id: str)</code></td><td><code>None</code></td><td>Set the active conversation thread within a session. Enables multi-thread belief scoping.</td></tr>
+      <tr><td><code>get_session_turn</code></td><td><code>(session_id: Optional[str])</code></td><td><code>int</code></td><td>Get the current turn number for a specific session. Returns <code>0</code> if no turns have been processed. Uses per-session counters (thread-safe).</td></tr>
+      <tr><td><code>get_context_prompt</code></td><td><code>(session_id, conversation_id, format_template, current_user_message)</code></td><td><code>str</code></td><td>Get formatted belief summary for injection into system prompts. Applies staleness filtering, sort strategy, and token-aware relevance selection. All parameters are optional.</td></tr>
+      <tr><td><code>inject_context</code></td><td><code>(messages, session_id, conversation_id, format_template, current_user_message)</code></td><td><code>list[dict]</code></td><td>Inject belief context into a list of message dicts. If a system message exists, appends context to it; otherwise prepends a new system message. Returns a new list (does not mutate the original).</td></tr>
+      <tr><td><code>get_beliefs</code></td><td><code>(session_id: Optional[str])</code></td><td><code>list[Belief]</code></td><td>Retrieve all beliefs for a session from the store. Delegates to <code>store.get_beliefs()</code>.</td></tr>
+      <tr><td><code>export_beliefs</code></td><td><code>(session_id: Optional[str])</code></td><td><code>list[dict]</code></td><td>Export all beliefs for a session as JSON-serializable dicts (via <code>Belief.model_dump()</code>). Useful for backups, debugging, and store migration.</td></tr>
+      <tr><td><code>import_beliefs</code></td><td><code>(session_id: Optional[str], beliefs_data: list[dict])</code></td><td><code>int</code></td><td>Import beliefs from a list of dicts into the store. Validates each entry via <code>Belief.model_validate()</code>. Skips invalid entries with a warning. Returns the count of successfully imported beliefs.</td></tr>
+      <tr><td><code>clear_session</code></td><td><code>(session_id: str)</code></td><td><code>DeletionReceipt</code></td><td>Delete all session data (GDPR right to erasure). Drains in-flight tasks, deletes all beliefs, cleans up session locks, and returns an auditable receipt.</td></tr>
+      <tr><td><code>health_check</code></td><td><code>()</code></td><td><code>dict[str, bool]</code></td><td>Check health of all tracker components. Returns <code>{"store": bool, "adapter": bool}</code>. Use at startup or in readiness probes.</td></tr>
+      <tr><td><code>prune_expired_beliefs</code></td><td><code>(session_id: Optional[str], max_age_seconds: Optional[int])</code></td><td><code>int</code></td><td>Remove beliefs older than <code>max_age_seconds</code> (defaults to <code>config.belief_max_age_seconds</code>). Returns the count of pruned beliefs.</td></tr>
+      <tr><td><code>update_belief_reference</code></td><td><code>(session_id: Optional[str], subject: str, predicate: str)</code></td><td><code>None</code></td><td>Touch a belief's <code>last_referenced_at</code> timestamp. Helps with staleness scoring — called internally when beliefs are injected into prompts.</td></tr>
+      <tr><td><code>__aenter__</code></td><td><code>()</code></td><td><code>BeliefTracker</code></td><td>Async context manager entry. Opens the store connection (if the store has an <code>open()</code> method). Enables <code>async with tracker:</code> pattern.</td></tr>
+      <tr><td><code>__aexit__</code></td><td><code>(exc_type, exc_val, exc_tb)</code></td><td><code>None</code></td><td>Async context manager exit. Closes the store connection (if the store has a <code>close()</code> method). Ensures proper resource cleanup.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Context Manager Usage</h4>
+  <pre><code><span class="code-label">python</span><span class="kw">async with</span> <span class="fn">BeliefTracker</span>(config=config, adapter=adapter) <span class="kw">as</span> tracker:
+    tracker.<span class="fn">set_session</span>(<span class="st">"user_123"</span>)
+    <span class="kw">await</span> <span class="fn">chat</span>([{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"Hello!"</span>}])
+<span class="cm"># Store connection is automatically closed here</span></code></pre>
+
+  <!-- ── ProviderAdapter Protocol ── -->
   <h3>ProviderAdapter (Protocol)</h3>
-  <p>Interface that all adapters implement.</p>
+  <p>Interface that all adapters implement. Defines the contract for payload normalization, LLM generation, embedding creation, and health checking.</p>
   <table class="param-table">
-    <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+    <thead><tr><th>Method</th><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td>to_llm_call(*args, **kwargs)</td><td>LLMCall</td><td>Convert native SDK args to universal LLMCall</td></tr>
-      <tr><td>to_llm_response(response)</td><td>LLMResponse</td><td>Convert native SDK response to universal LLMResponse</td></tr>
-      <tr><td>generate(call, response_format)</td><td>LLMResponse</td><td>Execute generation with retry and timeout</td></tr>
-      <tr><td>get_embedding(text)</td><td>list[float]</td><td>Generate embedding for a single text</td></tr>
-      <tr><td>get_embeddings(texts)</td><td>list[list[float]]</td><td>Generate embeddings for multiple texts (batched)</td></tr>
-      <tr><td>health_check()</td><td>bool</td><td>Verify provider connectivity</td></tr>
+      <tr><td><code>to_llm_call</code></td><td><code>(*args, **kwargs)</code></td><td><code>LLMCall</code></td><td>Convert native SDK arguments into a universal <code>LLMCall</code> model. Extracts message history, system prompt, and model parameters.</td></tr>
+      <tr><td><code>to_llm_response</code></td><td><code>(response: Any)</code></td><td><code>LLMResponse</code></td><td>Convert native SDK response into a universal <code>LLMResponse</code> model. Extracts response text, model name, and token usage.</td></tr>
+      <tr><td><code>generate</code></td><td><code>(call: LLMCall, response_format: Optional[type])</code></td><td><code>LLMResponse</code></td><td>Execute an LLM chat completion with retry and timeout. Used internally for extraction and judge prompts.</td></tr>
+      <tr><td><code>get_embedding</code></td><td><code>(text: str)</code></td><td><code>list[float]</code></td><td>Generate a vector embedding for a single text string.</td></tr>
+      <tr><td><code>get_embeddings</code></td><td><code>(texts: list[str])</code></td><td><code>list[list[float]]</code></td><td>Generate embeddings for multiple texts in a single batched API call.</td></tr>
+      <tr><td><code>health_check</code></td><td><code>()</code></td><td><code>bool</code></td><td>Verify provider connectivity. Returns <code>True</code> if the provider is reachable and responding.</td></tr>
     </tbody>
   </table>
 
+  <!-- ── Store Protocol ── -->
   <h3>Store (Protocol)</h3>
-  <p>Interface for belief storage backends.</p>
+  <p>Interface for belief storage backends. See <a href="stores.html#stores">Stores</a> for full method signatures and implementation details.</p>
   <table class="param-table">
     <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td>add_belief(session_id, belief)</td><td>None</td><td>Add or overwrite a belief</td></tr>
-      <tr><td>get_beliefs(session_id, conversation_id)</td><td>list[Belief]</td><td>Retrieve all beliefs for a session</td></tr>
-      <tr><td>search_beliefs(session_id, embedding, ...)</td><td>list[Belief]</td><td>Semantic similarity search</td></tr>
-      <tr><td>remove_belief(session_id, subject, predicate)</td><td>None</td><td>Remove a specific belief</td></tr>
-      <tr><td>update_belief(session_id, belief)</td><td>None</td><td>Update an existing belief</td></tr>
-      <tr><td>clear(session_id)</td><td>None</td><td>Clear all beliefs for a session</td></tr>
+      <tr><td><code>add_belief(session_id, belief)</code></td><td><code>None</code></td><td>Add or upsert a belief (keyed by session + subject + predicate).</td></tr>
+      <tr><td><code>get_beliefs(session_id, conversation_id)</code></td><td><code>list[Belief]</code></td><td>Retrieve all beliefs for a session, optionally filtered by conversation.</td></tr>
+      <tr><td><code>search_beliefs(session_id, embedding, ...)</code></td><td><code>list[Belief]</code></td><td>Semantic similarity search using cosine distance on embedding vectors.</td></tr>
+      <tr><td><code>remove_belief(session_id, subject, predicate)</code></td><td><code>None</code></td><td>Remove a specific belief by its composite key.</td></tr>
+      <tr><td><code>update_belief(session_id, belief)</code></td><td><code>None</code></td><td>Update an existing belief's fields (confidence, value, timestamps).</td></tr>
+      <tr><td><code>clear(session_id)</code></td><td><code>None</code></td><td>Delete all beliefs for a session.</td></tr>
+      <tr><td><code>belief_count(session_id)</code></td><td><code>int</code></td><td>Count beliefs without loading them into memory.</td></tr>
+      <tr><td><code>health_check()</code></td><td><code>bool</code></td><td>Verify store backend health and connectivity.</td></tr>
     </tbody>
   </table>
 
-  <h3>Key Models</h3>
+  <!-- ── Key Models ── -->
+  <h3>Belief Model</h3>
+  <p>The core data model representing a single extracted fact. Stored as a Pydantic <code>BaseModel</code> in <code>beliefstate.models</code>.</p>
+  <table class="param-table">
+    <thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>subject</code></td><td><code>str</code></td><td><em>(required)</em></td><td>Who or what the belief is about. Normalized: first-person → <code>"USER"</code>, second-person → <code>"ASSISTANT"</code>.</td></tr>
+      <tr><td><code>predicate</code></td><td><code>str</code></td><td><em>(required)</em></td><td>The relationship or attribute (e.g., <code>"lives in"</code>, <code>"likes"</code>, <code>"works at"</code>).</td></tr>
+      <tr><td><code>value</code></td><td><code>str</code></td><td><em>(required)</em></td><td>The value of the claim. Normalized: dates → ISO 8601, currency → ISO 4217, numbers → digits.</td></tr>
+      <tr><td><code>confidence</code></td><td><code>float</code></td><td><code>1.0</code></td><td>Extraction confidence from 0.0 (uncertain) to 1.0 (definitive). Reported by the extraction model.</td></tr>
+      <tr><td><code>turn</code></td><td><code>int</code></td><td><code>0</code></td><td>The conversation turn number when this belief was extracted.</td></tr>
+      <tr><td><code>source</code></td><td><code>str</code></td><td><code>"user"</code></td><td>Who made the claim: <code>"user"</code> (from user messages) or <code>"assistant"</code> (from LLM responses).</td></tr>
+      <tr><td><code>belief_type</code></td><td><code>str</code></td><td><code>"assertion"</code></td><td><code>"assertion"</code> — a normal factual claim. <code>"update"</code> — an explicit correction of a prior belief (triggers immediate override).</td></tr>
+      <tr><td><code>is_hypothetical</code></td><td><code>bool</code></td><td><code>False</code></td><td>Whether the belief is conditional or speculative (e.g., "If I were…"). Hypothetical beliefs are excluded from prompt injection but kept in the store.</td></tr>
+      <tr><td><code>embedding</code></td><td><code>Optional[list[float]]</code></td><td><code>None</code></td><td>Vector embedding of the belief text (<code>"{subject} {predicate} {value}"</code>). Used for semantic similarity search in contradiction detection.</td></tr>
+      <tr><td><code>created_at</code></td><td><code>datetime</code></td><td><em>(auto)</em></td><td>UTC timestamp when the belief was first extracted and stored.</td></tr>
+      <tr><td><code>last_referenced_at</code></td><td><code>Optional[datetime]</code></td><td><code>None</code></td><td>UTC timestamp of the last time this belief was actively used (injected into a prompt). Used by the staleness scoring algorithm.</td></tr>
+      <tr><td><code>conversation_id</code></td><td><code>Optional[str]</code></td><td><code>None</code></td><td>The conversation thread ID this belief belongs to. Enables multi-thread filtering in <code>get_context_prompt()</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ── Other Models ── -->
+  <h3>Other Key Models</h3>
   <table class="param-table">
     <thead><tr><th>Class</th><th>Module</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td>Belief</td><td>beliefstate.models</td><td>Subject-predicate-value triple with confidence and metadata</td></tr>
-      <tr><td>LLMCall</td><td>beliefstate.call</td><td>Universal representation of an LLM chat completion request</td></tr>
-      <tr><td>LLMResponse</td><td>beliefstate.call</td><td>Universal representation of an LLM chat completion response</td></tr>
-      <tr><td>TrackerConfig</td><td>beliefstate.config</td><td>Pydantic configuration model for the tracker</td></tr>
-      <tr><td>DeletionReceipt</td><td>beliefstate.models</td><td>Audit receipt returned by session deletion</td></tr>
-      <tr><td>RetryConfig</td><td>beliefstate.adapters.common</td><td>Per-adapter retry strategy configuration</td></tr>
+      <tr><td><code>LLMCall</code></td><td><code>beliefstate.call</code></td><td>Universal representation of an LLM chat completion request. Contains normalized message history, system prompt, model name, and parameters.</td></tr>
+      <tr><td><code>LLMResponse</code></td><td><code>beliefstate.call</code></td><td>Universal representation of an LLM chat completion response. Contains response text, model name, and token usage metadata.</td></tr>
+      <tr><td><code>TrackerConfig</code></td><td><code>beliefstate.config</code></td><td>Pydantic configuration model with 25+ parameters controlling the full tracker pipeline. See <a href="configuration.html#tracker-config">Configuration</a>.</td></tr>
+      <tr><td><code>DeletionReceipt</code></td><td><code>beliefstate.models</code></td><td>Audit receipt returned by <code>clear_session()</code>. Contains <code>session_id</code>, <code>beliefs_deleted</code>, <code>in_flight_tasks_drained</code>, <code>deleted_at</code>.</td></tr>
+      <tr><td><code>RetryConfig</code></td><td><code>beliefstate.adapters.common</code></td><td>Per-adapter retry strategy. Controls <code>max_retries</code>, <code>initial_delay</code>, <code>max_delay</code>, <code>exponential_base</code>, <code>jitter</code>. See <a href="adapters.html#retry-config">RetryConfig</a>.</td></tr>
+      <tr><td><code>TrackerEvent</code></td><td><code>beliefstate.logging_utils</code></td><td>Structured log event dataclass. Contains <code>session_id</code>, <code>operation</code>, <code>turn</code>, <code>latency_ms</code>, <code>detail</code>. See <a href="advanced.html#observability">Observability</a>.</td></tr>
+      <tr><td><code>CircuitBreaker</code></td><td><code>beliefstate.resilience</code></td><td>Circuit breaker implementation with CLOSED / OPEN / HALF-OPEN states. See <a href="advanced.html#resilience">Resilience</a>.</td></tr>
+      <tr><td><code>CircuitBreakerOpenException</code></td><td><code>beliefstate.resilience</code></td><td>Exception raised when the circuit breaker is in OPEN state. Signals that the provider is currently unavailable.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ── Context Variables ── -->
+  <h3>Context Variables</h3>
+  <p>BeliefState uses Python <code>contextvars.ContextVar</code> for thread/task-safe session management:</p>
+  <table class="param-table">
+    <thead><tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>session_context</code></td><td><code>ContextVar[str]</code></td><td><code>"default"</code></td><td>The active session ID. Set via <code>tracker.set_session()</code>, middleware, or directly via <code>session_context.set()</code>. Read by all tracker methods to determine which session to operate on.</td></tr>
+      <tr><td><code>conversation_context</code></td><td><code>ContextVar[Optional[str]]</code></td><td><code>None</code></td><td>The active conversation thread ID within a session. Set via <code>tracker.set_conversation()</code> or directly.</td></tr>
     </tbody>
   </table>
 </section>
@@ -140,6 +207,35 @@
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="changelog">
   <h2>Changelog</h2>
+
+  <h3>v1.0.0 — Production Release</h3>
+  <p><strong>Production hardening release</strong> with critical bug fixes, new features, and improved reliability.</p>
+
+  <h4>🐛 Bug Fixes</h4>
+  <ul>
+    <li><strong>Fixed global turn counter race condition:</strong> Replaced shared <code>int</code> counter with per-session <code>Dict[str, int]</code> counters. Prevents cross-session turn collision in multi-user servers (FastAPI, multi-worker).</li>
+    <li><strong>Fixed <code>inject_context()</code> silent bug:</strong> The method was passing <code>format_template</code> as <code>conversation_id</code> to <code>get_context_prompt()</code> due to positional argument mismatch. Now uses explicit keyword arguments.</li>
+    <li><strong>Fixed session lock memory leak:</strong> <code>_session_locks</code> dict grew unboundedly — every new session created a lock that was never removed. <code>clear_session()</code> now cleans up locks, turn counters, and provider tracking entries.</li>
+  </ul>
+
+  <h4>✨ New Features</h4>
+  <ul>
+    <li><strong><code>async with</code> context manager:</strong> <code>BeliefTracker</code> now supports <code>async with tracker:</code> pattern for automatic store open/close lifecycle management.</li>
+    <li><strong><code>belief_count()</code>:</strong> New Store protocol method to count beliefs without deserializing them all into memory. Uses <code>SELECT COUNT(*)</code> (SQLite), <code>HLEN</code> (Redis), <code>len()</code> (Memory).</li>
+    <li><strong><code>export_beliefs()</code> / <code>import_beliefs()</code>:</strong> New tracker methods for belief portability. Export to JSON-serializable dicts, import with Pydantic validation. Enables store migration (SQLite → Redis), backups, and debugging.</li>
+    <li><strong><code>health_check()</code>:</strong> New tracker method that checks store and adapter health. Returns <code>{"store": bool, "adapter": bool}</code>. Use at startup or in Kubernetes readiness probes.</li>
+    <li><strong>Structured logging (<code>TrackerEvent</code>):</strong> All pipeline operations emit structured JSON log events with consistent fields (session_id, operation, turn, latency_ms, detail). Compatible with Datadog, CloudWatch, Loki.</li>
+    <li><strong><code>get_session_turn()</code>:</strong> New method to query the turn counter for a specific session (replaces the deprecated global <code>turn_counter</code> attribute).</li>
+  </ul>
+
+  <h4>📦 Infrastructure</h4>
+  <ul>
+    <li>Published to PyPI via GitHub Actions (Trusted Publisher)</li>
+    <li>Added <code>ruff</code> formatting checks to CI</li>
+    <li>Test coverage above 60% across all modules</li>
+  </ul>
+
+  <hr>
 
   <h3>v0.1.0 — Initial Release</h3>
   <ul>
@@ -171,86 +267,23 @@
 
 <!-- ── Sidebar logic ── -->
 <script>
-  // Highlight active sidebar link based on current page and scroll position
   const sections = document.querySelectorAll('.doc-section');
   const navLinks = document.querySelectorAll('.sidebar-nav a');
-
   function highlightCurrentLink() {
     const currentPath = window.location.pathname.split('/').pop() || 'index.html';
     const currentHash = window.location.hash;
-    
     let matched = false;
-    navLinks.forEach(link => {
-      link.classList.remove('active');
-      const href = link.getAttribute('href');
-      
-      // If there's a hash, match the exact page + hash
-      if (currentHash && href.endsWith(currentHash)) {
-        link.classList.add('active');
-        matched = true;
-      }
-    });
-
-    // If no hash or no hash match, match the page itself (first link matching the page)
-    if (!matched) {
-      for (const link of navLinks) {
-        const href = link.getAttribute('href');
-        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
-          link.classList.add('active');
-          break;
-        }
-      }
-    }
+    navLinks.forEach(link => { link.classList.remove('active'); const href = link.getAttribute('href'); if (currentHash && href.endsWith(currentHash)) { link.classList.add('active'); matched = true; } });
+    if (!matched) { for (const link of navLinks) { const href = link.getAttribute('href'); if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) { link.classList.add('active'); break; } } }
   }
-
-  // Highlight active sidebar link on scroll (for sections on the current page)
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const targetId = entry.target.id;
-        navLinks.forEach(link => {
-          const href = link.getAttribute('href');
-          if (href.endsWith(`#${targetId}`)) {
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-          }
-        });
-      }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-
+  const observer = new IntersectionObserver((entries) => { entries.forEach(entry => { if (entry.isIntersecting) { const targetId = entry.target.id; navLinks.forEach(link => { const href = link.getAttribute('href'); if (href.endsWith(`#${targetId}`)) { navLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); } }); } }); }, { rootMargin: '-20% 0px -70% 0px' });
   sections.forEach(section => observer.observe(section));
-  
   highlightCurrentLink();
   window.addEventListener('hashchange', highlightCurrentLink);
-
-  // Close mobile sidebar on link click
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.remove('open');
-    });
-  });
-
-  // Sidebar Collapse / Expand Logic
+  navLinks.forEach(link => { link.addEventListener('click', () => { const sidebar = document.querySelector('.sidebar'); if (sidebar) sidebar.classList.remove('open'); }); });
   const sidebarToggle = document.getElementById('sidebar-toggle');
-  
-  // On load, restore state
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
-    document.body.classList.add('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '▶';
-  } else {
-    document.body.classList.remove('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '◀';
-  }
-
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
-      localStorage.setItem('sidebar-collapsed', isCollapsed);
-      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
-    });
-  }
+  if (localStorage.getItem('sidebar-collapsed') === 'true') { document.body.classList.add('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '▶'; } else { document.body.classList.remove('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '◀'; }
+  if (sidebarToggle) { sidebarToggle.addEventListener('click', () => { const isCollapsed = document.body.classList.toggle('sidebar-collapsed'); localStorage.setItem('sidebar-collapsed', isCollapsed); sidebarToggle.textContent = isCollapsed ? '▶' : '◀'; }); }
 </script>
 
 </body>

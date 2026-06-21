@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Integrations — BeliefState Documentation</title>
-  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <meta name="description" content="Framework integration guide for BeliefState. Middleware parameters for FastAPI, Flask, ASGI, and callbacks for LangChain, LlamaIndex, OpenAI Assistants.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v0.1.0</div>
+    <div class="sidebar-version">v1.0.0</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -58,7 +58,7 @@
       <li><a href="advanced.html#dispatchers">Background Workers</a></li>
       <li><a href="advanced.html#resilience">Resilience</a></li>
       <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+      <li><a href="advanced.html#gdpr">GDPR &amp; Privacy</a></li>
 
       <li class="nav-section-title">Reference</li>
       <li><a href="reference.html#api-reference">API Reference</a></li>
@@ -73,27 +73,37 @@
 <main class="main-content">
 
 <!-- ═══════════════════════════════════════════════════ -->
-<!-- ── INTEGRATIONS ── -->
+<!-- ── FASTAPI ── -->
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="fastapi">
   <h2>FastAPI Integration</h2>
-  <p>ASGI middleware that automatically extracts session IDs from request headers and sets them in the tracker context.</p>
+  <p>The FastAPI middleware automatically extracts session IDs from incoming HTTP request headers and sets them in the BeliefState session context. This means your endpoint handlers don't need to manually call <code>tracker.set_session()</code> — the middleware does it transparently for every request.</p>
+
+  <h4>Middleware Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>app</code></td><td><code>ASGIApp</code></td><td><em>(required)</em></td><td>The ASGI application instance (FastAPI app). Passed automatically by FastAPI's <code>add_middleware()</code>.</td></tr>
+      <tr><td><code>header_name</code></td><td><code>str</code></td><td><code>"X-Session-ID"</code></td><td>HTTP header name to extract the session ID from. The middleware reads this header from every incoming request. If the header is missing, the session defaults to <code>"default"</code>.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI, Depends
 <span class="kw">from</span> beliefstate <span class="kw">import</span> FastAPIBeliefTrackerMiddleware, get_session_id
 
 app = <span class="fn">FastAPI</span>()
 
-<!-- Option 1: Middleware (sets session context automatically) -->
+<span class="cm"># Option 1: Middleware (sets session context automatically)</span>
 app.<span class="fn">add_middleware</span>(
     FastAPIBeliefTrackerMiddleware,
     header_name=<span class="st">"X-Session-ID"</span>
 )
 
-<!-- Option 2: Dependency injection -->
+<span class="cm"># Option 2: Dependency injection</span>
 <span class="dc">@app.post</span>(<span class="st">"/chat"</span>)
 <span class="kw">async def</span> <span class="fn">chat</span>(message: <span class="nb">str</span>, session_id: <span class="nb">str</span> = <span class="fn">Depends</span>(get_session_id)):
-    <!-- session_id is extracted from X-Session-ID header -->
-    <!-- session context is automatically set -->
+    <span class="cm"># session_id is extracted from X-Session-ID header</span>
+    <span class="cm"># session context is automatically set</span>
     response = <span class="kw">await</span> <span class="fn">chat_with_llm</span>(message)
     <span class="kw">return</span> {<span class="st">"response"</span>: response}</code></pre>
 
@@ -107,46 +117,117 @@ app.<span class="fn">add_middleware</span>(
     </ol>
     </p>
   </div>
+
+  <h4>Testing Locally</h4>
+  <p>Send requests with the session header to test the integration:</p>
+  <pre><code><span class="code-label">bash</span># Set session via header
+curl -X POST http://localhost:8000/chat \
+  -H "X-Session-ID: user_123" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "I live in Tokyo"}'</code></pre>
 </section>
 
+<!-- ── Flask ── -->
 <section class="doc-section" id="flask">
   <h3>Flask Integration</h3>
+  <p>For Flask applications, BeliefState provides both a WSGI middleware wrapper and Flask request hooks. The WSGI middleware wraps Flask's <code>wsgi_app</code> and extracts session IDs from request headers, while the hooks integrate with Flask's request lifecycle.</p>
+
+  <h4>Middleware Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>app</code></td><td><code>WSGIApp</code></td><td><em>(required)</em></td><td>The WSGI application instance (Flask's <code>wsgi_app</code>).</td></tr>
+      <tr><td><code>header_name</code></td><td><code>str</code></td><td><code>"X-Session-ID"</code></td><td>HTTP header name to extract the session ID from.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Hook Registration Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>app</code></td><td><code>Flask</code></td><td><em>(required)</em></td><td>The Flask application instance.</td></tr>
+      <tr><td><code>header_name</code></td><td><code>str</code></td><td><code>"X-Session-ID"</code></td><td>HTTP header name to extract the session ID from. Registered as a <code>before_request</code> hook.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> flask <span class="kw">import</span> Flask
 <span class="kw">from</span> beliefstate <span class="kw">import</span> FlaskBeliefTrackerMiddleware, register_flask_hooks
 
 app = <span class="fn">Flask</span>(__name__)
 
-<!-- WSGI middleware for context propagation -->
+<span class="cm"># WSGI middleware for context propagation</span>
 app.wsgi_app = <span class="fn">FlaskBeliefTrackerMiddleware</span>(app.wsgi_app, header_name=<span class="st">"X-Session-ID"</span>)
 
-<!-- Flask request hooks (alternative or additional) -->
+<span class="cm"># Flask request hooks (alternative or additional)</span>
 <span class="fn">register_flask_hooks</span>(app, header_name=<span class="st">"X-Session-ID"</span>)</code></pre>
+
+  <div class="callout info">
+    <p><strong>ℹ️ Middleware vs. Hooks:</strong> The WSGI middleware intercepts requests at the WSGI layer (before Flask processes them), while hooks use Flask's <code>before_request</code> / <code>teardown_request</code> lifecycle. Either approach works — the middleware is recommended for consistency with other frameworks.</p>
+  </div>
 </section>
 
+<!-- ── ASGI ── -->
 <section class="doc-section" id="asgi">
   <h3>Generic ASGI Middleware</h3>
+  <p>The ASGI middleware works with any ASGI-compatible framework: Starlette, Litestar, Quart, or any custom ASGI application. It's the same middleware used internally by the FastAPI integration.</p>
+
+  <h4>Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>app</code></td><td><code>ASGIApp</code></td><td><em>(required)</em></td><td>The ASGI application instance.</td></tr>
+      <tr><td><code>header_name</code></td><td><code>str</code></td><td><code>"X-Session-ID"</code></td><td>HTTP header name to extract the session ID from. Case-insensitive (per HTTP spec).</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> starlette.applications <span class="kw">import</span> Starlette
 <span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTrackerASGIMiddleware
 
 app = <span class="fn">Starlette</span>()
 app.<span class="fn">add_middleware</span>(BeliefTrackerASGIMiddleware, header_name=<span class="st">"X-Session-ID"</span>)
-<!-- Works with any ASGI framework: Starlette, Litestar, Quart, etc. --></code></pre>
+<span class="cm"># Works with any ASGI framework: Starlette, Litestar, Quart, etc.</span></code></pre>
 </section>
 
+<!-- ── LangChain ── -->
 <section class="doc-section" id="langchain">
   <h3>LangChain Callback</h3>
+  <p>The LangChain callback handler integrates with LangChain's callback system. It intercepts the <code>on_llm_end</code> lifecycle event, capturing the prompt and response text, then dispatches a background belief tracking task. Attach it to any LangChain chain, agent, or LLM invocation.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>tracker</code></td><td><code>BeliefTracker</code></td><td><em>(required)</em></td><td>The <code>BeliefTracker</code> instance to use for belief extraction. Must be initialized with an adapter and config before passing.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> session_context, BeliefTrackerLangchainCallback
 
-<!-- Set session context -->
+<span class="cm"># Set session context before invoking the chain</span>
 session_context.<span class="fn">set</span>(<span class="st">"user_123"</span>)
 
-<!-- Attach callback handler to your chain -->
+<span class="cm"># Attach callback handler to your chain</span>
 handler = <span class="fn">BeliefTrackerLangchainCallback</span>(tracker=tracker)
 <span class="kw">await</span> llm.<span class="fn">ainvoke</span>(<span class="st">"Hello!"</span>, config={<span class="st">"callbacks"</span>: [handler]})</code></pre>
+
+  <div class="callout info">
+    <p><strong>ℹ️ Important:</strong> You must set <code>session_context</code> before invoking the chain, since LangChain callbacks don't have access to HTTP headers. Use <code>session_context.set("user_123")</code> or wrap calls inside a middleware that sets the context.</p>
+  </div>
 </section>
 
+<!-- ── LlamaIndex ── -->
 <section class="doc-section" id="llamaindex">
   <h3>LlamaIndex Callback</h3>
+  <p>The LlamaIndex callback integrates with LlamaIndex's callback manager system. It captures LLM events via <code>on_event_end</code> and dispatches tracking tasks. Register it in the global <code>Settings.callback_manager</code> to automatically track all LLM calls.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>tracker</code></td><td><code>BeliefTracker</code></td><td><em>(required)</em></td><td>The <code>BeliefTracker</code> instance to use for belief extraction.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> llama_index.core <span class="kw">import</span> Settings
 <span class="kw">from</span> llama_index.core.callbacks <span class="kw">import</span> CallbackManager
 <span class="kw">from</span> beliefstate <span class="kw">import</span> LlamaIndexBeliefTrackerCallback
@@ -155,12 +236,27 @@ callback = <span class="fn">LlamaIndexBeliefTrackerCallback</span>(tracker=track
 Settings.callback_manager = <span class="fn">CallbackManager</span>([callback])</code></pre>
 </section>
 
+<!-- ── OpenAI Assistants ── -->
 <section class="doc-section" id="openai-assistants">
   <h3>OpenAI Assistants Observer</h3>
+  <p>The Assistants observer watches an OpenAI Assistant run and extracts beliefs from the thread messages once the run completes. Unlike the <code>@tracker.wrap</code> pattern, this observer polls the run status and processes the full thread conversation in bulk.</p>
+
+  <h4>Function Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>tracker</code></td><td><code>BeliefTracker</code></td><td><em>(required)</em></td><td>The <code>BeliefTracker</code> instance.</td></tr>
+      <tr><td><code>client</code></td><td><code>AsyncOpenAI</code></td><td><em>(required)</em></td><td>The OpenAI async client used to poll the run status and retrieve thread messages.</td></tr>
+      <tr><td><code>thread_id</code></td><td><code>str</code></td><td><em>(required)</em></td><td>The OpenAI thread ID containing the conversation messages.</td></tr>
+      <tr><td><code>run_id</code></td><td><code>str</code></td><td><em>(required)</em></td><td>The run ID to observe. The observer waits for this run to complete before extracting beliefs.</td></tr>
+      <tr><td><code>session_id</code></td><td><code>str</code></td><td><em>(required)</em></td><td>Session ID to associate extracted beliefs with. Maps to a user or conversation in your belief store.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">import</span> asyncio
 <span class="kw">from</span> beliefstate <span class="kw">import</span> observe_run
 
-<!-- Observe assistant run and extract beliefs from thread messages -->
+<span class="cm"># Observe assistant run and extract beliefs from thread messages</span>
 asyncio.<span class="fn">create_task</span>(
     <span class="fn">observe_run</span>(
         tracker=tracker,
@@ -181,6 +277,9 @@ asyncio.<span class="fn">create_task</span>(
     </ol>
     </p>
   </div>
+
+  <h3>Error Handling in Integrations</h3>
+  <p>All integrations are designed to be <strong>fail-safe</strong>. If any part of the belief tracking pipeline fails (adapter error, store error, parsing error), the failure is logged as a warning but <strong>never propagates to your application</strong>. Your users always receive their LLM response, even if background tracking encounters an error.</p>
 </section>
 
 <!-- ── Footer ── -->
@@ -195,86 +294,23 @@ asyncio.<span class="fn">create_task</span>(
 
 <!-- ── Sidebar logic ── -->
 <script>
-  // Highlight active sidebar link based on current page and scroll position
   const sections = document.querySelectorAll('.doc-section');
   const navLinks = document.querySelectorAll('.sidebar-nav a');
-
   function highlightCurrentLink() {
     const currentPath = window.location.pathname.split('/').pop() || 'index.html';
     const currentHash = window.location.hash;
-    
     let matched = false;
-    navLinks.forEach(link => {
-      link.classList.remove('active');
-      const href = link.getAttribute('href');
-      
-      // If there's a hash, match the exact page + hash
-      if (currentHash && href.endsWith(currentHash)) {
-        link.classList.add('active');
-        matched = true;
-      }
-    });
-
-    // If no hash or no hash match, match the page itself (first link matching the page)
-    if (!matched) {
-      for (const link of navLinks) {
-        const href = link.getAttribute('href');
-        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
-          link.classList.add('active');
-          break;
-        }
-      }
-    }
+    navLinks.forEach(link => { link.classList.remove('active'); const href = link.getAttribute('href'); if (currentHash && href.endsWith(currentHash)) { link.classList.add('active'); matched = true; } });
+    if (!matched) { for (const link of navLinks) { const href = link.getAttribute('href'); if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) { link.classList.add('active'); break; } } }
   }
-
-  // Highlight active sidebar link on scroll (for sections on the current page)
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const targetId = entry.target.id;
-        navLinks.forEach(link => {
-          const href = link.getAttribute('href');
-          if (href.endsWith(`#${targetId}`)) {
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-          }
-        });
-      }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-
+  const observer = new IntersectionObserver((entries) => { entries.forEach(entry => { if (entry.isIntersecting) { const targetId = entry.target.id; navLinks.forEach(link => { const href = link.getAttribute('href'); if (href.endsWith(`#${targetId}`)) { navLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); } }); } }); }, { rootMargin: '-20% 0px -70% 0px' });
   sections.forEach(section => observer.observe(section));
-  
   highlightCurrentLink();
   window.addEventListener('hashchange', highlightCurrentLink);
-
-  // Close mobile sidebar on link click
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.remove('open');
-    });
-  });
-
-  // Sidebar Collapse / Expand Logic
+  navLinks.forEach(link => { link.addEventListener('click', () => { const sidebar = document.querySelector('.sidebar'); if (sidebar) sidebar.classList.remove('open'); }); });
   const sidebarToggle = document.getElementById('sidebar-toggle');
-  
-  // On load, restore state
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
-    document.body.classList.add('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '▶';
-  } else {
-    document.body.classList.remove('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '◀';
-  }
-
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
-      localStorage.setItem('sidebar-collapsed', isCollapsed);
-      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
-    });
-  }
+  if (localStorage.getItem('sidebar-collapsed') === 'true') { document.body.classList.add('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '▶'; } else { document.body.classList.remove('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '◀'; }
+  if (sidebarToggle) { sidebarToggle.addEventListener('click', () => { const isCollapsed = document.body.classList.toggle('sidebar-collapsed'); localStorage.setItem('sidebar-collapsed', isCollapsed); sidebarToggle.textContent = isCollapsed ? '▶' : '◀'; }); }
 </script>
 
 </body>

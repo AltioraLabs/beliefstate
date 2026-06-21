@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Configuration — BeliefState Documentation</title>
-  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <meta name="description" content="Complete configuration reference for BeliefState. Every TrackerConfig parameter explained with types, defaults, and usage guidance.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v0.1.0</div>
+    <div class="sidebar-version">v1.0.0</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -58,7 +58,7 @@
       <li><a href="advanced.html#dispatchers">Background Workers</a></li>
       <li><a href="advanced.html#resilience">Resilience</a></li>
       <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+      <li><a href="advanced.html#gdpr">GDPR &amp; Privacy</a></li>
 
       <li class="nav-section-title">Reference</li>
       <li><a href="reference.html#api-reference">API Reference</a></li>
@@ -77,76 +77,63 @@
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="tracker-config">
   <h2>TrackerConfig</h2>
-  <p><code>TrackerConfig</code> is a Pydantic model that controls all aspects of the tracker. All parameters have sensible defaults.</p>
+  <p><code>TrackerConfig</code> is a <a href="https://docs.pydantic.dev/">Pydantic</a> <code>BaseModel</code> that controls every aspect of the belief tracking pipeline. It is passed to the <code>BeliefTracker</code> constructor at initialization time. All parameters have sensible defaults — you only need to override the ones relevant to your use case.</p>
 
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTracker, TrackerConfig
+
+<span class="cm"># Minimal config — all defaults</span>
+tracker = <span class="fn">BeliefTracker</span>(config=<span class="fn">TrackerConfig</span>())
+
+<span class="cm"># Custom config — override what you need</span>
+config = <span class="fn">TrackerConfig</span>(
+    store_type=<span class="st">"sqlite"</span>,
+    store_kwargs={<span class="st">"db_path"</span>: <span class="st">"beliefs.db"</span>},
+    similarity_threshold=<span class="nu">0.80</span>,
+    enable_background_tasks=<span class="nb">True</span>,
+    max_beliefs=<span class="nu">100</span>,
+)</code></pre>
+
+  <!-- ── Store Settings ── -->
   <h3>Store Settings</h3>
+  <p>These parameters determine <strong>where</strong> extracted beliefs are persisted. The store is the database backend that holds all subject-predicate-value triples for each user session. Choose a store based on your deployment model:</p>
+  <ul>
+    <li><strong><code>"sqlite"</code></strong> — Best for single-process apps, local development, and prototyping. Data persists in a single file. Zero setup.</li>
+    <li><strong><code>"redis"</code></strong> — Best for multi-worker production deployments behind a load balancer. Shared state across processes with native TTL support.</li>
+  </ul>
+
   <table class="param-table">
     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td>store_type</td><td>str</td><td>"sqlite"</td><td>Storage backend: <code>"sqlite"</code> or <code>"redis"</code></td></tr>
-      <tr><td>store_kwargs</td><td>dict</td><td>{}</td><td>Extra arguments passed to the store constructor (e.g. <code>{"db_path": "beliefs.db"}</code>)</td></tr>
+      <tr><td><code>store_type</code></td><td><code>str</code></td><td><code>"sqlite"</code></td><td>Storage backend to use. Accepted values: <code>"sqlite"</code> (uses <code>aiosqlite</code> for async disk-backed persistence) or <code>"redis"</code> (uses <code>redis.asyncio</code> for distributed caching). The tracker automatically instantiates the corresponding store class at initialization.</td></tr>
+      <tr><td><code>store_kwargs</code></td><td><code>dict</code></td><td><code>{}</code></td><td>Keyword arguments forwarded to the store constructor. For SQLite: <code>{"db_path": "beliefs.db"}</code> sets the database file path (use <code>":memory:"</code> for in-memory testing). For Redis: <code>{"redis_url": "redis://localhost:6379/0"}</code> sets the connection URI. If empty, stores use their built-in defaults.</td></tr>
     </tbody>
   </table>
 
+  <!-- ── Detection Settings ── -->
   <h3>Detection Settings</h3>
+  <p>These three thresholds control the <strong>contradiction detection pipeline</strong> — the two-stage filter that determines whether a newly extracted belief conflicts with, duplicates, or is independent of existing beliefs in the store. Tuning these values directly impacts the precision and recall of contradiction detection.</p>
+
   <table class="param-table">
     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td>similarity_threshold</td><td>float</td><td>0.82</td><td>Minimum cosine similarity to consider beliefs related</td></tr>
-      <tr><td>contradiction_threshold</td><td>float</td><td>0.70</td><td>Minimum NLI score to flag as contradiction</td></tr>
-      <tr><td>entailment_threshold</td><td>float</td><td>0.85</td><td>Minimum NLI score to detect semantic duplicates</td></tr>
+      <tr><td><code>similarity_threshold</code></td><td><code>float</code></td><td><code>0.82</code></td><td><strong>Stage 1 — Semantic gate.</strong> Minimum cosine similarity between embedding vectors of the new belief and each existing belief. Pairs below this threshold are skipped entirely (they are considered unrelated topics), avoiding unnecessary NLI judge calls. <em>Lower values</em> cast a wider net (more NLI calls, fewer missed contradictions). <em>Higher values</em> are stricter (fewer NLI calls, faster, but may miss subtle contradictions).</td></tr>
+      <tr><td><code>contradiction_threshold</code></td><td><code>float</code></td><td><code>0.70</code></td><td><strong>Stage 2 — Contradiction gate.</strong> Minimum score from the NLI judge model to classify two beliefs as contradicting each other. The judge returns a confidence score between 0.0 and 1.0 for the "contradiction" label. If <code>contradiction_score >= contradiction_threshold</code>, the resolver is invoked. Example: <em>"lives in London"</em> vs. <em>"lives in Paris"</em> would typically score ~0.95.</td></tr>
+      <tr><td><code>entailment_threshold</code></td><td><code>float</code></td><td><code>0.85</code></td><td><strong>Stage 2 — Deduplication gate.</strong> Minimum NLI entailment score to classify beliefs as semantic duplicates. If <code>entailment_score >= entailment_threshold</code>, the new belief is silently discarded (it's already represented). Example: <em>"likes Python"</em> and <em>"enjoys Python programming"</em> would score ~0.90 entailment.</td></tr>
     </tbody>
   </table>
 
-  <h3>Resilience Settings</h3>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>retry_max_attempts</td><td>int</td><td>5</td><td>Maximum retry attempts for LLM API calls</td></tr>
-      <tr><td>retry_min_wait</td><td>float</td><td>2.0</td><td>Minimum wait time between retries (seconds)</td></tr>
-      <tr><td>retry_max_wait</td><td>float</td><td>30.0</td><td>Maximum wait time between retries (seconds)</td></tr>
-      <tr><td>retry_multiplier</td><td>float</td><td>2.0</td><td>Exponential backoff multiplier</td></tr>
-      <tr><td>enable_circuit_breaker</td><td>bool</td><td>True</td><td>Enable circuit breaker protection</td></tr>
-      <tr><td>circuit_breaker_failure_threshold</td><td>int</td><td>5</td><td>Failures before tripping the circuit breaker</td></tr>
-      <tr><td>circuit_breaker_recovery_timeout</td><td>float</td><td>30.0</td><td>Cooldown before recovery attempt (seconds)</td></tr>
-    </tbody>
-  </table>
+  <div class="callout tip">
+    <p><strong>💡 Tuning Tip:</strong> Start with the defaults and observe your application's logs. If you see too many false contradictions, raise <code>contradiction_threshold</code> to 0.80. If valid contradictions are being missed, lower <code>similarity_threshold</code> to 0.75 to let more candidate pairs through to the NLI judge.</p>
+  </div>
 
-  <h3>Task & Dispatcher Settings</h3>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>enable_background_tasks</td><td>bool</td><td>True</td><td>Run tracking in fire-and-forget background tasks</td></tr>
-      <tr><td>task_dispatcher_type</td><td>str</td><td>"asyncio"</td><td>Dispatcher: <code>"asyncio"</code>, <code>"sync"</code>, <code>"celery"</code>, or <code>"rq"</code></td></tr>
-      <tr><td>dispatcher_kwargs</td><td>dict</td><td>{}</td><td>Arguments for dispatcher initialization</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Belief Storage & Injection</h3>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>max_beliefs</td><td>int</td><td>50</td><td>Maximum beliefs injected into prompts</td></tr>
-      <tr><td>belief_sort_strategy</td><td>str</td><td>"confidence_recency"</td><td>Selection strategy: <code>"confidence_recency"</code>, <code>"recency"</code>, or <code>"confidence"</code></td></tr>
-      <tr><td>enable_belief_ttl</td><td>bool</td><td>False</td><td>Enable automatic belief pruning by age</td></tr>
-      <tr><td>belief_max_age_seconds</td><td>int</td><td>86400</td><td>Max age before pruning (default: 24 hours)</td></tr>
-      <tr><td>enable_staleness_scoring</td><td>bool</td><td>True</td><td>Deprioritize old beliefs during session resumption</td></tr>
-      <tr><td>staleness_threshold</td><td>float</td><td>0.1</td><td>Minimum staleness score to inject a belief</td></tr>
-      <tr><td>enable_token_aware_injection</td><td>bool</td><td>True</td><td>Use relevance filtering when beliefs exceed token budget</td></tr>
-      <tr><td>belief_budget_tokens</td><td>int</td><td>500</td><td>Maximum tokens reserved for belief injection</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Technical Mechanics & Calculations</h3>
-  
-  <h4>1. Threshold Calibration</h4>
+  <h4>How the Two-Stage Filter Works</h4>
   <p>To avoid querying the expensive NLI judge on every single stored fact, BeliefState uses a two-tiered check:</p>
   <ul>
     <li>
       <strong>Similarity Threshold (<code>similarity_threshold</code>):</strong> Checks the cosine similarity between the vector embeddings of the new fact and existing stored facts. If the similarity is below this value (default 0.82), the facts are deemed conceptually unrelated, and the NLI check is skipped.
     </li>
     <li>
-      <strong>Contradiction & Entailment Thresholds:</strong> The Natural Language Inference (NLI) model scores logical relation on a 0.0 to 1.0 scale:
+      <strong>Contradiction &amp; Entailment Thresholds:</strong> The Natural Language Inference (NLI) model scores logical relation on a 0.0 to 1.0 scale:
       <ul>
         <li>If <code>contradiction_score >= contradiction_threshold</code>, the facts are treated as contradicting (e.g. <em>"lives in London"</em> vs. <em>"lives in Paris"</em>).</li>
         <li>If <code>entailment_score >= entailment_threshold</code>, the facts are duplicates (e.g. <em>"likes Python"</em> vs. <em>"enjoys Python programming"</em>) and the new record is ignored or merged.</li>
@@ -154,37 +141,202 @@
     </li>
   </ul>
 
-  <h4>2. Staleness Decay Formula</h4>
-  <p>When resuming an old conversation session, stale beliefs (e.g., intermediate tasks the user finished days ago) should not clutter the prompt context. If <code>enable_staleness_scoring</code> is active, each belief is rated using:</p>
-  <pre><code>Staleness Score = Confidence / (Days Since Referenced + 1)</code></pre>
-  <p>If the calculated score falls below the <code>staleness_threshold</code> (default 0.1), the belief is excluded from prompt context injection. If all beliefs are too stale, the tracker falls back to injecting the top 5 most confident, recent facts as a safety measure.</p>
+  <!-- ── Resilience Settings ── -->
+  <h3>Resilience Settings</h3>
+  <p>These parameters control <strong>how the tracker handles LLM API failures</strong>. Since belief extraction runs in the background, transient API errors should be retried automatically rather than silently dropping beliefs. The retry mechanism uses exponential backoff with jitter to prevent thundering herd problems when the provider recovers.</p>
 
-  <h4>3. Token-Aware Relevance Filtering</h4>
-  <p>To keep LLM API token consumption low, the tracker estimates the size of the formatted prompt using a fast character-based heuristic: <code>1 token ≈ 4 characters</code>. If this estimated size exceeds <code>belief_budget_tokens</code>, relevance filtering is triggered:</p>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>retry_max_attempts</code></td><td><code>int</code></td><td><code>5</code></td><td>Maximum number of retry attempts for each LLM API call (extraction, judge, embedding). After this many failures, the call is abandoned and logged as a warning. Does not affect your application — only the background tracking pipeline.</td></tr>
+      <tr><td><code>retry_min_wait</code></td><td><code>float</code></td><td><code>2.0</code></td><td>Minimum wait time (in seconds) before the first retry. Subsequent retries grow exponentially from this base value.</td></tr>
+      <tr><td><code>retry_max_wait</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Maximum wait time (in seconds) between retries. The exponential backoff is capped at this value to prevent excessively long waits.</td></tr>
+      <tr><td><code>retry_multiplier</code></td><td><code>float</code></td><td><code>2.0</code></td><td>Exponential backoff multiplier. Each retry waits <code>min(retry_min_wait * multiplier^attempt, retry_max_wait)</code> seconds. With defaults: 2s → 4s → 8s → 16s → 30s.</td></tr>
+      <tr><td><code>enable_circuit_breaker</code></td><td><code>bool</code></td><td><code>True</code></td><td>Enable the circuit breaker pattern for LLM API calls. When enabled, consecutive failures cause the breaker to trip OPEN, immediately rejecting subsequent calls without hitting the provider. This prevents wasting rate limits and latency on a downed provider. See <a href="advanced.html#resilience">Resilience</a> for state machine details.</td></tr>
+      <tr><td><code>circuit_breaker_failure_threshold</code></td><td><code>int</code></td><td><code>5</code></td><td>Number of consecutive failures required to trip the circuit breaker from CLOSED to OPEN state. Higher values tolerate more transient errors before tripping.</td></tr>
+      <tr><td><code>circuit_breaker_recovery_timeout</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Cooldown period (in seconds) after the circuit breaker trips. Once elapsed, the breaker enters HALF-OPEN state and allows a single probe request. If the probe succeeds, the breaker resets to CLOSED; if it fails, back to OPEN for another cooldown.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ── Task & Dispatcher Settings ── -->
+  <h3>Task &amp; Dispatcher Settings</h3>
+  <p>These parameters control <strong>how belief tracking tasks are executed</strong>. By default, tracking runs as fire-and-forget <code>asyncio</code> background tasks in the same event loop as your application. For production deployments that require task durability (surviving process restarts), you can offload to Celery or RQ workers.</p>
+
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>enable_background_tasks</code></td><td><code>bool</code></td><td><code>True</code></td><td>When <code>True</code>, belief extraction runs in a fire-and-forget background task — your LLM response is returned instantly with zero added latency. When <code>False</code>, the entire extraction → detection → resolution pipeline runs <strong>synchronously</strong> inside your <code>@tracker.wrap</code> call, blocking your application until tracking completes. Only set to <code>False</code> for debugging or testing.</td></tr>
+      <tr><td><code>task_dispatcher_type</code></td><td><code>str</code></td><td><code>"asyncio"</code></td><td>Controls which dispatcher backend runs tracking tasks. Options:
+        <ul style="margin: 0.5rem 0 0 0;">
+          <li><code>"asyncio"</code> — Default. Registers tasks via <code>asyncio.create_task()</code> in the current event loop. Zero setup, no extra processes. Tasks are lost if the process crashes.</li>
+          <li><code>"sync"</code> — Runs tasks synchronously (blocking). Useful for testing and debugging.</li>
+          <li><code>"celery"</code> — Offloads tasks to a Celery distributed task queue. Requires a running broker (Redis/RabbitMQ) and worker processes. Tasks survive process restarts.</li>
+          <li><code>"rq"</code> — Offloads tasks to a Redis Queue. Simpler than Celery, requires a Redis server and worker processes.</li>
+        </ul>
+      </td></tr>
+      <tr><td><code>dispatcher_kwargs</code></td><td><code>dict</code></td><td><code>{}</code></td><td>Keyword arguments forwarded to the dispatcher constructor. For Celery: <code>{"celery_app": celery_app}</code>. For RQ: <code>{"queue": rq_queue}</code>. Ignored for asyncio/sync dispatchers. See <a href="advanced.html#dispatchers">Background Workers</a>.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ── Internal Provider Override ── -->
+  <h3>Internal Provider Override</h3>
+  <p>By default, the tracker uses the same LLM adapter as your application for all internal operations (extraction, contradiction detection, embeddings). You can override this to use a separate, cheaper model for background tracking via the <a href="adapters.html#dual-adapter">Dual-Adapter</a> pattern.</p>
+
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>internal_provider</code></td><td><code>Optional[Any]</code></td><td><code>None</code></td><td>An explicit <code>ProviderAdapter</code> instance for the tracker's internal LLM calls (belief extraction, NLI judge, embedding generation). When set to <code>None</code>, the tracker reuses the main application adapter. Set this to a cheaper or local model (e.g., <code>OllamaAdapter</code>) to reduce costs while keeping your premium model for the user-facing app. <em>Note: This can also be set directly via the <code>internal_adapter</code> parameter on the <code>BeliefTracker</code> constructor.</em></td></tr>
+    </tbody>
+  </table>
+
+  <!-- ── Belief Storage & Injection ── -->
+  <h3>Belief Storage &amp; Injection</h3>
+  <p>These parameters control <strong>how beliefs are selected and formatted</strong> when injecting context into your LLM prompts via <code>get_context_prompt()</code> or <code>inject_context()</code>. They determine which beliefs are surfaced, how many, and in what order.</p>
+
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>max_beliefs</code></td><td><code>int</code></td><td><code>50</code></td><td>Maximum number of beliefs injected into the system prompt. Acts as a hard cap after all filtering and sorting. Prevents context window overflow when a user has accumulated many beliefs over long conversations. Increase for models with larger context windows (e.g., GPT-4 128k); decrease for smaller models.</td></tr>
+      <tr><td><code>belief_sort_strategy</code></td><td><code>str</code></td><td><code>"confidence_recency"</code></td><td>Strategy for ranking beliefs when selecting the top <code>max_beliefs</code>. Options:
+        <ul style="margin: 0.5rem 0 0 0;">
+          <li><code>"confidence_recency"</code> — <strong>(Recommended)</strong> Primary sort by confidence (descending), secondary sort by turn number (descending). Prioritizes high-confidence, recent beliefs.</li>
+          <li><code>"recency"</code> — Sort by turn number only (most recent first). Best when the latest information is always most relevant.</li>
+          <li><code>"confidence"</code> — Sort by confidence only (highest first). Best when certainty matters more than freshness.</li>
+        </ul>
+      </td></tr>
+    </tbody>
+  </table>
+
+  <!-- ── Belief TTL Settings ── -->
+  <h3>Belief TTL (Time-to-Live)</h3>
+  <p>These parameters enable <strong>automatic pruning of old beliefs</strong> based on age. Useful for applications where user preferences change frequently and stale beliefs should be automatically cleaned up rather than manually managed.</p>
+
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>enable_belief_ttl</code></td><td><code>bool</code></td><td><code>False</code></td><td>Enable automatic pruning of beliefs older than <code>belief_max_age_seconds</code>. When enabled, the tracker periodically scans the store and removes expired beliefs. Disabled by default because most applications want to preserve belief history indefinitely.</td></tr>
+      <tr><td><code>belief_max_age_seconds</code></td><td><code>int</code></td><td><code>86400</code></td><td>Maximum age (in seconds) before a belief is eligible for pruning. Only effective when <code>enable_belief_ttl=True</code>. Default is 24 hours (86400 seconds). Set to <code>604800</code> for 7-day retention or <code>2592000</code> for 30-day retention.</td></tr>
+      <tr><td><code>belief_ttl_check_interval</code></td><td><code>int</code></td><td><code>3600</code></td><td>How often (in seconds) the tracker runs its background pruning sweep to remove expired beliefs. Default is 1 hour (3600 seconds). Only effective when <code>enable_belief_ttl=True</code>. Lower values detect expired beliefs faster but increase database load.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <p><strong>ℹ️ Pruning vs. Staleness:</strong> TTL pruning (<code>enable_belief_ttl</code>) <strong>permanently deletes</strong> old beliefs from the store. Staleness scoring (<code>enable_staleness_scoring</code>) only <strong>hides</strong> old beliefs from prompt injection — they remain in the store and can be queried. Use TTL for data hygiene; use staleness for prompt relevance.</p>
+  </div>
+
+  <!-- ── Staleness Scoring ── -->
+  <h3>Staleness Scoring</h3>
+  <p>When a user resumes an old session after days or weeks, some beliefs may no longer be relevant (e.g., "USER is working on a project X" from 10 days ago). Staleness scoring <strong>deprioritizes old beliefs during prompt injection</strong> without deleting them, keeping the context prompt focused on recent, high-confidence information.</p>
+
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>enable_staleness_scoring</code></td><td><code>bool</code></td><td><code>True</code></td><td>Enable staleness-based filtering during prompt injection. When active, each belief is assigned a score based on its confidence and recency. Beliefs scoring below <code>staleness_threshold</code> are excluded from the injected context. If all beliefs are too stale, the tracker falls back to injecting the top 5 most confident, recent beliefs as a safety net.</td></tr>
+      <tr><td><code>staleness_threshold</code></td><td><code>float</code></td><td><code>0.1</code></td><td>Minimum staleness score required for a belief to be injected into the prompt. Beliefs scoring below this value are excluded. Computed using the formula below.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Staleness Decay Formula</h4>
+  <p>Each belief is scored using:</p>
+  <pre><code>Staleness Score = Confidence / (Days Since Last Referenced + 1)</code></pre>
+  <p>Examples:</p>
+  <ul>
+    <li>A belief with confidence 1.0, referenced today → Score = <code>1.0 / (0 + 1)</code> = <strong>1.0</strong> ✅ (included)</li>
+    <li>A belief with confidence 0.8, referenced 3 days ago → Score = <code>0.8 / (3 + 1)</code> = <strong>0.2</strong> ✅ (included)</li>
+    <li>A belief with confidence 0.5, referenced 10 days ago → Score = <code>0.5 / (10 + 1)</code> = <strong>0.045</strong> ❌ (excluded, below 0.1)</li>
+  </ul>
+
+  <!-- ── Token-Aware Injection ── -->
+  <h3>Token-Aware Injection</h3>
+  <p>For users with many accumulated beliefs, the formatted context prompt can grow very large, consuming a significant portion of the LLM's context window. Token-aware injection <strong>automatically selects the most relevant beliefs</strong> when the total would exceed a token budget, using cosine similarity with the current user message to rank relevance.</p>
+
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>enable_token_aware_injection</code></td><td><code>bool</code></td><td><code>True</code></td><td>Enable intelligent belief selection based on token budget. When the formatted belief summary exceeds <code>belief_budget_tokens</code>, the tracker embeds the current user message and ranks beliefs by relevance (cosine similarity), selecting only the most relevant ones to fit the budget. Requires <code>current_user_message</code> to be passed to <code>get_context_prompt()</code> or <code>inject_context()</code>.</td></tr>
+      <tr><td><code>belief_budget_tokens</code></td><td><code>int</code></td><td><code>500</code></td><td>Maximum number of tokens reserved for the belief context block in the system prompt. Token count is estimated using a fast heuristic: <code>1 token ≈ 4 characters</code>. When the belief summary exceeds this budget, relevance-based filtering is triggered. Increase for models with large context windows; decrease if you need to reserve more space for the conversation history.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Token-Aware Filtering Cascade</h4>
+  <p>When <code>enable_token_aware_injection=True</code> and a <code>current_user_message</code> is provided, the filtering works as follows:</p>
   <ol>
-    <li>The current user query is embedded into a vector.</li>
-    <li>All candidate beliefs for the session are ranked by the cosine similarity between their stored embedding and the query embedding.</li>
-    <li>Beliefs are filled into the prompt from highest to lowest similarity, stopping as soon as the token budget is reached.</li>
+    <li><strong>Estimate</strong> — Format all candidate beliefs and count tokens using the <code>1 token ≈ 4 chars</code> heuristic.</li>
+    <li><strong>Check budget</strong> — If estimated tokens ≤ <code>belief_budget_tokens</code>, use all beliefs (no filtering needed).</li>
+    <li><strong>Embed query</strong> — Generate a vector embedding of the current user message.</li>
+    <li><strong>Rank beliefs</strong> — Compute cosine similarity between the user message embedding and each belief's stored embedding.</li>
+    <li><strong>Select top-K</strong> — Fill beliefs from highest to lowest relevance until the token budget is reached.</li>
   </ol>
 </section>
 
 <!-- ── Custom Prompts ── -->
 <section class="doc-section" id="prompts">
   <h2>Custom Prompts</h2>
-  <p>Override the built-in extraction or judge prompts via <code>TrackerConfig</code>:</p>
+  <p>BeliefState uses two LLM prompts internally for the tracking pipeline. The <strong>extraction prompt</strong> parses conversation text into structured beliefs. The <strong>judge prompt</strong> evaluates whether two beliefs contradict, entail, or are neutral to each other. You can override both via <code>TrackerConfig</code> to customize behavior for your domain.</p>
+
+  <h3>Extraction Prompt</h3>
+  <p>This prompt is sent to the internal adapter after each LLM conversation turn. It instructs the model to parse the response text and extract factual claims as structured JSON objects.</p>
+
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>extract_prompt_template</code></td><td><code>str</code></td><td><em>(Built-in prompt)</em></td><td>Jinja-style template for the belief extraction prompt. <strong>Must include the <code>{response}</code> placeholder</strong>, which is replaced with the LLM conversation text at runtime. The model's output must be a valid JSON array of belief objects.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
     extract_prompt_template=<span class="st">"""Extract beliefs from this text as JSON.
 Return [{"subject": "...", "predicate": "...", "value": "...", "confidence": 0.0-1.0}]
 Text: {response}"""</span>,
+)</code></pre>
 
+  <div class="callout info">
+    <p><strong>ℹ️ Required placeholder:</strong> <code>{response}</code> — Replaced with the conversation text to analyze. If this placeholder is missing, no text will be provided to the model and extraction will fail.</p>
+  </div>
+
+  <h4>Expected Output Format</h4>
+  <p>The extraction prompt must instruct the model to return a JSON array where each object has these fields:</p>
+  <table class="param-table">
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>subject</code></td><td><code>str</code></td><td>Yes</td><td>Who/what this belief is about (e.g., <code>"USER"</code>, <code>"Python"</code>)</td></tr>
+      <tr><td><code>predicate</code></td><td><code>str</code></td><td>Yes</td><td>The relationship or attribute (e.g., <code>"lives in"</code>, <code>"likes"</code>)</td></tr>
+      <tr><td><code>value</code></td><td><code>str</code></td><td>Yes</td><td>The value of the claim (e.g., <code>"Tokyo"</code>, <code>"Python"</code>)</td></tr>
+      <tr><td><code>confidence</code></td><td><code>float</code></td><td>Yes</td><td>Extraction confidence from 0.0 to 1.0</td></tr>
+      <tr><td><code>belief_type</code></td><td><code>str</code></td><td>No</td><td><code>"assertion"</code> (default) or <code>"update"</code> (explicit correction of prior belief)</td></tr>
+      <tr><td><code>source</code></td><td><code>str</code></td><td>No</td><td><code>"user"</code> or <code>"assistant"</code> — who made the claim</td></tr>
+      <tr><td><code>is_hypothetical</code></td><td><code>bool</code></td><td>No</td><td><code>true</code> if the belief is conditional/speculative (excluded from prompt injection)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Judge Prompt</h3>
+  <p>This prompt is sent to the internal adapter during contradiction detection. It evaluates the logical relationship between two beliefs (a "premise" and a "hypothesis").</p>
+
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>judge_prompt_template</code></td><td><code>str</code></td><td><em>(Built-in prompt)</em></td><td>Template for the NLI judge prompt. <strong>Must include both <code>{premise}</code> and <code>{hypothesis}</code> placeholders</strong>, which are replaced with the two belief texts being compared.</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
     judge_prompt_template=<span class="st">"""Analyze these two claims.
 Premise: {premise}
 Hypothesis: {hypothesis}
 Return {"relationship": "contradiction|entailment|neutral", "score": 0.0-1.0}"""</span>
 )</code></pre>
+
   <div class="callout info">
-    <p><strong>ℹ️ Note:</strong> The extraction prompt must include the <code>{response}</code> placeholder. The judge prompt must include <code>{premise}</code> and <code>{hypothesis}</code> placeholders.</p>
+    <p><strong>ℹ️ Required placeholders:</strong> <code>{premise}</code> — The existing stored belief. <code>{hypothesis}</code> — The new belief being evaluated. The model must return a JSON object with <code>relationship</code> and <code>score</code> keys.</p>
   </div>
+
+  <h3>Tips for Writing Custom Prompts</h3>
+  <ul>
+    <li><strong>Be explicit about output format:</strong> The tracker parses the model's output as JSON. Include format examples in your prompt.</li>
+    <li><strong>Subject normalization matters:</strong> The default prompt normalizes first-person pronouns to <code>"USER"</code> and second-person to <code>"ASSISTANT"</code>. If you override the extraction prompt, include similar normalization rules to ensure consistent subject keys in the store.</li>
+    <li><strong>Value normalization:</strong> The default prompt normalizes dates (ISO 8601), currencies (ISO 4217), and numbers (digits only). This prevents near-duplicate beliefs like "has $5,000" vs "has USD 5000".</li>
+    <li><strong>Test with <code>enable_background_tasks=False</code>:</strong> When iterating on prompt design, disable background tasks so you can synchronously inspect extraction results.</li>
+  </ul>
 </section>
 
 <!-- ── Footer ── -->

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Adapters — BeliefState Documentation</title>
-  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
+  <meta name="description" content="Complete adapter reference for BeliefState. Constructor parameters for OpenAI, Anthropic, Gemini, Ollama, and LiteLLM adapters.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v0.1.0</div>
+    <div class="sidebar-version">v1.0.0</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -38,6 +38,7 @@
       <li><a href="adapters.html#gemini">Google Gemini</a></li>
       <li><a href="adapters.html#ollama">Ollama</a></li>
       <li><a href="adapters.html#litellm">LiteLLM</a></li>
+      <li><a href="adapters.html#retry-config">RetryConfig</a></li>
       <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
 
       <li class="nav-section-title">Stores</li>
@@ -58,7 +59,7 @@
       <li><a href="advanced.html#dispatchers">Background Workers</a></li>
       <li><a href="advanced.html#resilience">Resilience</a></li>
       <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+      <li><a href="advanced.html#gdpr">GDPR &amp; Privacy</a></li>
 
       <li class="nav-section-title">Reference</li>
       <li><a href="reference.html#api-reference">API Reference</a></li>
@@ -73,11 +74,16 @@
 <main class="main-content">
 
 <!-- ═══════════════════════════════════════════════════ -->
-<!-- ── ADAPTERS ── -->
+<!-- ── ADAPTERS OVERVIEW ── -->
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="adapters">
   <h2>Adapters</h2>
-  <p>Adapters translate between native LLM SDK formats and BeliefState's universal models. All adapters include:</p>
+  <p>Adapters are the bridge between your LLM provider's native SDK and BeliefState's universal tracking pipeline. Each adapter implements the <code>ProviderAdapter</code> protocol, handling two critical jobs:</p>
+  <ol>
+    <li><strong>Payload normalization:</strong> Converting provider-specific request/response formats into BeliefState's universal <code>LLMCall</code> and <code>LLMResponse</code> models.</li>
+    <li><strong>Internal LLM operations:</strong> Executing belief extraction prompts, generating vector embeddings for semantic search, and running NLI judge checks.</li>
+  </ol>
+  <p>All adapters include built-in production features:</p>
   <div class="badge-row">
     <span class="badge green">✅ Automatic Retry</span>
     <span class="badge green">✅ Timeout Handling</span>
@@ -93,11 +99,38 @@
     <div class="adapter-card"><div class="adapter-icon">🦙</div><h4>Ollama</h4><p>Llama 3, Mistral, etc.</p></div>
     <div class="adapter-card"><div class="adapter-icon">🌐</div><h4>LiteLLM</h4><p>100+ providers</p></div>
   </div>
+
+  <h3>Choosing an Adapter</h3>
+  <table class="param-table">
+    <thead><tr><th>Adapter</th><th>Best For</th><th>Embeddings</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td><strong>OpenAI</strong></td><td>Best overall extraction quality, widest model selection</td><td>✅ Native (<code>text-embedding-3-small</code>)</td><td>Pay per token</td></tr>
+      <tr><td><strong>Anthropic</strong></td><td>Long context conversations, strong reasoning</td><td>❌ No embedding API — use Dual-Adapter</td><td>Pay per token</td></tr>
+      <tr><td><strong>Gemini</strong></td><td>Large context windows, Google Cloud integration</td><td>✅ Native (<code>text-embedding-004</code>)</td><td>Pay per token / Free tier</td></tr>
+      <tr><td><strong>Ollama</strong></td><td>Local/private deployment, zero cost, offline use</td><td>✅ Native (<code>nomic-embed-text</code>)</td><td>Free (local GPU)</td></tr>
+      <tr><td><strong>LiteLLM</strong></td><td>Multi-provider routing, Azure/Bedrock/Cohere access</td><td>✅ Via LiteLLM routing</td><td>Varies by provider</td></tr>
+    </tbody>
+  </table>
 </section>
 
 <!-- ── OpenAI ── -->
 <section class="doc-section" id="openai">
   <h3>OpenAI</h3>
+  <p>The OpenAI adapter supports all GPT chat completion models and OpenAI's embedding models. It uses the official <code>openai</code> Python SDK with async client support. The API key is read from the <code>OPENAI_API_KEY</code> environment variable, or can be passed via a pre-configured client instance.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>client</code></td><td><code>Optional[AsyncOpenAI]</code></td><td><code>None</code></td><td>Pre-configured <code>openai.AsyncOpenAI</code> client instance. If provided, the adapter uses this client directly instead of creating one from environment variables. Useful for custom base URLs (Azure OpenAI), proxy configs, or testing with mocks.</td></tr>
+      <tr><td><code>model</code></td><td><code>str</code></td><td><code>"gpt-4o-mini"</code></td><td>Chat completion model used for belief extraction and NLI judge calls. Examples: <code>"gpt-4o"</code>, <code>"gpt-4o-mini"</code>, <code>"gpt-3.5-turbo"</code>.</td></tr>
+      <tr><td><code>embed_model</code></td><td><code>str</code></td><td><code>"text-embedding-3-small"</code></td><td>Embedding model used for generating belief vectors (used in semantic similarity search and contradiction detection). Options: <code>"text-embedding-3-small"</code> (1536 dims, cheapest), <code>"text-embedding-3-large"</code> (3072 dims, best quality).</td></tr>
+      <tr><td><code>embed_kwargs</code></td><td><code>Optional[dict]</code></td><td><code>{}</code></td><td>Additional keyword arguments forwarded to the embedding API call. Example: <code>{"dimensions": 256}</code> to use OpenAI's dimension reduction feature for smaller, faster vectors.</td></tr>
+      <tr><td><code>timeout</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Maximum time (in seconds) to wait for a single API call before raising a timeout error. Applies to both chat completions and embedding calls.</td></tr>
+      <tr><td><code>retry_config</code></td><td><code>Optional[RetryConfig]</code></td><td><code>RetryConfig()</code></td><td>Retry strategy for transient API errors. See <a href="#retry-config">RetryConfig</a> for details.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> OpenAIAdapter
 
 adapter = <span class="fn">OpenAIAdapter</span>(
@@ -106,42 +139,59 @@ adapter = <span class="fn">OpenAIAdapter</span>(
     timeout=<span class="nu">30.0</span>,                           <span class="cm"># Request timeout (seconds)</span>
 )
 
-<!-- Health check -->
-is_healthy = <span class="kw">await</span> adapter.<span class="fn">health_check</span>()
+<span class="cm"># Health check — verify API key and connectivity</span>
+is_healthy = <span class="kw">await</span> adapter.<span class="fn">health_check</span>()</code></pre>
 
-<!-- Custom retry config -->
-<span class="kw">from</span> beliefstate.adapters.common <span class="kw">import</span> RetryConfig
-
-adapter = <span class="fn">OpenAIAdapter</span>(
-    model=<span class="st">"gpt-4o"</span>,
-    retry_config=<span class="fn">RetryConfig</span>(
-        max_retries=<span class="nu">3</span>,
-        initial_delay=<span class="nu">1.0</span>,
-        max_delay=<span class="nu">30.0</span>,
-        exponential_base=<span class="nu">2.0</span>,
-        jitter=<span class="nb">True</span>,           <span class="cm"># Prevents thundering herd</span>
-    )
-)</code></pre>
-  <p>Set <code>OPENAI_API_KEY</code> environment variable or pass via <code>api_key</code> parameter.</p>
+  <div class="callout tip">
+    <p><strong>💡 Environment Variable:</strong> Set <code>OPENAI_API_KEY</code> in your environment, or pass a pre-configured client: <code>OpenAIAdapter(client=AsyncOpenAI(api_key="sk-..."))</code></p>
+  </div>
 </section>
 
 <!-- ── Anthropic ── -->
 <section class="doc-section" id="anthropic">
   <h3>Anthropic (Claude)</h3>
+  <p>The Anthropic adapter supports all Claude models. It uses the official <code>anthropic</code> Python SDK. The API key is read from the <code>ANTHROPIC_API_KEY</code> environment variable.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>client</code></td><td><code>Optional[AsyncAnthropic]</code></td><td><code>None</code></td><td>Pre-configured <code>anthropic.AsyncAnthropic</code> client instance. If <code>None</code>, a client is created from the <code>ANTHROPIC_API_KEY</code> environment variable.</td></tr>
+      <tr><td><code>model</code></td><td><code>str</code></td><td><code>"claude-3-5-sonnet-latest"</code></td><td>Chat model used for belief extraction and NLI judge calls. Examples: <code>"claude-3-5-sonnet-latest"</code>, <code>"claude-3-opus-latest"</code>, <code>"claude-3-haiku-20240307"</code>.</td></tr>
+      <tr><td><code>timeout</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Maximum time (in seconds) to wait for a single API call.</td></tr>
+      <tr><td><code>retry_config</code></td><td><code>Optional[RetryConfig]</code></td><td><code>RetryConfig()</code></td><td>Retry strategy for transient API errors.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> AnthropicAdapter
 
 adapter = <span class="fn">AnthropicAdapter</span>(
     model=<span class="st">"claude-3-5-sonnet-latest"</span>,
     timeout=<span class="nu">30.0</span>
 )</code></pre>
+
   <div class="callout warning">
-    <p><strong>⚠️ Note:</strong> Anthropic does not provide an embeddings API. Use the <a href="#dual-adapter">Dual-Adapter</a> pattern with OpenAI or Ollama as the <code>internal_adapter</code> for embedding generation.</p>
+    <p><strong>⚠️ No Embedding API:</strong> Anthropic does not provide an embeddings API. Use the <a href="#dual-adapter">Dual-Adapter</a> pattern with OpenAI or Ollama as the <code>internal_adapter</code> for embedding generation. Without embeddings, semantic similarity search and contradiction detection cannot function.</p>
   </div>
 </section>
 
 <!-- ── Gemini ── -->
 <section class="doc-section" id="gemini">
   <h3>Google Gemini</h3>
+  <p>The Gemini adapter supports Google's Generative AI models through the <code>google-generativeai</code> SDK. It provides both chat completion and embedding capabilities. The API key is read from <code>GOOGLE_API_KEY</code> or <code>GEMINI_API_KEY</code> environment variable.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>client</code></td><td><code>Optional[Any]</code></td><td><code>None</code></td><td>Pre-configured Gemini client instance. If <code>None</code>, a client is created from the <code>GOOGLE_API_KEY</code> or <code>GEMINI_API_KEY</code> environment variable.</td></tr>
+      <tr><td><code>model</code></td><td><code>str</code></td><td><code>"gemini-2.0-flash"</code></td><td>Chat model used for belief extraction and NLI judge calls. Examples: <code>"gemini-2.0-flash"</code>, <code>"gemini-1.5-pro"</code>, <code>"gemini-1.5-flash"</code>.</td></tr>
+      <tr><td><code>embed_model</code></td><td><code>str</code></td><td><code>"text-embedding-004"</code></td><td>Embedding model for vector generation. Used in semantic similarity search during contradiction detection.</td></tr>
+      <tr><td><code>timeout</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Maximum time (in seconds) to wait for a single API call.</td></tr>
+      <tr><td><code>retry_config</code></td><td><code>Optional[RetryConfig]</code></td><td><code>RetryConfig()</code></td><td>Retry strategy for transient API errors.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> GeminiAdapter
 
 adapter = <span class="fn">GeminiAdapter</span>(
@@ -155,6 +205,22 @@ adapter = <span class="fn">GeminiAdapter</span>(
 <!-- ── Ollama ── -->
 <section class="doc-section" id="ollama">
   <h3>Ollama (Local)</h3>
+  <p>The Ollama adapter connects to a locally running <a href="https://ollama.ai">Ollama</a> server for completely free, offline LLM inference. It supports any model available in your local Ollama installation. Ollama is the recommended choice as an <code>internal_adapter</code> in the Dual-Adapter pattern — zero API costs for background tracking.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>client</code></td><td><code>Optional[AsyncClient]</code></td><td><code>None</code></td><td>Pre-configured <code>ollama.AsyncClient</code> instance. If <code>None</code>, a client is created using the <code>host</code> and <code>port</code> parameters.</td></tr>
+      <tr><td><code>model</code></td><td><code>str</code></td><td><code>"llama3.2"</code></td><td>Chat model for belief extraction and NLI judge calls. Must be pulled locally first via <code>ollama pull &lt;model&gt;</code>. Examples: <code>"llama3.2"</code>, <code>"mistral"</code>, <code>"qwen2.5"</code>, <code>"phi3"</code>.</td></tr>
+      <tr><td><code>embed_model</code></td><td><code>str</code></td><td><code>"nomic-embed-text"</code></td><td>Embedding model for vector generation. Must be pulled locally. Recommended: <code>"nomic-embed-text"</code> (768 dims, fast, good quality).</td></tr>
+      <tr><td><code>host</code></td><td><code>str</code></td><td><code>"http://localhost"</code></td><td>Ollama server hostname. Change if running Ollama on a different machine or in a Docker container.</td></tr>
+      <tr><td><code>port</code></td><td><code>int</code></td><td><code>11434</code></td><td>Ollama server port. Default Ollama port is 11434.</td></tr>
+      <tr><td><code>timeout</code></td><td><code>float</code></td><td><code>120.0</code></td><td>Maximum time (in seconds) per request. Local models may need more time than cloud APIs, especially on CPU-only machines. Increase for larger models.</td></tr>
+      <tr><td><code>retry_config</code></td><td><code>Optional[RetryConfig]</code></td><td><code>RetryConfig()</code></td><td>Retry strategy for transient errors (e.g., Ollama server temporarily unavailable).</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> OllamaAdapter
 
 adapter = <span class="fn">OllamaAdapter</span>(
@@ -163,36 +229,112 @@ adapter = <span class="fn">OllamaAdapter</span>(
     host=<span class="st">"http://localhost"</span>,
     port=<span class="nu">11434</span>
 )</code></pre>
+
   <div class="callout tip">
-    <p><strong>💡 Tip:</strong> Ollama is perfect as an <code>internal_adapter</code> in the Dual-Adapter pattern — completely free, fast, and runs locally.</p>
+    <p><strong>💡 Tip:</strong> Ollama is perfect as an <code>internal_adapter</code> in the Dual-Adapter pattern — completely free, fast, and runs locally. Pull both models before first use: <code>ollama pull llama3.2 && ollama pull nomic-embed-text</code></p>
   </div>
 </section>
 
 <!-- ── LiteLLM ── -->
 <section class="doc-section" id="litellm">
   <h3>LiteLLM (Multi-Provider)</h3>
+  <p>The LiteLLM adapter uses the <a href="https://github.com/BerriAI/litellm">LiteLLM</a> library to route requests to 100+ LLM providers through a unified API. It supports Azure OpenAI, AWS Bedrock, Cohere, Vertex AI, and many more. Provider-specific API keys are configured via environment variables as documented by LiteLLM.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>model</code></td><td><code>str</code></td><td><em>(required)</em></td><td>LiteLLM model identifier with provider prefix. Examples: <code>"azure/gpt-4"</code>, <code>"bedrock/anthropic.claude-3-sonnet"</code>, <code>"vertex_ai/gemini-pro"</code>. See <a href="https://docs.litellm.ai/docs/providers">LiteLLM docs</a> for the full list.</td></tr>
+      <tr><td><code>embed_model</code></td><td><code>str</code></td><td><code>None</code></td><td>LiteLLM embedding model identifier. Examples: <code>"cohere/embed-english-v3.0"</code>, <code>"azure/text-embedding-ada-002"</code>. If not set, embedding calls will raise an error.</td></tr>
+      <tr><td><code>timeout</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Maximum time (in seconds) per request.</td></tr>
+      <tr><td><code>retry_config</code></td><td><code>Optional[RetryConfig]</code></td><td><code>RetryConfig()</code></td><td>Retry strategy for transient errors.</td></tr>
+    </tbody>
+  </table>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> LiteLLMAdapter
 
-<!-- Route to any of 100+ providers via LiteLLM -->
+<span class="cm"># Route to any of 100+ providers via LiteLLM</span>
 adapter = <span class="fn">LiteLLMAdapter</span>(
     model=<span class="st">"azure/gpt-4"</span>,                    <span class="cm"># Azure OpenAI</span>
     embed_model=<span class="st">"cohere/embed-english-v3.0"</span>  <span class="cm"># Cohere embeddings</span>
 )
 
-<!-- Or use AWS Bedrock -->
+<span class="cm"># Or use AWS Bedrock</span>
 adapter = <span class="fn">LiteLLMAdapter</span>(model=<span class="st">"bedrock/anthropic.claude-3-sonnet"</span>)</code></pre>
+</section>
+
+<!-- ── RetryConfig ── -->
+<section class="doc-section" id="retry-config">
+  <h3>RetryConfig</h3>
+  <p>All adapters accept an optional <code>RetryConfig</code> that controls how transient API errors (rate limits, timeouts, server errors) are retried. The default configuration uses exponential backoff with jitter to avoid thundering herd problems when a provider recovers from an outage.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>max_retries</code></td><td><code>int</code></td><td><code>3</code></td><td>Maximum number of retry attempts per API call. After this many failures, the error is raised to the caller. Set to <code>0</code> to disable retries entirely.</td></tr>
+      <tr><td><code>initial_delay</code></td><td><code>float</code></td><td><code>1.0</code></td><td>Base delay (in seconds) before the first retry. Each subsequent retry multiplies this by <code>exponential_base</code>.</td></tr>
+      <tr><td><code>max_delay</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Maximum delay (in seconds) between retries. The exponential growth is capped at this value.</td></tr>
+      <tr><td><code>exponential_base</code></td><td><code>float</code></td><td><code>2.0</code></td><td>Multiplier for exponential backoff. Delay formula: <code>min(initial_delay × base^attempt, max_delay)</code>. With defaults: 1s → 2s → 4s.</td></tr>
+      <tr><td><code>jitter</code></td><td><code>bool</code></td><td><code>True</code></td><td>Add random jitter to retry delays. When enabled, the computed delay is multiplied by a random factor between 0.5 and 1.0. This prevents multiple clients from retrying at exactly the same time (thundering herd), which is critical in multi-worker deployments.</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters.common <span class="kw">import</span> RetryConfig
+
+<span class="cm"># Conservative retry for rate-limited APIs</span>
+config = <span class="fn">RetryConfig</span>(
+    max_retries=<span class="nu">5</span>,
+    initial_delay=<span class="nu">2.0</span>,
+    max_delay=<span class="nu">60.0</span>,
+    exponential_base=<span class="nu">2.0</span>,
+    jitter=<span class="nb">True</span>,
+)
+
+<span class="cm"># Pass to any adapter</span>
+adapter = <span class="fn">OpenAIAdapter</span>(model=<span class="st">"gpt-4o"</span>, retry_config=config)</code></pre>
+
+  <h4>Retry Delay Schedule (with defaults)</h4>
+  <p>With <code>initial_delay=1.0</code>, <code>exponential_base=2.0</code>, <code>max_delay=30.0</code>, and <code>jitter=True</code>:</p>
+  <table class="param-table">
+    <thead><tr><th>Attempt</th><th>Computed Delay</th><th>With Jitter (range)</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>1.0s</td><td>0.5s – 1.0s</td></tr>
+      <tr><td>2</td><td>2.0s</td><td>1.0s – 2.0s</td></tr>
+      <tr><td>3</td><td>4.0s</td><td>2.0s – 4.0s</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Transient vs. Permanent Errors</h4>
+  <p>The retry mechanism only retries <strong>transient</strong> errors — those that might succeed on a subsequent attempt. These include:</p>
+  <ul>
+    <li><strong>Rate limit errors</strong> (HTTP 429) — Provider is throttling requests</li>
+    <li><strong>Server errors</strong> (HTTP 500, 502, 503) — Provider is temporarily unavailable</li>
+    <li><strong>Timeout errors</strong> — Request took too long</li>
+    <li><strong>Connection errors</strong> — Network issues</li>
+  </ul>
+  <p><strong>Permanent errors</strong> (invalid API key, malformed request, model not found) are raised immediately without retrying.</p>
 </section>
 
 <!-- ── Dual-Adapter ── -->
 <section class="doc-section" id="dual-adapter">
   <h3>Dual-Adapter Architecture</h3>
-  <p>Use a premium model for your application and a cheaper/local model for background tracking to optimize costs:</p>
+  <p>The Dual-Adapter pattern lets you use a <strong>premium model</strong> for your application's user-facing responses and a <strong>cheaper/local model</strong> for all background belief tracking work. This can reduce tracking costs by 90%+ while maintaining identical application quality.</p>
+
+  <h4>When to Use Dual-Adapter</h4>
+  <ul>
+    <li><strong>Cost optimization:</strong> Your app uses GPT-4o ($$$) but tracking can run on Llama 3 via Ollama (free).</li>
+    <li><strong>Anthropic users:</strong> Claude doesn't offer an embedding API — you must use a second adapter for embeddings.</li>
+    <li><strong>Privacy:</strong> Keep user data local by running extraction on Ollama while the app uses a cloud provider.</li>
+    <li><strong>Latency:</strong> Offload tracking to a fast local model so it doesn't compete for API rate limits.</li>
+  </ul>
+
   <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> AnthropicAdapter, OllamaAdapter
 
-<!-- Your app uses Claude 3.5 Sonnet (premium) -->
+<span class="cm"># Your app uses Claude 3.5 Sonnet (premium)</span>
 app_adapter = <span class="fn">AnthropicAdapter</span>(model=<span class="st">"claude-3-5-sonnet-latest"</span>)
 
-<!-- Background tracking uses local Llama 3 (free!) -->
+<span class="cm"># Background tracking uses local Llama 3 (free!)</span>
 bg_adapter = <span class="fn">OllamaAdapter</span>(model=<span class="st">"llama3"</span>, embed_model=<span class="st">"nomic-embed-text"</span>)
 
 tracker = <span class="fn">BeliefTracker</span>(
@@ -200,6 +342,8 @@ tracker = <span class="fn">BeliefTracker</span>(
     adapter=app_adapter,              <span class="cm"># Intercepts the Claude API payload</span>
     internal_adapter=bg_adapter       <span class="cm"># Runs extraction, embeddings, and judge</span>
 )</code></pre>
+
+  <h4>How It Works</h4>
   <div class="architecture-diagram">
     <pre>
   ┌─────────────────────┐                 ┌─────────────────────┐
@@ -212,14 +356,14 @@ tracker = <span class="fn">BeliefTracker</span>(
   └─────────────────────┘                 └─────────────────────┘</pre>
   </div>
 
-  <h3>Payload Normalization Design</h3>
+  <h4>Payload Normalization</h4>
   <p>Different model providers use radically different SDK payload signatures. For example:</p>
   <ul>
     <li><strong>OpenAI:</strong> Accesses response text via <code>response.choices[0].message.content</code>.</li>
     <li><strong>Anthropic:</strong> Accesses response text via <code>response.content[0].text</code>.</li>
     <li><strong>Google Gemini:</strong> Accesses response text via <code>response.text</code>.</li>
   </ul>
-  <p>To enable universal tracking, each adapter implements the <code>ProviderAdapter</code> protocol to normalize inputs and outputs:</p>
+  <p>Each adapter implements the <code>ProviderAdapter</code> protocol to normalize inputs and outputs:</p>
   <ul>
     <li>
       <strong><code>to_llm_call(*args, **kwargs):</code></strong> Intercepts raw arguments passed to the provider SDK and extracts the conversation history, converting them into a standardized <code>LLMCall</code> structure containing a unified list of message dictionaries.
@@ -228,7 +372,7 @@ tracker = <span class="fn">BeliefTracker</span>(
       <strong><code>to_llm_response(raw_response):</code></strong> Normalizes the provider's returned response object into an <code>LLMResponse</code> structure, exposing the message content, model name, and token usage metadata.
     </li>
   </ul>
-  <p>This decoupling is what enables the **Dual-Adapter** pattern: the premium adapter parses the main application LLM calls, while the internal adapter handles all background vector embeddings, fact extractions, and logical checks using completely different API calls (or a local instance like Ollama).</p>
+  <p>This decoupling is what enables the Dual-Adapter pattern: the premium adapter parses the main application LLM calls, while the internal adapter handles all background vector embeddings, fact extractions, and logical checks using completely different API calls.</p>
 </section>
 
 <!-- ── Footer ── -->
@@ -243,86 +387,46 @@ tracker = <span class="fn">BeliefTracker</span>(
 
 <!-- ── Sidebar logic ── -->
 <script>
-  // Highlight active sidebar link based on current page and scroll position
   const sections = document.querySelectorAll('.doc-section');
   const navLinks = document.querySelectorAll('.sidebar-nav a');
 
   function highlightCurrentLink() {
     const currentPath = window.location.pathname.split('/').pop() || 'index.html';
     const currentHash = window.location.hash;
-    
     let matched = false;
     navLinks.forEach(link => {
       link.classList.remove('active');
       const href = link.getAttribute('href');
-      
-      // If there's a hash, match the exact page + hash
-      if (currentHash && href.endsWith(currentHash)) {
-        link.classList.add('active');
-        matched = true;
-      }
+      if (currentHash && href.endsWith(currentHash)) { link.classList.add('active'); matched = true; }
     });
-
-    // If no hash or no hash match, match the page itself (first link matching the page)
     if (!matched) {
       for (const link of navLinks) {
         const href = link.getAttribute('href');
-        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
-          link.classList.add('active');
-          break;
-        }
+        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) { link.classList.add('active'); break; }
       }
     }
   }
 
-  // Highlight active sidebar link on scroll (for sections on the current page)
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         const targetId = entry.target.id;
         navLinks.forEach(link => {
           const href = link.getAttribute('href');
-          if (href.endsWith(`#${targetId}`)) {
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-          }
+          if (href.endsWith(`#${targetId}`)) { navLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); }
         });
       }
     });
   }, { rootMargin: '-20% 0px -70% 0px' });
 
   sections.forEach(section => observer.observe(section));
-  
   highlightCurrentLink();
   window.addEventListener('hashchange', highlightCurrentLink);
+  navLinks.forEach(link => { link.addEventListener('click', () => { const sidebar = document.querySelector('.sidebar'); if (sidebar) sidebar.classList.remove('open'); }); });
 
-  // Close mobile sidebar on link click
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.remove('open');
-    });
-  });
-
-  // Sidebar Collapse / Expand Logic
   const sidebarToggle = document.getElementById('sidebar-toggle');
-  
-  // On load, restore state
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
-    document.body.classList.add('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '▶';
-  } else {
-    document.body.classList.remove('sidebar-collapsed');
-    if (sidebarToggle) sidebarToggle.textContent = '◀';
-  }
-
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
-      localStorage.setItem('sidebar-collapsed', isCollapsed);
-      sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
-    });
-  }
+  if (localStorage.getItem('sidebar-collapsed') === 'true') { document.body.classList.add('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '▶'; } else { document.body.classList.remove('sidebar-collapsed'); if (sidebarToggle) sidebarToggle.textContent = '◀'; }
+  if (sidebarToggle) { sidebarToggle.addEventListener('click', () => { const isCollapsed = document.body.classList.toggle('sidebar-collapsed'); localStorage.setItem('sidebar-collapsed', isCollapsed); sidebarToggle.textContent = isCollapsed ? '▶' : '◀'; }); }
 </script>
 
 </body>
