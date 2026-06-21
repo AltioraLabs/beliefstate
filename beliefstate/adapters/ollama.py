@@ -108,7 +108,7 @@ class OllamaAdapter(ProviderAdapter):
             try:
                 from ollama import AsyncClient
 
-                    # Avoid duplicating port if host already includes a port
+                # Avoid duplicating port if host already includes a port
                 if ":" in self.host.replace("://", ""):
                     base_url = self.host
                 else:
