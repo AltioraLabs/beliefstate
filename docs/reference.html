@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v1.0.1</div>
+    <div class="sidebar-version">v1.0.2</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -207,6 +207,15 @@
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="changelog">
   <h2>Changelog</h2>
+
+  <h3>v1.0.2 — Advanced Enhancements</h3>
+  <p><strong>Feature release</strong> introducing cloud-ready storage, low-latency streaming wrappers, and decoupled configuration.</p>
+  <ul>
+    <li><strong>PostgreSQL Store Backend (<code>PostgreSQLStore</code>):</strong> Added a new database store backend supporting PostgreSQL with database-side PL/pgSQL vector similarity.</li>
+    <li><strong>Non-Blocking Streaming Wrapper (<code>AsyncStreamWrapper</code>):</strong> Upgraded the LLM function wrapper to natively support async streaming generators, yielding tokens to clients with zero added latency while extracting beliefs in the background.</li>
+    <li><strong>Decoupled Embeddings:</strong> Added <code>embed_provider</code> and <code>embed_model</code> fields to <code>TrackerConfig</code> to separate chat LLM and embedding LLM providers.</li>
+    <li><strong>Fail-Fast Configuration Validation:</strong> The tracker now immediately raises a descriptive <code>ValueError</code> at runtime if the auto-detected response type resolves to a non-functional <code>GenericAdapter</code> fallback.</li>
+  </ul>
 
   <h3>v1.0.1 — Pronoun Mapping Fix</h3>
   <p><strong>Bug fix release</strong> targeting pronoun mapping bias during extraction.</p>

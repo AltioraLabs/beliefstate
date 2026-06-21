@@ -372,20 +372,21 @@ class BeliefExtractor:
     def __init__(self, adapter: ProviderAdapter, config: TrackerConfig):
         self.adapter = adapter
         self.config = config
-        self.embedding_adapter = (
-            config.embed_provider
-            if getattr(config, "embed_provider", None) is not None
-            else adapter
+        provider = config.embed_provider
+        self.embedding_adapter: ProviderAdapter = (
+            provider if provider is not None else adapter
         )
         # Try to extract model name and dimensionality from adapter/config
-        self.embedding_model = getattr(config, "embed_model", None) or getattr(
-            self.embedding_adapter, "embed_model", ""
+        self.embedding_model: str = (
+            getattr(config, "embed_model", None)
+            or getattr(self.embedding_adapter, "embed_model", "")
+            or ""
         )
         self.embedding_dim = self._get_embedding_dim()
 
     def _get_embedding_dim(self) -> int:
         """Infer embedding dimensionality from model name."""
-        model_name = self.embedding_model.lower()
+        model_name = (self.embedding_model or "").lower()
 
         # Common embedding model dimensions
         dim_map = {
@@ -404,8 +405,10 @@ class BeliefExtractor:
                 return dim
 
         # Fallback: query adapter if it supports dimension discovery
-        if hasattr(self.embedding_adapter, "embedding_dim"):
-            return int(self.embedding_adapter.embedding_dim)
+        if self.embedding_adapter is not None and hasattr(
+            self.embedding_adapter, "embedding_dim"
+        ):
+            return int(getattr(self.embedding_adapter, "embedding_dim"))
 
         return 0  # Unknown dimensionality
 

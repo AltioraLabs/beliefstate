@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar
+from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar, Tuple
 from datetime import datetime, timezone
 from functools import wraps
 from contextvars import ContextVar
@@ -232,8 +232,8 @@ class AsyncStreamWrapper:
         self,
         stream_gen: Any,
         tracker: "BeliefTracker",
-        args: tuple,
-        kwargs: dict,
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
         session_id: str,
         turn: int,
     ):

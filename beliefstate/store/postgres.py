@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 try:
     import asyncpg
 except ImportError:
-    asyncpg = None  # type: ignore[assignment]
+    asyncpg = None
 
 
 class PostgreSQLStore(Store):
@@ -340,7 +340,7 @@ class PostgreSQLStore(Store):
             pool = await self._get_pool()
             async with pool.acquire() as conn:
                 val = await conn.fetchval("SELECT 1")
-                return val == 1
+                return bool(val == 1)
         except Exception:
             return False
 

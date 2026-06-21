@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v1.0.1</div>
+    <div class="sidebar-version">v1.0.2</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -185,9 +185,15 @@ config = <span class="fn">TrackerConfig</span>(
   <table class="param-table">
     <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td><code>internal_provider</code></td><td><code>Optional[Any]</code></td><td><code>None</code></td><td>An explicit <code>ProviderAdapter</code> instance for the tracker's internal LLM calls (belief extraction, NLI judge, embedding generation). When set to <code>None</code>, the tracker reuses the main application adapter. Set this to a cheaper or local model (e.g., <code>OllamaAdapter</code>) to reduce costs while keeping your premium model for the user-facing app. <em>Note: This can also be set directly via the <code>internal_adapter</code> parameter on the <code>BeliefTracker</code> constructor.</em></td></tr>
+      <tr><td><code>internal_provider</code></td><td><code>Optional[Any]</code></td><td><code>None</code></td><td>An explicit <code>ProviderAdapter</code> instance for the tracker's internal LLM calls (belief extraction, NLI judge). When set to <code>None</code>, the tracker reuses the main application adapter. Set this to a cheaper or local model (e.g., <code>OllamaAdapter</code>) to reduce costs while keeping your premium model for the user-facing app. <em>Note: This can also be set directly via the <code>internal_adapter</code> parameter on the <code>BeliefTracker</code> constructor.</em></td></tr>
+      <tr><td><code>embed_provider</code></td><td><code>Optional[Any]</code></td><td><code>None</code></td><td>An explicit <code>ProviderAdapter</code> instance dedicated to embedding generation. This allows you to decouple your chat model (e.g., Anthropic Claude which lacks embedding endpoints) from your embedding generation service (e.g., OpenAI or a local Nomic embedder).</td></tr>
+      <tr><td><code>embed_model</code></td><td><code>Optional[str]</code></td><td><code>None</code></td><td>The model name to use specifically for embedding generation. Overrides any default embedding model inferred from the provider adapter.</td></tr>
     </tbody>
   </table>
+
+  <div class="callout warning">
+    <p><strong>⚠️ Auto-detection Fail-Fast:</strong> If the tracker auto-detects an unrecognized LLM response type at runtime, it falls back to <code>GenericAdapter</code>. Since this generic fallback cannot perform extraction or generate embeddings, the tracker now immediately throws a <code>ValueError</code> upon initialization to prevent silent background failures.</p>
+  </div>
 
   <!-- ── Belief Storage & Injection ── -->
   <h3>Belief Storage &amp; Injection</h3>

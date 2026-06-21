@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v1.0.1</div>
+    <div class="sidebar-version">v1.0.2</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -84,6 +84,7 @@
     <thead><tr><th>Store</th><th>Persistence</th><th>Multi-Worker</th><th>Best For</th><th>Setup</th></tr></thead>
     <tbody>
       <tr><td><strong>SQLite</strong></td><td>✅ Disk file</td><td>❌ Single process</td><td>Local dev, prototyping, single-server apps</td><td>Zero — included with Python</td></tr>
+      <tr><td><strong>PostgreSQL</strong></td><td>✅ Postgres DB</td><td>✅ Distributed</td><td>Multi-worker cloud databases, RDS, Supabase</td><td>Requires Postgres (using asyncpg)</td></tr>
       <tr><td><strong>Redis</strong></td><td>✅ Redis server</td><td>✅ Distributed</td><td>Production, multi-worker, load-balanced</td><td>Requires Redis server</td></tr>
       <tr><td><strong>In-Memory</strong></td><td>❌ Lost on restart</td><td>❌ Single process</td><td>Unit testing, ephemeral sessions</td><td>Zero — pure Python</td></tr>
     </tbody>
@@ -165,6 +166,43 @@ store = <span class="fn">SQLiteStore</span>(db_path=<span class="st">":memory:"<
     <li><strong>Similarity search:</strong> O(N) — loads all beliefs for the session and computes cosine similarity in Python. Efficient for up to ~10,000 beliefs per session.</li>
     <li><strong>Limitation:</strong> Single-writer. Multiple processes writing to the same file may cause lock contention. Use Redis for multi-worker deployments.</li>
   </ul>
+</section>
+
+<!-- ── PostgreSQL Store ── -->
+<section class="doc-section" id="postgresql-store">
+  <h3>PostgreSQL Store</h3>
+  <p>The PostgreSQL store is designed for <strong>cloud-native, multi-worker environments</strong> (such as AWS RDS, Google Cloud SQL, Supabase, or ElephantSQL). It leverages <code>asyncpg</code> for extremely fast, non-blocking connection pooling and execution. It calculates vector distances natively inside the database via a custom PL/pgSQL function.</p>
+
+  <h4>Constructor Parameters</h4>
+  <table class="param-table">
+    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>dsn</code></td><td><code>Optional[str]</code></td><td><code>None</code></td><td>Database connection URI (e.g., <code>"postgresql://user:pass@host/db"</code>). If not provided, connection parameters must be passed in <code>kwargs</code>.</td></tr>
+      <tr><td><code>**kwargs</code></td><td><code>Any</code></td><td><code>{}</code></td><td>Additional keyword arguments forwarded directly to <code>asyncpg.create_pool()</code> (such as <code>host</code>, <code>port</code>, <code>user</code>, <code>password</code>, <code>database</code>, <code>min_size</code>, <code>max_size</code>).</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> PostgreSQLStore, BeliefTracker, TrackerConfig
+
+<span class="cm"># Automatic initialization via TrackerConfig</span>
+config = <span class="fn">TrackerConfig</span>(
+    store_type=<span class="st">"postgres"</span>,
+    store_kwargs={
+        <span class="st">"dsn"</span>: <span class="st">"postgresql://postgres:password@localhost/beliefstate"</span>
+    }
+)
+tracker = <span class="fn">BeliefTracker</span>(config=config, adapter=adapter)
+</code></pre>
+
+  <div class="callout info">
+    <p><strong>ℹ️ Cosine Similarity & PL/pgSQL Function:</strong> During database initialization, PostgreSQLStore:
+    <ul>
+      <li>Creates the <code>beliefs</code> table and corresponding indexes optimized for sessions and timestamps.</li>
+      <li>Creates a pure PL/pgSQL function <code>cosine_similarity(double precision[], double precision[])</code>.</li>
+      <li>Calculates vector similarity directly in SQL queries, avoiding the overhead of loading embeddings into Python memory or requiring pgvector.</li>
+    </ul>
+    </p>
+  </div>
 </section>
 
 <!-- ── Redis Store ── -->
