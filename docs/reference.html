@@ -18,7 +18,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <div class="sidebar-logo">🧠 BeliefState</div>
-    <div class="sidebar-version">v1.0.0</div>
+    <div class="sidebar-version">v1.0.1</div>
   </div>
   <nav>
     <ul class="sidebar-nav">
@@ -207,6 +207,12 @@
 <!-- ═══════════════════════════════════════════════════ -->
 <section class="doc-section" id="changelog">
   <h2>Changelog</h2>
+
+  <h3>v1.0.1 — Pronoun Mapping Fix</h3>
+  <p><strong>Bug fix release</strong> targeting pronoun mapping bias during extraction.</p>
+  <ul>
+    <li><strong>Fixed Pronoun Mapping Bias:</strong> Split the extraction prompt into separate user and assistant templates (<code>extract_user_prompt_template</code> and <code>extract_assistant_prompt_template</code>) to prevent first-person pronoun mapping failures in assistant responses.</li>
+  </ul>
 
   <h3>v1.0.0 — Production Release</h3>
   <p><strong>Production hardening release</strong> with critical bug fixes, new features, and improved reliability.</p>
