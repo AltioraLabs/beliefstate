@@ -89,7 +89,7 @@ packages = ["beliefstate"]
 
 [tool.mypy]
 strict = true
-python_version = "3.10"
+python_version = "3.12"
 ignore_missing_imports = true
 
 # Optional-dependency modules: type:ignore comments are needed when the
@@ -102,13 +102,6 @@ module = [
 ]
 warn_unused_ignores = false
 
-[[tool.mypy.overrides]]
-module = [
-    "numpy",
-    "numpy.*",
-]
-ignore_errors = true
-follow_imports = "skip"
 
 
 
