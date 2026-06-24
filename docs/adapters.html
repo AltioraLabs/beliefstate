@@ -723,6 +723,24 @@
   }
 
   /* ── RESPONSIVENESS ── */
+  @media (max-width: 1024px) {
+    .page-wrapper {
+      flex-direction: column;
+    }
+    .sidebar {
+      display: none;
+    }
+    .on-this-page {
+      display: none;
+    }
+    .doc-container {
+      gap: 24px;
+    }
+    .doc-main {
+      padding: 32px 40px;
+    }
+  }
+
   @media (max-width: 768px) {
     .page-wrapper {
       flex-direction: column;
@@ -730,14 +748,147 @@
     .sidebar {
       display: none;
     }
+    .on-this-page {
+      display: none;
+    }
     .doc-main {
-      padding: 24px 20px;
+      padding: 24px 16px;
+    }
+    .doc-content {
+      max-width: 100%;
     }
     .nav-links {
       display: none;
     }
+    .nav-cta {
+      padding: 4px 12px;
+      font-size: 12px;
+    }
+    h1 {
+      font-size: clamp(24px, 5vw, 36px);
+    }
+    h2 {
+      font-size: 20px;
+    }
+    h3 {
+      font-size: 16px;
+    }
+    p {
+      font-size: 14px;
+    }
+    .lead {
+      font-size: 14px;
+    }
+    pre {
+      font-size: 11px;
+      padding: 12px;
+    }
+    code {
+      font-size: 11px;
+    }
+    .code-inner {
+      font-size: 11px;
+      padding: 12px;
+    }
     .two-col-layout {
       grid-template-columns: 1fr;
+    }
+    .param-table {
+      font-size: 12px;
+    }
+    .param-table th,
+    .param-table td {
+      padding: 8px 12px;
+    }
+    table {
+      font-size: 12px;
+    }
+    .prev-next-link {
+      width: 100%;
+    }
+    .prev-next-nav {
+      flex-direction: column;
+      gap: 12px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .doc-main {
+      padding: 16px 12px;
+    }
+    .nav-logo {
+      font-size: 13px;
+    }
+    .nav-logo-dot {
+      width: 6px;
+      height: 6px;
+    }
+    h1 {
+      font-size: clamp(20px, 4vw, 28px);
+    }
+    h2 {
+      font-size: 18px;
+    }
+    h3 {
+      font-size: 14px;
+    }
+    h4 {
+      font-size: 12px;
+    }
+    p {
+      font-size: 13px;
+    }
+    .lead {
+      font-size: 13px;
+    }
+    .eyebrow {
+      font-size: 10px;
+    }
+    pre {
+      font-size: 10px;
+      padding: 10px;
+      margin: 16px 0;
+    }
+    code {
+      font-size: 10px;
+    }
+    .code-inner {
+      font-size: 10px;
+      padding: 10px;
+    }
+    .prev-next-nav {
+      margin-top: 32px;
+      margin-bottom: 16px;
+    }
+    .prev-next-label {
+      font-size: 9px;
+    }
+    .prev-next-title {
+      font-size: 12px;
+    }
+    ul, ol {
+      padding-left: 16px;
+      margin: 12px 0;
+    }
+    li {
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .param-table {
+      font-size: 11px;
+      margin: 16px 0;
+    }
+    .param-table th,
+    .param-table td {
+      padding: 6px 8px;
+    }
+    .callout {
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+    .badge {
+      font-size: 10px;
+      padding: 1px 6px;
     }
   }
 </style>
@@ -1639,5 +1790,6 @@ content = response.text</div>
     }
   });
 </script>
+<script src="script.js"></script>
 </body>
 </html>

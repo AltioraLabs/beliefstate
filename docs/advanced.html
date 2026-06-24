@@ -3,71 +3,838 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Advanced Features — BeliefState Documentation</title>
+<title>Advanced Features — beliefstate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Custom scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg:         #0A0A0B;
+    --bg-card:    #111113;
+    --bg-raised:  #18181B;
+    --border:     rgba(255,255,255,0.07);
+    --border-hi:  rgba(255,255,255,0.14);
+    --text-1:     #F4F4F5;
+    --text-2:     #A1A1AA;
+    --text-3:     #52525B;
+    --accent:     #7C6FEB;
+    --accent-lo:  rgba(124,111,235,0.12);
+    --accent-hi:  #9D93F0;
+    --green:      #34D399;
+    --green-lo:   rgba(52,211,235,0.10);
+    --red:        #F87171;
+    --red-lo:     rgba(248,113,113,0.10);
+    --amber:      #F59E0B;
+    --amber-lo:   rgba(245,158,11,0.10);
+    --blue:       #60A5FA;
+    --blue-lo:    rgba(96,165,250,0.10);
+    --sans:       'Inter', system-ui, sans-serif;
+    --mono:       'JetBrains Mono', monospace;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background: var(--bg);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NAVIGATION ── */
+  nav:not(.prev-next-nav) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    height: 56px;
+    background: rgba(10,10,11,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-logo {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+
+  .nav-logo-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    list-style: none;
+    height: 100%;
+  }
+
+  .nav-links li {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+
+  .nav-links a {
+    font-size: 13px;
+    color: var(--text-2);
+    text-decoration: none;
+    transition: color 0.15s;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    border-bottom: 2px solid transparent;
+    padding: 0 4px;
+  }
+
+  .nav-links a:hover {
+    color: var(--text-1);
+  }
+
+  .nav-links a.active {
+    color: var(--text-1);
+    border-bottom: 2px solid var(--accent);
+  }
+
+  .nav-cta {
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+
+  .nav-cta:hover {
+    background: var(--accent-hi);
+  }
+
+  /* ── LAYOUT ── */
+  .page-wrapper {
+    display: flex;
+    min-height: calc(100vh - 56px);
+    margin-top: 56px;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: sticky;
+    top: 56px;
+    width: 220px;
+    flex-shrink: 0;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    background: var(--bg);
+  }
+
+  .sidebar-group-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-3);
+    padding: 8px 20px;
+    margin-top: 16px;
+  }
+
+  .sidebar-group:first-child .sidebar-group-title {
+    margin-top: 0;
+  }
+
+  .sidebar-link {
+    display: block;
+    padding: 6px 20px;
+    font-size: 13px;
+    color: var(--text-2);
+    text-decoration: none;
+    transition: color 0.15s, background-color 0.15s;
+  }
+
+  .sidebar-link:hover {
+    color: var(--text-1);
+    background: rgba(255,255,255,0.03);
+  }
+
+  .sidebar-link.active {
+    color: var(--accent);
+    border-left: 2px solid var(--accent);
+    padding-left: 18px;
+    background: var(--accent-lo);
+  }
+
+  /* ── MAIN CONTENT ── */
+  .doc-main {
+    flex: 1;
+    min-width: 0;
+    padding: 48px 64px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .doc-container {
+    display: flex;
+    gap: 48px;
+    width: 100%;
+    max-width: 1080px;
+  }
+
+  .doc-content {
+    flex: 1;
+    min-width: 0;
+    max-width: 820px;
+  }
+
+  /* ── ON THIS PAGE ── */
+  .on-this-page {
+    position: sticky;
+    top: 104px;
+    width: 200px;
+    flex-shrink: 0;
+    height: fit-content;
+    align-self: flex-start;
+  }
+
+  .otp-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-3);
+    margin-bottom: 12px;
+  }
+
+  .otp-links {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .otp-link {
+    font-size: 12px;
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color 0.15s;
+    display: block;
+  }
+
+  .otp-link:hover {
+    color: var(--text-2);
+  }
+
+  .otp-link.active {
+    color: var(--accent);
+  }
+
+  .otp-link.indent {
+    padding-left: 12px;
+  }
+
+  /* ── ELEMENTS ── */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  h1 {
+    font-size: clamp(36px, 5vw, 58px);
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+    margin-bottom: 16px;
+  }
+
+  .lead {
+    font-size: 16px;
+    color: var(--text-2);
+    line-height: 1.7;
+    max-width: 600px;
+    margin-bottom: 24px;
+  }
+
+  .hr-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+
+  /* Doc sections */
+  .doc-section {
+    padding-top: 48px;
+    border-top: 1px solid var(--border);
+  }
+
+  .doc-section:first-of-type {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin: 48px 0 16px;
+    padding-top: 48px;
+    letter-spacing: -0.02em;
+  }
+
+  .doc-section:first-of-type h2:first-of-type {
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-1);
+    margin: 32px 0 12px;
+    letter-spacing: -0.02em;
+  }
+
+  h4 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-2);
+    margin: 24px 0 8px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  p {
+    font-size: 15px;
+    color: var(--text-2);
+    line-height: 1.8;
+    max-width: 720px;
+    margin-bottom: 16px;
+  }
+
+  ul, ol {
+    margin: 16px 0;
+    padding-left: 20px;
+  }
+
+  li {
+    margin-bottom: 8px;
+    color: var(--text-2);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* ── CODE BLOCKS ── */
+  pre {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    overflow-x: auto;
+    margin: 24px 0;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: var(--text-2);
+  }
+
+  code.inline {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--accent-hi);
+    background: var(--bg-raised);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* Syntax Highlighting */
+  .kw { color: var(--accent-hi); }
+  .fn { color: #60A5FA; }
+  .st { color: var(--green); }
+  .nu { color: var(--amber); }
+  .cm { color: var(--text-3); }
+  .nb { color: var(--accent-hi); }
+
+  /* ── TABLES ── */
+  .param-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 24px 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .param-table thead {
+    background: var(--bg-raised);
+  }
+
+  .param-table th {
+    padding: 10px 16px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .param-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-2);
+  }
+
+  .param-table tr:hover {
+    background: rgba(255,255,255,0.02);
+  }
+
+  .param-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* ── CALLOUTS ── */
+  .callout {
+    margin: 24px 0;
+    padding: 14px 16px;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+  }
+
+  .callout p {
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 0;
+  }
+
+  .callout.tip {
+    background: var(--blue-lo);
+    border-left: 3px solid var(--blue);
+  }
+
+  .callout.warning {
+    background: var(--amber-lo);
+    border-left: 3px solid var(--amber);
+  }
+
+  .callout.important {
+    background: var(--accent-lo);
+    border-left: 3px solid var(--accent);
+  }
+
+  .callout.danger {
+    background: var(--red-lo);
+    border-left: 3px solid var(--red);
+  }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .badge.green {
+    background: var(--green-lo);
+    color: var(--green);
+    border: 1px solid rgba(52,211,153,0.2);
+  }
+
+  .badge.yellow {
+    background: var(--amber-lo);
+    color: var(--amber);
+    border: 1px solid rgba(245,158,11,0.2);
+  }
+
+  /* ── PREV / NEXT NAVIGATION ── */
+  .prev-next-nav {
+    border-top: 1px solid var(--border);
+    padding-top: 32px;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 64px;
+    margin-bottom: 24px;
+    gap: 16px;
+  }
+
+  .prev-next-link {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 1px solid var(--border);
+    padding: 14px 20px;
+    border-radius: 8px;
+    background: var(--bg-card);
+    width: 48%;
+  }
+
+  .prev-next-link:hover {
+    border-color: var(--accent);
+    background: var(--bg-raised);
+  }
+
+  .prev-next-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  .prev-next-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-1);
+  }
+
+  .prev-next-link.prev {
+    align-items: flex-start;
+  }
+
+  .prev-next-link.next {
+    align-items: flex-end;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-3);
+  }
+
+  footer a {
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  footer a:hover {
+    color: var(--text-2);
+  }
+
+  /* ── RESPONSIVENESS ── */
+  @media (max-width: 1024px) {
+    .page-wrapper {
+      flex-direction: column;
+    }
+    .sidebar {
+      display: none;
+    }
+    .on-this-page {
+      display: none;
+    }
+    .doc-container {
+      gap: 24px;
+    }
+    .doc-main {
+      padding: 32px 40px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .page-wrapper {
+      flex-direction: column;
+    }
+    .sidebar {
+      display: none;
+    }
+    .on-this-page {
+      display: none;
+    }
+    .doc-main {
+      padding: 24px 16px;
+    }
+    .doc-content {
+      max-width: 100%;
+    }
+    .nav-links {
+      display: none;
+    }
+    .nav-cta {
+      padding: 4px 12px;
+      font-size: 12px;
+    }
+    h1 {
+      font-size: clamp(24px, 5vw, 36px);
+    }
+    h2 {
+      font-size: 20px;
+    }
+    h3 {
+      font-size: 16px;
+    }
+    p {
+      font-size: 14px;
+    }
+    .lead {
+      font-size: 14px;
+    }
+    pre {
+      font-size: 11px;
+      padding: 12px;
+    }
+    code {
+      font-size: 11px;
+    }
+    .code-inner {
+      font-size: 11px;
+      padding: 12px;
+    }
+    .two-col-layout {
+      grid-template-columns: 1fr;
+    }
+    .param-table {
+      font-size: 12px;
+    }
+    .param-table th,
+    .param-table td {
+      padding: 8px 12px;
+    }
+    table {
+      font-size: 12px;
+    }
+    .prev-next-link {
+      width: 100%;
+    }
+    .prev-next-nav {
+      flex-direction: column;
+      gap: 12px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .doc-main {
+      padding: 16px 12px;
+    }
+    .nav-logo {
+      font-size: 13px;
+    }
+    .nav-logo-dot {
+      width: 6px;
+      height: 6px;
+    }
+    h1 {
+      font-size: clamp(20px, 4vw, 28px);
+    }
+    h2 {
+      font-size: 18px;
+    }
+    h3 {
+      font-size: 14px;
+    }
+    h4 {
+      font-size: 12px;
+    }
+    p {
+      font-size: 13px;
+    }
+    .lead {
+      font-size: 13px;
+    }
+    .eyebrow {
+      font-size: 10px;
+    }
+    pre {
+      font-size: 10px;
+      padding: 10px;
+      margin: 16px 0;
+    }
+    code {
+      font-size: 10px;
+    }
+    .code-inner {
+      font-size: 10px;
+      padding: 10px;
+    }
+    .prev-next-nav {
+      margin-top: 32px;
+      margin-bottom: 16px;
+    }
+    .prev-next-label {
+      font-size: 9px;
+    }
+    .prev-next-title {
+      font-size: 12px;
+    }
+    ul, ol {
+      padding-left: 16px;
+      margin: 12px 0;
+    }
+    li {
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .param-table {
+      font-size: 11px;
+      margin: 16px 0;
+    }
+    .param-table th,
+    .param-table td {
+      padding: 6px 8px;
+    }
+    .callout {
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+    .badge {
+      font-size: 10px;
+      padding: 1px 6px;
+    }
+  }
+</style>
 </head>
 <body>
 
-<!-- NAV -->
+<!-- FIXED NAVIGATION BAR -->
 <nav>
   <a href="index.html" class="nav-logo">
     <span class="nav-logo-dot"></span>
     beliefstate
   </a>
   <ul class="nav-links">
-    <li><a href="index.html#problem">The problem</a></li>
-    <li><a href="index.html#how">How it works</a></li>
-    <li><a href="why.html">Why beliefstate?</a></li>
-    <li><a href="configuration.html">Docs</a></li>
-    <li><a href="https://github.com/abhay-2108/beliefstate">GitHub</a></li>
+    <li><a href="index.html">Docs</a></li>
+    <li><a href="configuration.html">Configuration</a></li>
+    <li><a href="adapters.html">Adapters</a></li>
+    <li><a href="stores.html">Stores</a></li>
+    <li><a href="integrations.html">Integrations</a></li>
+    <li><a href="advanced.html" class="active">Advanced</a></li>
+    <li><a href="reference.html">Reference</a></li>
+    <li><a href="https://github.com/abhay-2108/beliefstate" target="_blank" rel="noopener">GitHub</a></li>
   </ul>
   <a href="index.html#quickstart" class="nav-cta">Get started</a>
 </nav>
 
-<!-- Mobile Menu Button -->
-<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
-
-<div class="docs-layout">
-
-  <!-- SIDEBAR -->
-  <aside class="sidebar" id="sidebar">
-    <!-- Sidebar Search -->
-    <div class="sidebar-search">
-      <button class="search-trigger" id="searchTriggerBtn">
-        <span>Search docs...</span>
-        <span class="search-shortcut">Ctrl K</span>
-      </button>
+<div class="page-wrapper">
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Getting Started</div>
+      <a href="index.html#installation" class="sidebar-link">Installation</a>
+      <a href="index.html#quickstart" class="sidebar-link">Quickstart</a>
+      <a href="index.html#core-concepts" class="sidebar-link">Core Concepts</a>
     </div>
-    
-    <nav class="sidebar-nav">
-      <ul>
-        <li class="nav-section-title">Getting Started</li>
-        <li><a href="index.html">Introduction</a></li>
-        <li><a href="why.html">Why beliefstate?</a></li>
 
-        <li class="nav-section-title">Core Reference</li>
-        <li><a href="configuration.html">Configuration</a></li>
-        <li><a href="adapters.html">Adapters</a></li>
-        <li><a href="stores.html">Stores</a></li>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Configuration</div>
+      <a href="configuration.html#tracker-config" class="sidebar-link">TrackerConfig</a>
+      <a href="configuration.html#prompts" class="sidebar-link">Custom Prompts</a>
+    </div>
 
-        <li class="nav-section-title">Usage &amp; Deployment</li>
-        <li><a href="integrations.html">Integrations</a></li>
-        <li><a href="advanced.html" class="active">Advanced Features</a></li>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Adapters</div>
+      <a href="adapters.html#adapters" class="sidebar-link">Overview</a>
+      <a href="adapters.html#openai" class="sidebar-link">OpenAI</a>
+      <a href="adapters.html#anthropic" class="sidebar-link">Anthropic</a>
+      <a href="adapters.html#gemini" class="sidebar-link">Google Gemini</a>
+    </div>
 
-        <li class="nav-section-title">Help &amp; API</li>
-        <li><a href="reference.html">API Reference &amp; FAQ</a></li>
-      </ul>
-    </nav>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Stores</div>
+      <a href="stores.html#stores" class="sidebar-link">Overview</a>
+      <a href="stores.html#sqlite-store" class="sidebar-link">SQLite</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Integrations</div>
+      <a href="integrations.html#fastapi" class="sidebar-link">FastAPI</a>
+      <a href="integrations.html#flask" class="sidebar-link">Flask</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Advanced</div>
+      <a href="advanced.html#dispatchers" class="sidebar-link active">Background Workers</a>
+      <a href="advanced.html#resilience" class="sidebar-link">Resilience</a>
+      <a href="advanced.html#observability" class="sidebar-link">Observability</a>
+      <a href="advanced.html#gdpr" class="sidebar-link">GDPR &amp; Privacy</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Reference</div>
+      <a href="reference.html#api-reference" class="sidebar-link">API Reference</a>
+    </div>
   </aside>
 
   <!-- MAIN CONTENT -->
-  <main class="main-content">
-    <section class="doc-section" id="dispatchers">
-      <div class="eyebrow">Advanced</div>
-      <h2>Background Workers</h2>
+  <main class="doc-main">
+    <div class="doc-container">
+      <div class="doc-content">
+        <p class="eyebrow">Advanced</p>
+        <h1>Advanced Features</h1>
+        <p class="lead">
+          Production-grade patterns for task durability, resilience, observability, and GDPR compliance.
+        </p>
+
+        <hr class="hr-divider">
+
+        <!-- SECTION 1: DISPATCHERS -->
+        <section class="doc-section" id="dispatchers">
+          <h2>Background Workers</h2>
       <p>By default, belief tracking runs as <code>asyncio</code> background tasks in the same event loop as your application. For production deployments that require <strong>task durability</strong> (surviving process restarts, guaranteed delivery, retry queues), you can offload tracking to Celery or RQ distributed workers.</p>
 
       <h3>Dispatcher Comparison</h3>
@@ -310,41 +1077,43 @@ receipt = <span class="kw">await</span> tracker.<span class="fn">clear_session</
       </ul>
     </section>
 
-    <!-- Site Footer -->
-    <footer class="site-footer">
-      <p>
-        beliefstate · MIT Licensed ·
-        <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> ·
-        <a href="https://pypi.org/project/beliefstate/">PyPI</a>
-      </p>
-    </footer>
+        <!-- PREV / NEXT NAVIGATION -->
+        <nav class="prev-next-nav">
+          <a href="integrations.html" class="prev-next-link prev">
+            <span class="prev-next-label">← Previous</span>
+            <span class="prev-next-title">Integrations</span>
+          </a>
+          <a href="reference.html" class="prev-next-link next">
+            <span class="prev-next-label">Next →</span>
+            <span class="prev-next-title">Reference</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- RIGHT COLUMN: ON THIS PAGE -->
+      <aside class="on-this-page">
+        <div class="otp-title">On this page</div>
+        <ul class="otp-links">
+          <li><a href="#dispatchers" class="otp-link">Background Workers</a></li>
+          <li><a href="#resilience" class="otp-link">Resilience</a></li>
+          <li><a href="#observability" class="otp-link">Observability</a></li>
+          <li><a href="#gdpr" class="otp-link">GDPR &amp; Privacy</a></li>
+        </ul>
+      </aside>
+    </div>
   </main>
 </div>
 
-<!-- SEARCH MODAL (Shared) -->
-<div class="search-modal-backdrop" id="searchBackdrop">
-  <div class="search-modal">
-    <div class="search-modal-header">
-      <span class="search-modal-icon">🔍</span>
-      <input type="text" class="search-input" id="searchInput" placeholder="Search documentation..." autocomplete="off">
-      <button class="search-close-btn" id="searchCloseBtn">ESC</button>
-    </div>
-    <div class="search-results" id="searchResults">
-      <!-- Search results injected here -->
-    </div>
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    beliefstate · MIT Licensed ·
+    <a href="https://github.com/abhay-2108/beliefstate" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="https://pypi.org/project/beliefstate/" target="_blank" rel="noopener">PyPI</a> ·
+    <a href="reference.html#changelog">Changelog</a>
   </div>
-</div>
+</footer>
 
-<script src="search.js"></script>
-<script>
-  // Close mobile sidebar on link click
-  const navLinks = document.querySelectorAll('.sidebar-nav a');
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.remove('open');
-    });
-  });
-</script>
+<script src="script.js"></script>
 </body>
 </html>
