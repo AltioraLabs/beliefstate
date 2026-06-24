@@ -1,441 +1,1599 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Configuration — BeliefState Documentation</title>
-  <meta name="description" content="Complete configuration reference for BeliefState. Every TrackerConfig parameter explained with types, defaults, and usage guidance.">
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configuration Reference — beliefstate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Custom scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
 
-<!-- Mobile Menu Button -->
-<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-<div class="docs-layout">
+  :root {
+    --bg:         #0A0A0B;
+    --bg-card:    #111113;
+    --bg-raised:  #18181B;
+    --border:     rgba(255,255,255,0.07);
+    --border-hi:  rgba(255,255,255,0.14);
+    --text-1:     #F4F4F5;
+    --text-2:     #A1A1AA;
+    --text-3:     #52525B;
+    --accent:     #7C6FEB;
+    --accent-lo:  rgba(124,111,235,0.12);
+    --accent-hi:  #9D93F0;
+    --green:      #34D399;
+    --green-lo:   rgba(52,211,235,0.10);
+    --red:        #F87171;
+    --red-lo:     rgba(248,113,113,0.10);
+    --amber:      #F59E0B;
+    --amber-lo:   rgba(245,158,11,0.10);
+    --blue:       #60A5FA;
+    --blue-lo:    rgba(96,165,250,0.10);
+    --sans:       'Inter', system-ui, sans-serif;
+    --mono:       'JetBrains Mono', monospace;
+  }
 
-<!-- ═══════════════ SIDEBAR ═══════════════ -->
-<aside class="sidebar" id="sidebar">
-  <div class="sidebar-header">
-    <div class="sidebar-logo">BeliefState</div>
-    <div class="sidebar-version">v1.0.2</div>
-  </div>
-  <nav>
-    <ul class="sidebar-nav">
-      <li class="nav-section-title">Getting Started</li>
-      <li><a href="index.html#installation">Installation</a></li>
-      <li><a href="index.html#quickstart">Quickstart</a></li>
-      <li><a href="index.html#core-concepts">Core Concepts</a></li>
+  html {
+    scroll-behavior: smooth;
+    background: var(--bg);
+  }
 
-      <li class="nav-section-title">Configuration</li>
-      <li><a href="configuration.html#tracker-config">TrackerConfig</a></li>
-      <li><a href="configuration.html#prompts">Custom Prompts</a></li>
+  body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
 
-      <li class="nav-section-title">Adapters</li>
-      <li><a href="adapters.html#adapters">Overview</a></li>
-      <li><a href="adapters.html#openai">OpenAI</a></li>
-      <li><a href="adapters.html#anthropic">Anthropic</a></li>
-      <li><a href="adapters.html#gemini">Google Gemini</a></li>
-      <li><a href="adapters.html#ollama">Ollama</a></li>
-      <li><a href="adapters.html#litellm">LiteLLM</a></li>
-      <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
+  /* ── NAVIGATION ── */
+  nav:not(.prev-next-nav) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    height: 56px;
+    background: rgba(10,10,11,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
 
-      <li class="nav-section-title">Stores</li>
-      <li><a href="stores.html#stores">Overview</a></li>
-      <li><a href="stores.html#sqlite-store">SQLite</a></li>
-      <li><a href="stores.html#redis-store">Redis</a></li>
-      <li><a href="stores.html#memory-store">In-Memory</a></li>
+  .nav-logo {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
 
-      <li class="nav-section-title">Integrations</li>
-      <li><a href="integrations.html#fastapi">FastAPI</a></li>
-      <li><a href="integrations.html#flask">Flask</a></li>
-      <li><a href="integrations.html#asgi">ASGI</a></li>
-      <li><a href="integrations.html#langchain">LangChain</a></li>
-      <li><a href="integrations.html#llamaindex">LlamaIndex</a></li>
-      <li><a href="integrations.html#openai-assistants">OpenAI Assistants</a></li>
+  .nav-logo-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
 
-      <li class="nav-section-title">Advanced</li>
-      <li><a href="advanced.html#dispatchers">Background Workers</a></li>
-      <li><a href="advanced.html#resilience">Resilience</a></li>
-      <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR &amp; Privacy</a></li>
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    list-style: none;
+    height: 100%;
+  }
 
-      <li class="nav-section-title">Reference</li>
-      <li><a href="reference.html#api-reference">API Reference</a></li>
-      <li><a href="reference.html#changelog">Changelog</a></li>
-    </ul>
-  </nav>
-</aside>
+  .nav-links li {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
 
-<button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Toggle sidebar"></button>
+  .nav-links a {
+    font-size: 13px;
+    color: var(--text-2);
+    text-decoration: none;
+    transition: color 0.15s;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    border-bottom: 2px solid transparent;
+    padding: 0 4px;
+  }
 
-<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
-<main class="main-content">
+  .nav-links a:hover {
+    color: var(--text-1);
+  }
 
-<!-- ═══════════════════════════════════════════════════ -->
-<!-- ── TRACKER CONFIG ── -->
-<!-- ═══════════════════════════════════════════════════ -->
-<section class="doc-section" id="tracker-config">
-  <h2>TrackerConfig</h2>
-  <p><code>TrackerConfig</code> is a <a href="https://docs.pydantic.dev/">Pydantic</a> <code>BaseModel</code> that controls every aspect of the belief tracking pipeline. It is passed to the <code>BeliefTracker</code> constructor at initialization time. All parameters have sensible defaults — you only need to override the ones relevant to your use case.</p>
+  .nav-links a.active {
+    color: var(--text-1);
+    border-bottom: 2px solid var(--accent);
+  }
 
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTracker, TrackerConfig
+  .nav-cta {
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
 
-<span class="cm"># Minimal config — all defaults</span>
-tracker = <span class="fn">BeliefTracker</span>(config=<span class="fn">TrackerConfig</span>())
+  .nav-cta:hover {
+    background: var(--accent-hi);
+  }
 
-<span class="cm"># Custom config — override what you need</span>
-config = <span class="fn">TrackerConfig</span>(
-    store_type=<span class="st">"sqlite"</span>,
-    store_kwargs={<span class="st">"db_path"</span>: <span class="st">"beliefs.db"</span>},
-    similarity_threshold=<span class="nu">0.80</span>,
-    enable_background_tasks=<span class="nb">True</span>,
-    max_beliefs=<span class="nu">100</span>,
-)</code></pre>
+  /* ── LAYOUT ── */
+  .page-wrapper {
+    display: flex;
+    min-height: calc(100vh - 56px);
+    margin-top: 56px;
+  }
 
-  <!-- ── Store Settings ── -->
-  <h3>Store Settings</h3>
-  <p>These parameters determine <strong>where</strong> extracted beliefs are persisted. The store is the database backend that holds all subject-predicate-value triples for each user session. Choose a store based on your deployment model:</p>
-  <ul>
-    <li><strong><code>"sqlite"</code></strong> — Best for single-process apps, local development, and prototyping. Data persists in a single file. Zero setup.</li>
-    <li><strong><code>"redis"</code></strong> — Best for multi-worker production deployments behind a load balancer. Shared state across processes with native TTL support.</li>
-  </ul>
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: sticky;
+    top: 56px;
+    width: 220px;
+    flex-shrink: 0;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    background: var(--bg);
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>store_type</code></td><td><code>str</code></td><td><code>"sqlite"</code></td><td>Storage backend to use. Accepted values: <code>"sqlite"</code> (uses <code>aiosqlite</code> for async disk-backed persistence) or <code>"redis"</code> (uses <code>redis.asyncio</code> for distributed caching). The tracker automatically instantiates the corresponding store class at initialization.</td></tr>
-      <tr><td><code>store_kwargs</code></td><td><code>dict</code></td><td><code>{}</code></td><td>Keyword arguments forwarded to the store constructor. For SQLite: <code>{"db_path": "beliefs.db"}</code> sets the database file path (use <code>":memory:"</code> for in-memory testing). For Redis: <code>{"redis_url": "redis://localhost:6379/0"}</code> sets the connection URI. If empty, stores use their built-in defaults.</td></tr>
-    </tbody>
-  </table>
+  .sidebar-group-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-3);
+    padding: 8px 20px;
+    margin-top: 16px;
+  }
 
-  <!-- ── Detection Settings ── -->
-  <h3>Detection Settings</h3>
-  <p>These three thresholds control the <strong>contradiction detection pipeline</strong> — the two-stage filter that determines whether a newly extracted belief conflicts with, duplicates, or is independent of existing beliefs in the store. Tuning these values directly impacts the precision and recall of contradiction detection.</p>
+  .sidebar-group:first-child .sidebar-group-title {
+    margin-top: 0;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>similarity_threshold</code></td><td><code>float</code></td><td><code>0.82</code></td><td><strong>Stage 1 — Semantic gate.</strong> Minimum cosine similarity between embedding vectors of the new belief and each existing belief. Pairs below this threshold are skipped entirely (they are considered unrelated topics), avoiding unnecessary NLI judge calls. <em>Lower values</em> cast a wider net (more NLI calls, fewer missed contradictions). <em>Higher values</em> are stricter (fewer NLI calls, faster, but may miss subtle contradictions).</td></tr>
-      <tr><td><code>contradiction_threshold</code></td><td><code>float</code></td><td><code>0.70</code></td><td><strong>Stage 2 — Contradiction gate.</strong> Minimum score from the NLI judge model to classify two beliefs as contradicting each other. The judge returns a confidence score between 0.0 and 1.0 for the "contradiction" label. If <code>contradiction_score >= contradiction_threshold</code>, the resolver is invoked. Example: <em>"lives in London"</em> vs. <em>"lives in Paris"</em> would typically score ~0.95.</td></tr>
-      <tr><td><code>entailment_threshold</code></td><td><code>float</code></td><td><code>0.85</code></td><td><strong>Stage 2 — Deduplication gate.</strong> Minimum NLI entailment score to classify beliefs as semantic duplicates. If <code>entailment_score >= entailment_threshold</code>, the new belief is silently discarded (it's already represented). Example: <em>"likes Python"</em> and <em>"enjoys Python programming"</em> would score ~0.90 entailment.</td></tr>
-    </tbody>
-  </table>
+  .sidebar-link {
+    display: block;
+    padding: 6px 20px;
+    font-size: 13px;
+    color: var(--text-2);
+    text-decoration: none;
+    transition: color 0.15s, background-color 0.15s;
+  }
 
-  <div class="callout tip">
-    <p><strong>💡 Tuning Tip:</strong> Start with the defaults and observe your application's logs. If you see too many false contradictions, raise <code>contradiction_threshold</code> to 0.80. If valid contradictions are being missed, lower <code>similarity_threshold</code> to 0.75 to let more candidate pairs through to the NLI judge.</p>
-  </div>
+  .sidebar-link:hover {
+    color: var(--text-1);
+    background: rgba(255,255,255,0.03);
+  }
 
-  <h4>How the Two-Stage Filter Works</h4>
-  <p>To avoid querying the expensive NLI judge on every single stored fact, BeliefState uses a two-tiered check:</p>
-  <ul>
-    <li>
-      <strong>Similarity Threshold (<code>similarity_threshold</code>):</strong> Checks the cosine similarity between the vector embeddings of the new fact and existing stored facts. If the similarity is below this value (default 0.82), the facts are deemed conceptually unrelated, and the NLI check is skipped.
-    </li>
-    <li>
-      <strong>Contradiction &amp; Entailment Thresholds:</strong> The Natural Language Inference (NLI) model scores logical relation on a 0.0 to 1.0 scale:
-      <ul>
-        <li>If <code>contradiction_score >= contradiction_threshold</code>, the facts are treated as contradicting (e.g. <em>"lives in London"</em> vs. <em>"lives in Paris"</em>).</li>
-        <li>If <code>entailment_score >= entailment_threshold</code>, the facts are duplicates (e.g. <em>"likes Python"</em> vs. <em>"enjoys Python programming"</em>) and the new record is ignored or merged.</li>
-      </ul>
-    </li>
-  </ul>
+  .sidebar-link.active {
+    color: var(--accent);
+    border-left: 2px solid var(--accent);
+    padding-left: 18px;
+    background: var(--accent-lo);
+  }
 
-  <!-- ── Resilience Settings ── -->
-  <h3>Resilience Settings</h3>
-  <p>These parameters control <strong>how the tracker handles LLM API failures</strong>. Since belief extraction runs in the background, transient API errors should be retried automatically rather than silently dropping beliefs. The retry mechanism uses exponential backoff with jitter to prevent thundering herd problems when the provider recovers.</p>
+  /* ── MAIN CONTENT ── */
+  .doc-main {
+    flex: 1;
+    min-width: 0;
+    padding: 48px 64px;
+    display: flex;
+    justify-content: center;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>retry_max_attempts</code></td><td><code>int</code></td><td><code>5</code></td><td>Maximum number of retry attempts for each LLM API call (extraction, judge, embedding). After this many failures, the call is abandoned and logged as a warning. Does not affect your application — only the background tracking pipeline.</td></tr>
-      <tr><td><code>retry_min_wait</code></td><td><code>float</code></td><td><code>2.0</code></td><td>Minimum wait time (in seconds) before the first retry. Subsequent retries grow exponentially from this base value.</td></tr>
-      <tr><td><code>retry_max_wait</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Maximum wait time (in seconds) between retries. The exponential backoff is capped at this value to prevent excessively long waits.</td></tr>
-      <tr><td><code>retry_multiplier</code></td><td><code>float</code></td><td><code>2.0</code></td><td>Exponential backoff multiplier. Each retry waits <code>min(retry_min_wait * multiplier^attempt, retry_max_wait)</code> seconds. With defaults: 2s → 4s → 8s → 16s → 30s.</td></tr>
-      <tr><td><code>enable_circuit_breaker</code></td><td><code>bool</code></td><td><code>True</code></td><td>Enable the circuit breaker pattern for LLM API calls. When enabled, consecutive failures cause the breaker to trip OPEN, immediately rejecting subsequent calls without hitting the provider. This prevents wasting rate limits and latency on a downed provider. See <a href="advanced.html#resilience">Resilience</a> for state machine details.</td></tr>
-      <tr><td><code>circuit_breaker_failure_threshold</code></td><td><code>int</code></td><td><code>5</code></td><td>Number of consecutive failures required to trip the circuit breaker from CLOSED to OPEN state. Higher values tolerate more transient errors before tripping.</td></tr>
-      <tr><td><code>circuit_breaker_recovery_timeout</code></td><td><code>float</code></td><td><code>30.0</code></td><td>Cooldown period (in seconds) after the circuit breaker trips. Once elapsed, the breaker enters HALF-OPEN state and allows a single probe request. If the probe succeeds, the breaker resets to CLOSED; if it fails, back to OPEN for another cooldown.</td></tr>
-    </tbody>
-  </table>
+  .doc-container {
+    display: flex;
+    gap: 48px;
+    width: 100%;
+    max-width: 1080px;
+  }
 
-  <!-- ── Task & Dispatcher Settings ── -->
-  <h3>Task &amp; Dispatcher Settings</h3>
-  <p>These parameters control <strong>how belief tracking tasks are executed</strong>. By default, tracking runs as fire-and-forget <code>asyncio</code> background tasks in the same event loop as your application. For production deployments that require task durability (surviving process restarts), you can offload to Celery or RQ workers.</p>
+  .doc-content {
+    flex: 1;
+    min-width: 0;
+    max-width: 820px;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>enable_background_tasks</code></td><td><code>bool</code></td><td><code>True</code></td><td>When <code>True</code>, belief extraction runs in a fire-and-forget background task — your LLM response is returned instantly with zero added latency. When <code>False</code>, the entire extraction → detection → resolution pipeline runs <strong>synchronously</strong> inside your <code>@tracker.wrap</code> call, blocking your application until tracking completes. Only set to <code>False</code> for debugging or testing.</td></tr>
-      <tr><td><code>task_dispatcher_type</code></td><td><code>str</code></td><td><code>"asyncio"</code></td><td>Controls which dispatcher backend runs tracking tasks. Options:
-        <ul style="margin: 0.5rem 0 0 0;">
-          <li><code>"asyncio"</code> — Default. Registers tasks via <code>asyncio.create_task()</code> in the current event loop. Zero setup, no extra processes. Tasks are lost if the process crashes.</li>
-          <li><code>"sync"</code> — Runs tasks synchronously (blocking). Useful for testing and debugging.</li>
-          <li><code>"celery"</code> — Offloads tasks to a Celery distributed task queue. Requires a running broker (Redis/RabbitMQ) and worker processes. Tasks survive process restarts.</li>
-          <li><code>"rq"</code> — Offloads tasks to a Redis Queue. Simpler than Celery, requires a Redis server and worker processes.</li>
-        </ul>
-      </td></tr>
-      <tr><td><code>dispatcher_kwargs</code></td><td><code>dict</code></td><td><code>{}</code></td><td>Keyword arguments forwarded to the dispatcher constructor. For Celery: <code>{"celery_app": celery_app}</code>. For RQ: <code>{"queue": rq_queue}</code>. Ignored for asyncio/sync dispatchers. See <a href="advanced.html#dispatchers">Background Workers</a>.</td></tr>
-    </tbody>
-  </table>
+  /* ── ON THIS PAGE ── */
+  .on-this-page {
+    position: sticky;
+    top: 104px;
+    width: 200px;
+    flex-shrink: 0;
+    height: fit-content;
+    align-self: flex-start;
+  }
 
-  <!-- ── Internal Provider Override ── -->
-  <h3>Internal Provider Override</h3>
-  <p>By default, the tracker uses the same LLM adapter as your application for all internal operations (extraction, contradiction detection, embeddings). You can override this to use a separate, cheaper model for background tracking via the <a href="adapters.html#dual-adapter">Dual-Adapter</a> pattern.</p>
+  .otp-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-3);
+    margin-bottom: 12px;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>internal_provider</code></td><td><code>Optional[Any]</code></td><td><code>None</code></td><td>An explicit <code>ProviderAdapter</code> instance for the tracker's internal LLM calls (belief extraction, NLI judge). When set to <code>None</code>, the tracker reuses the main application adapter. Set this to a cheaper or local model (e.g., <code>OllamaAdapter</code>) to reduce costs while keeping your premium model for the user-facing app. <em>Note: This can also be set directly via the <code>internal_adapter</code> parameter on the <code>BeliefTracker</code> constructor.</em></td></tr>
-      <tr><td><code>embed_provider</code></td><td><code>Optional[Any]</code></td><td><code>None</code></td><td>An explicit <code>ProviderAdapter</code> instance dedicated to embedding generation. This allows you to decouple your chat model (e.g., Anthropic Claude which lacks embedding endpoints) from your embedding generation service (e.g., OpenAI or a local Nomic embedder).</td></tr>
-      <tr><td><code>embed_model</code></td><td><code>Optional[str]</code></td><td><code>None</code></td><td>The model name to use specifically for embedding generation. Overrides any default embedding model inferred from the provider adapter.</td></tr>
-    </tbody>
-  </table>
+  .otp-links {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 
-  <div class="callout warning">
-    <p><strong>Auto-detection Fail-Fast:</strong> If the tracker auto-detects an unrecognized LLM response type at runtime, it falls back to <code>GenericAdapter</code>. Since this generic fallback cannot perform extraction or generate embeddings, the tracker now immediately throws a <code>ValueError</code> upon initialization to prevent silent background failures.</p>
-  </div>
+  .otp-link {
+    font-size: 12px;
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color 0.15s;
+    display: block;
+  }
 
-  <!-- ── Belief Storage & Injection ── -->
-  <h3>Belief Storage &amp; Injection</h3>
-  <p>These parameters control <strong>how beliefs are selected and formatted</strong> when injecting context into your LLM prompts via <code>get_context_prompt()</code> or <code>inject_context()</code>. They determine which beliefs are surfaced, how many, and in what order.</p>
+  .otp-link:hover {
+    color: var(--text-2);
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>max_beliefs</code></td><td><code>int</code></td><td><code>50</code></td><td>Maximum number of beliefs injected into the system prompt. Acts as a hard cap after all filtering and sorting. Prevents context window overflow when a user has accumulated many beliefs over long conversations. Increase for models with larger context windows (e.g., GPT-4 128k); decrease for smaller models.</td></tr>
-      <tr><td><code>belief_sort_strategy</code></td><td><code>str</code></td><td><code>"confidence_recency"</code></td><td>Strategy for ranking beliefs when selecting the top <code>max_beliefs</code>. Options:
-        <ul style="margin: 0.5rem 0 0 0;">
-          <li><code>"confidence_recency"</code> — <strong>(Recommended)</strong> Primary sort by confidence (descending), secondary sort by turn number (descending). Prioritizes high-confidence, recent beliefs.</li>
-          <li><code>"recency"</code> — Sort by turn number only (most recent first). Best when the latest information is always most relevant.</li>
-          <li><code>"confidence"</code> — Sort by confidence only (highest first). Best when certainty matters more than freshness.</li>
-        </ul>
-      </td></tr>
-    </tbody>
-  </table>
+  .otp-link.active {
+    color: var(--accent);
+  }
 
-  <!-- ── Belief TTL Settings ── -->
-  <h3>Belief TTL (Time-to-Live)</h3>
-  <p>These parameters enable <strong>automatic pruning of old beliefs</strong> based on age. Useful for applications where user preferences change frequently and stale beliefs should be automatically cleaned up rather than manually managed.</p>
+  .otp-link.indent {
+    padding-left: 12px;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>enable_belief_ttl</code></td><td><code>bool</code></td><td><code>False</code></td><td>Enable automatic pruning of beliefs older than <code>belief_max_age_seconds</code>. When enabled, the tracker periodically scans the store and removes expired beliefs. Disabled by default because most applications want to preserve belief history indefinitely.</td></tr>
-      <tr><td><code>belief_max_age_seconds</code></td><td><code>int</code></td><td><code>86400</code></td><td>Maximum age (in seconds) before a belief is eligible for pruning. Only effective when <code>enable_belief_ttl=True</code>. Default is 24 hours (86400 seconds). Set to <code>604800</code> for 7-day retention or <code>2592000</code> for 30-day retention.</td></tr>
-      <tr><td><code>belief_ttl_check_interval</code></td><td><code>int</code></td><td><code>3600</code></td><td>How often (in seconds) the tracker runs its background pruning sweep to remove expired beliefs. Default is 1 hour (3600 seconds). Only effective when <code>enable_belief_ttl=True</code>. Lower values detect expired beliefs faster but increase database load.</td></tr>
-    </tbody>
-  </table>
+  /* ── ELEMENTS ── */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
 
-  <div class="callout info">
-    <p><strong>Pruning vs. Staleness:</strong> TTL pruning (<code>enable_belief_ttl</code>) <strong>permanently deletes</strong> old beliefs from the store. Staleness scoring (<code>enable_staleness_scoring</code>) only <strong>hides</strong> old beliefs from prompt injection — they remain in the store and can be queried. Use TTL for data hygiene; use staleness for prompt relevance.</p>
-  </div>
+  h1 {
+    font-size: clamp(36px, 5vw, 58px);
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+    margin-bottom: 16px;
+  }
 
-  <!-- ── Staleness Scoring ── -->
-  <h3>Staleness Scoring</h3>
-  <p>When a user resumes an old session after days or weeks, some beliefs may no longer be relevant (e.g., "USER is working on a project X" from 10 days ago). Staleness scoring <strong>deprioritizes old beliefs during prompt injection</strong> without deleting them, keeping the context prompt focused on recent, high-confidence information.</p>
+  .lead {
+    font-size: 16px;
+    color: var(--text-2);
+    line-height: 1.7;
+    max-width: 600px;
+    margin-bottom: 24px;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>enable_staleness_scoring</code></td><td><code>bool</code></td><td><code>True</code></td><td>Enable staleness-based filtering during prompt injection. When active, each belief is assigned a score based on its confidence and recency. Beliefs scoring below <code>staleness_threshold</code> are excluded from the injected context. If all beliefs are too stale, the tracker falls back to injecting the top 5 most confident, recent beliefs as a safety net.</td></tr>
-      <tr><td><code>staleness_threshold</code></td><td><code>float</code></td><td><code>0.1</code></td><td>Minimum staleness score required for a belief to be injected into the prompt. Beliefs scoring below this value are excluded. Computed using the formula below.</td></tr>
-    </tbody>
-  </table>
+  .hr-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
 
-  <h4>Staleness Decay Formula</h4>
-  <p>Each belief is scored using:</p>
-  <pre><code>Staleness Score = Confidence / (Days Since Last Referenced + 1)</code></pre>
-  <p>Examples:</p>
-  <ul>
-    <li>A belief with confidence 1.0, referenced today → Score = <code>1.0 / (0 + 1)</code> = <strong>1.0</strong> <span class="badge green">Included</span></li>
-    <li>A belief with confidence 0.8, referenced 3 days ago → Score = <code>0.8 / (3 + 1)</code> = <strong>0.2</strong> <span class="badge green">Included</span></li>
-    <li>A belief with confidence 0.5, referenced 10 days ago → Score = <code>0.5 / (10 + 1)</code> = <strong>0.045</strong> <span class="badge yellow">Excluded</span> (below 0.1)</li>
-  </ul>
+  /* Doc sections */
+  .doc-section {
+    padding-top: 48px;
+    border-top: 1px solid var(--border);
+  }
 
-  <!-- ── Token-Aware Injection ── -->
-  <h3>Token-Aware Injection</h3>
-  <p>For users with many accumulated beliefs, the formatted context prompt can grow very large, consuming a significant portion of the LLM's context window. Token-aware injection <strong>automatically selects the most relevant beliefs</strong> when the total would exceed a token budget, using cosine similarity with the current user message to rank relevance.</p>
+  .doc-section:first-of-type {
+    border-top: none;
+    padding-top: 0;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>enable_token_aware_injection</code></td><td><code>bool</code></td><td><code>True</code></td><td>Enable intelligent belief selection based on token budget. When the formatted belief summary exceeds <code>belief_budget_tokens</code>, the tracker embeds the current user message and ranks beliefs by relevance (cosine similarity), selecting only the most relevant ones to fit the budget. Requires <code>current_user_message</code> to be passed to <code>get_context_prompt()</code> or <code>inject_context()</code>.</td></tr>
-      <tr><td><code>belief_budget_tokens</code></td><td><code>int</code></td><td><code>500</code></td><td>Maximum number of tokens reserved for the belief context block in the system prompt. Token count is estimated using a fast heuristic: <code>1 token ≈ 4 characters</code>. When the belief summary exceeds this budget, relevance-based filtering is triggered. Increase for models with large context windows; decrease if you need to reserve more space for the conversation history.</td></tr>
-    </tbody>
-  </table>
+  h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin: 48px 0 16px;
+    padding-top: 48px;
+    letter-spacing: -0.02em;
+  }
 
-  <h4>Token-Aware Filtering Cascade</h4>
-  <p>When <code>enable_token_aware_injection=True</code> and a <code>current_user_message</code> is provided, the filtering works as follows:</p>
-  <ol>
-    <li><strong>Estimate</strong> — Format all candidate beliefs and count tokens using the <code>1 token ≈ 4 chars</code> heuristic.</li>
-    <li><strong>Check budget</strong> — If estimated tokens ≤ <code>belief_budget_tokens</code>, use all beliefs (no filtering needed).</li>
-    <li><strong>Embed query</strong> — Generate a vector embedding of the current user message.</li>
-    <li><strong>Rank beliefs</strong> — Compute cosine similarity between the user message embedding and each belief's stored embedding.</li>
-    <li><strong>Select top-K</strong> — Fill beliefs from highest to lowest relevance until the token budget is reached.</li>
-  </ol>
-</section>
+  .doc-section:first-of-type h2:first-of-type {
+    margin-top: 0;
+    padding-top: 0;
+  }
 
-<!-- ── Custom Prompts ── -->
-<section class="doc-section" id="prompts">
-  <h2>Custom Prompts</h2>
-  <p>BeliefState uses two LLM prompts internally for the tracking pipeline. The <strong>extraction prompt</strong> parses conversation text into structured beliefs. The <strong>judge prompt</strong> evaluates whether two beliefs contradict, entail, or are neutral to each other. You can override both via <code>TrackerConfig</code> to customize behavior for your domain.</p>
+  h3 {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-1);
+    margin: 32px 0 12px;
+    letter-spacing: -0.02em;
+  }
 
-  <h3>Extraction Prompt</h3>
-  <p>This prompt is sent to the internal adapter after each LLM conversation turn. It instructs the model to parse the response text and extract factual claims as structured JSON objects.</p>
+  h4 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-2);
+    margin: 24px 0 8px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>extract_prompt_template</code></td><td><code>str</code></td><td><em>(Built-in prompt)</em></td><td>Legacy/Fallback template for belief extraction. If overridden, it will be used for both user and assistant messages to preserve backward compatibility.</td></tr>
-      <tr><td><code>extract_user_prompt_template</code></td><td><code>str</code></td><td><em>(Built-in prompt)</em></td><td>Template used to extract beliefs from user messages. Maps first-person pronouns to "USER". <strong>Must include the <code>{response}</code> placeholder</strong>.</td></tr>
-      <tr><td><code>extract_assistant_prompt_template</code></td><td><code>str</code></td><td><em>(Built-in prompt)</em></td><td>Template used to extract beliefs from assistant messages. Maps first-person pronouns to "ASSISTANT" and second-person to "USER". <strong>Must include the <code>{response}</code> placeholder</strong>.</td></tr>
-    </tbody>
-  </table>
+  p {
+    font-size: 15px;
+    color: var(--text-2);
+    line-height: 1.8;
+    max-width: 720px;
+    margin-bottom: 16px;
+  }
 
-  <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
-    extract_user_prompt_template=<span class="st">"""Extract beliefs from user text: {response}"""</span>,
-    extract_assistant_prompt_template=<span class="st">"""Extract beliefs from assistant text: {response}"""</span>,
-)</code></pre>
+  ul, ol {
+    margin: 16px 0;
+    padding-left: 20px;
+  }
 
-  <div class="callout info">
-    <p><strong>Prompt Routing &amp; Pronoun Mapping Bias:</strong> By default, BeliefState automatically routes user inputs to <code>extract_user_prompt_template</code> and assistant responses to <code>extract_assistant_prompt_template</code>. This ensures that first-person pronouns ("I", "my") are mapped correctly to "USER" or "ASSISTANT" respectively. If you customize <code>extract_prompt_template</code> directly, it overrides both to maintain legacy behavior.</p>
-  </div>
+  li {
+    margin-bottom: 8px;
+    color: var(--text-2);
+    font-size: 15px;
+    line-height: 1.6;
+  }
 
-  <h4>Expected Output Format</h4>
-  <p>The extraction prompt must instruct the model to return a JSON array where each object has these fields:</p>
-  <table class="param-table">
-    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>subject</code></td><td><code>str</code></td><td>Yes</td><td>Who/what this belief is about (e.g., <code>"USER"</code>, <code>"Python"</code>)</td></tr>
-      <tr><td><code>predicate</code></td><td><code>str</code></td><td>Yes</td><td>The relationship or attribute (e.g., <code>"lives in"</code>, <code>"likes"</code>)</td></tr>
-      <tr><td><code>value</code></td><td><code>str</code></td><td>Yes</td><td>The value of the claim (e.g., <code>"Tokyo"</code>, <code>"Python"</code>)</td></tr>
-      <tr><td><code>confidence</code></td><td><code>float</code></td><td>Yes</td><td>Extraction confidence from 0.0 to 1.0</td></tr>
-      <tr><td><code>belief_type</code></td><td><code>str</code></td><td>No</td><td><code>"assertion"</code> (default) or <code>"update"</code> (explicit correction of prior belief)</td></tr>
-      <tr><td><code>source</code></td><td><code>str</code></td><td>No</td><td><code>"user"</code> or <code>"assistant"</code> — who made the claim</td></tr>
-      <tr><td><code>is_hypothetical</code></td><td><code>bool</code></td><td>No</td><td><code>true</code> if the belief is conditional/speculative (excluded from prompt injection)</td></tr>
-    </tbody>
-  </table>
+  /* ── CODE BLOCKS ── */
+  .code-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 24px 0;
+  }
 
-  <h3>Judge Prompt</h3>
-  <p>This prompt is sent to the internal adapter during contradiction detection. It evaluates the logical relationship between two beliefs (a "premise" and a "hypothesis").</p>
+  .code-topbar {
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
 
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>judge_prompt_template</code></td><td><code>str</code></td><td><em>(Built-in prompt)</em></td><td>Template for the NLI judge prompt. <strong>Must include both <code>{premise}</code> and <code>{hypothesis}</code> placeholders</strong>, which are replaced with the two belief texts being compared.</td></tr>
-    </tbody>
-  </table>
+  .code-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
 
-  <pre><code><span class="code-label">python</span>config = <span class="fn">TrackerConfig</span>(
-    judge_prompt_template=<span class="st">"""Analyze these two claims.
-Premise: {premise}
-Hypothesis: {hypothesis}
-Return {"relationship": "contradiction|entailment|neutral", "score": 0.0-1.0}"""</span>
-)</code></pre>
+  .code-filename {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    margin-left: 8px;
+  }
 
-  <div class="callout info">
-    <p><strong>Required placeholders:</strong> <code>{premise}</code> — The existing stored belief. <code>{hypothesis}</code> — The new belief being evaluated. The model must return a JSON object with <code>relationship</code> and <code>score</code> keys.</p>
-  </div>
+  .code-lang-pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-3);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+  }
 
-  <h3>Tips for Writing Custom Prompts</h3>
-  <ul>
-    <li><strong>Be explicit about output format:</strong> The tracker parses the model's output as JSON. Include format examples in your prompt.</li>
-    <li><strong>Subject normalization matters:</strong> The default prompt normalizes first-person pronouns to <code>"USER"</code> and second-person to <code>"ASSISTANT"</code>. If you override the extraction prompt, include similar normalization rules to ensure consistent subject keys in the store.</li>
-    <li><strong>Value normalization:</strong> The default prompt normalizes dates (ISO 8601), currencies (ISO 4217), and numbers (digits only). This prevents near-duplicate beliefs like "has $5,000" vs "has USD 5000".</li>
-    <li><strong>Test with <code>enable_background_tasks=False</code>:</strong> When iterating on prompt design, disable background tasks so you can synchronously inspect extraction results.</li>
-  </ul>
-</section>
+  .btn-icon {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: color 0.15s, border-color 0.15s;
+    margin-left: auto;
+  }
 
-<!-- ── Footer ── -->
-<footer class="site-footer">
-  <p>
-    MIT Licensed · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a>
-  </p>
-</footer>
+  .btn-icon:hover {
+    color: var(--text-1);
+    border-color: var(--border-hi);
+  }
 
-</main>
-</div>
+  .code-inner {
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: var(--text-2);
+    overflow-x: auto;
+    white-space: pre;
+  }
 
-<!-- ── Sidebar logic ── -->
-<script>
-  // Highlight active sidebar link based on current page and scroll position
-  const sections = document.querySelectorAll('.doc-section');
-  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  code.inline {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--accent-hi);
+    background: var(--bg-raised);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
 
-  function highlightCurrentLink() {
-    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
-    const currentHash = window.location.hash;
-    
-    let matched = false;
-    navLinks.forEach(link => {
-      link.classList.remove('active');
-      const href = link.getAttribute('href');
-      
-      // If there's a hash, match the exact page + hash
-      if (currentHash && href.endsWith(currentHash)) {
-        link.classList.add('active');
-        matched = true;
-      }
-    });
+  /* Syntax Highlighting */
+  .c-kw { color: var(--accent-hi); }
+  .c-fn { color: #60A5FA; }
+  .c-str { color: var(--green); }
+  .c-dec { color: var(--amber); }
+  .c-cm { color: var(--text-3); }
 
-    // If no hash or no hash match, match the page itself (first link matching the page)
-    if (!matched) {
-      for (const link of navLinks) {
-        const href = link.getAttribute('href');
-        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
-          link.classList.add('active');
-          break;
-        }
-      }
+  /* ── TABLES ── */
+  .table-wrapper {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead {
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 10px 16px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--text-2);
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr:hover {
+    background: rgba(255,255,255,0.02);
+  }
+
+  td code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-1);
+    background: var(--bg-raised);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  td span.type-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent-hi);
+  }
+
+  td span.default-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--green);
+  }
+
+  td span.default-label.none {
+    color: var(--text-3);
+  }
+
+  td span.default-label.required {
+    color: var(--red);
+  }
+
+  /* ── CALLOUTS ── */
+  .callout {
+    margin: 24px 0;
+    padding: 14px 16px;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+  }
+
+  .callout p {
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 0;
+  }
+
+  .callout-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .callout.tip {
+    background: var(--blue-lo);
+    border-left: 3px solid var(--blue);
+  }
+  .callout.tip .callout-label {
+    color: var(--blue);
+  }
+
+  .callout.warning {
+    background: var(--amber-lo);
+    border-left: 3px solid var(--amber);
+  }
+  .callout.warning .callout-label {
+    color: var(--amber);
+  }
+
+  .callout.important {
+    background: var(--accent-lo);
+    border-left: 3px solid var(--accent);
+  }
+  .callout.important .callout-label {
+    color: var(--accent-hi);
+  }
+
+  .callout.danger {
+    background: var(--red-lo);
+    border-left: 3px solid var(--red);
+  }
+  .callout.danger .callout-label {
+    color: var(--red);
+  }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .badge.default {
+    background: var(--bg-raised);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+
+  .badge.accent {
+    background: var(--accent-lo);
+    color: var(--accent-hi);
+    border: 1px solid rgba(124,111,235,0.25);
+  }
+
+  .badge.green {
+    background: var(--green-lo);
+    color: var(--green);
+    border: 1px solid rgba(52,211,153,0.2);
+  }
+
+  .badge.red {
+    background: var(--red-lo);
+    color: var(--red);
+    border: 1px solid rgba(248,113,113,0.2);
+  }
+
+  /* ── PREV / NEXT NAVIGATION ── */
+  .prev-next-nav {
+    border-top: 1px solid var(--border);
+    padding-top: 32px;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 64px;
+    margin-bottom: 24px;
+    gap: 16px;
+  }
+
+  .prev-next-link {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color 0.15s, background-color 0.15s, transform 0.15s;
+    border: 1px solid var(--border);
+    padding: 14px 20px;
+    border-radius: 8px;
+    background: var(--bg-card);
+    width: 48%;
+  }
+
+  .prev-next-link:hover {
+    border-color: var(--accent);
+    background: var(--bg-raised);
+    transform: translateY(-1px);
+  }
+
+  .prev-next-link.prev {
+    align-items: flex-start;
+  }
+
+  .prev-next-link.next {
+    align-items: flex-end;
+  }
+
+  .prev-next-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .prev-next-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-1);
+    transition: color 0.15s;
+  }
+
+  .prev-next-link:hover .prev-next-title {
+    color: var(--accent-hi);
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-3);
+  }
+
+  footer a {
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  footer a:hover {
+    color: var(--text-2);
+  }
+
+  /* ── RESPONSIVENESS ── */
+  @media (max-width: 1024px) {
+    .on-this-page {
+      display: none;
     }
   }
 
-  // Highlight active sidebar link on scroll (for sections on the current page)
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const targetId = entry.target.id;
-        navLinks.forEach(link => {
-          const href = link.getAttribute('href');
-          if (href.endsWith(`#${targetId}`)) {
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-          }
-        });
+  @media (max-width: 768px) {
+    .page-wrapper {
+      flex-direction: column;
+    }
+    .sidebar {
+      display: none;
+    }
+    .doc-main {
+      padding: 24px 20px;
+    }
+    .nav-links {
+      display: none;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- FIXED NAVIGATION BAR -->
+<nav>
+  <a href="index.html" class="nav-logo">
+    <span class="nav-logo-dot"></span>
+    beliefstate
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html">Docs</a></li>
+    <li><a href="configuration.html" class="active">Configuration</a></li>
+    <li><a href="adapters.html">Adapters</a></li>
+    <li><a href="stores.html">Stores</a></li>
+    <li><a href="integrations.html">Integrations</a></li>
+    <li><a href="advanced.html">Advanced</a></li>
+    <li><a href="reference.html">Reference</a></li>
+    <li><a href="https://github.com/abhay-2108/beliefstate" target="_blank" rel="noopener">GitHub</a></li>
+  </ul>
+  <a href="index.html#quickstart" class="nav-cta">Get started</a>
+</nav>
+
+<div class="page-wrapper">
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Getting Started</div>
+      <a href="index.html#installation" class="sidebar-link">Installation</a>
+      <a href="index.html#quickstart" class="sidebar-link">Quickstart</a>
+      <a href="index.html#core-concepts" class="sidebar-link">Core Concepts</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Configuration</div>
+      <a href="configuration.html#tracker-config" class="sidebar-link active">TrackerConfig</a>
+      <a href="configuration.html#prompts" class="sidebar-link">Custom Prompts</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Adapters</div>
+      <a href="adapters.html#adapters" class="sidebar-link">Overview</a>
+      <a href="adapters.html#openai" class="sidebar-link">OpenAI</a>
+      <a href="adapters.html#anthropic" class="sidebar-link">Anthropic</a>
+      <a href="adapters.html#gemini" class="sidebar-link">Google Gemini</a>
+      <a href="adapters.html#ollama" class="sidebar-link">Ollama</a>
+      <a href="adapters.html#litellm" class="sidebar-link">LiteLLM</a>
+      <a href="adapters.html#dual-adapter" class="sidebar-link">Dual-Adapter</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Stores</div>
+      <a href="stores.html#stores" class="sidebar-link">Overview</a>
+      <a href="stores.html#sqlite-store" class="sidebar-link">SQLite</a>
+      <a href="stores.html#redis-store" class="sidebar-link">Redis</a>
+      <a href="stores.html#memory-store" class="sidebar-link">In-Memory</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Integrations</div>
+      <a href="integrations.html#fastapi" class="sidebar-link">FastAPI</a>
+      <a href="integrations.html#flask" class="sidebar-link">Flask</a>
+      <a href="integrations.html#asgi" class="sidebar-link">ASGI</a>
+      <a href="integrations.html#langchain" class="sidebar-link">LangChain</a>
+      <a href="integrations.html#llamaindex" class="sidebar-link">LlamaIndex</a>
+      <a href="integrations.html#openai-assistants" class="sidebar-link">OpenAI Assistants</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Advanced</div>
+      <a href="advanced.html#dispatchers" class="sidebar-link">Background Workers</a>
+      <a href="advanced.html#resilience" class="sidebar-link">Resilience</a>
+      <a href="advanced.html#observability" class="sidebar-link">Observability</a>
+      <a href="advanced.html#gdpr" class="sidebar-link">GDPR &amp; Privacy</a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Reference</div>
+      <a href="reference.html#api-reference" class="sidebar-link">API Reference</a>
+      <a href="reference.html#changelog" class="sidebar-link">Changelog</a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="doc-main">
+    <div class="doc-container">
+      <div class="doc-content">
+        <p class="eyebrow">Reference</p>
+        <h1>Configuration</h1>
+        <p class="lead">
+          TrackerConfig manages every aspect of the belief tracking pipeline. Configure storage, thresholds, retry logic, background workers, and internal prompt templates using this reference guide.
+        </p>
+
+        <hr class="hr-divider">
+
+        <!-- SECTION 1: TRACKERCONFIG -->
+        <section class="doc-section" id="tracker-config">
+          <h2>TrackerConfig</h2>
+          <p>
+            TrackerConfig is a Pydantic BaseModel passed to the BeliefTracker constructor. All fields have defaults — only override what you need.
+          </p>
+
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">import_tracker.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">BeliefTracker</span>, <span class="c-fn">TrackerConfig</span>
+tracker = <span class="c-fn">BeliefTracker</span>(config=<span class="c-fn">TrackerConfig</span>())</div>
+          </div>
+
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">full_config.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">TrackerConfig</span>
+
+config = <span class="c-fn">TrackerConfig</span>(
+    store_type=<span class="c-str">"sqlite"</span>,
+    store_kwargs={<span class="c-str">"db_path"</span>: <span class="c-str">"beliefs.db"</span>},
+    similarity_threshold=<span class="c-str">0.82</span>,
+    contradiction_threshold=<span class="c-str">0.70</span>,
+    entailment_threshold=<span class="c-str">0.85</span>,
+    retry_max_attempts=<span class="c-str">5</span>,
+    enable_circuit_breaker=<span class="c-kw">True</span>,
+    enable_background_tasks=<span class="c-kw">True</span>,
+    task_dispatcher_type=<span class="c-str">"asyncio"</span>,
+    max_beliefs=<span class="c-str">50</span>,
+    belief_sort_strategy=<span class="c-str">"confidence_recency"</span>,
+    enable_belief_ttl=<span class="c-kw">False</span>,
+    enable_staleness_scoring=<span class="c-kw">True</span>,
+    enable_token_aware_injection=<span class="c-kw">True</span>,
+    belief_budget_tokens=<span class="c-str">500</span>
+)</div>
+          </div>
+
+          <!-- Store Settings -->
+          <h3 id="store-settings">Store Settings</h3>
+          <p>Configure how and where user conversation facts are written to database storage.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>store_type</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">"sqlite"</span></td>
+                  <td>The type of storage database instance. Supported options: <code>"sqlite"</code>, <code>"redis"</code>, or <code>"memory"</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>store_kwargs</code></td>
+                  <td><span class="type-label">dict</span></td>
+                  <td><span class="default-label">{}</span></td>
+                  <td>Additional keyword arguments forwarded directly to the backend storage constructor.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout tip">
+            <div class="callout-label">💡 Tip</div>
+            <p>
+              Use <code>"sqlite"</code> for local prototyping and single-process applications. Use <code>"redis"</code> for multi-worker environments to share session states across horizontal deployments.
+            </p>
+          </div>
+
+          <!-- Detection Settings -->
+          <h3 id="detection-settings">Detection Settings</h3>
+          <p>These settings control the evaluation sensitivity of the conflict and duplicate checking pipeline.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>similarity_threshold</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label">0.82</span></td>
+                  <td>Cosine similarity limit for Stage 1 vector checking. Filters out unrelated facts before NLI.</td>
+                </tr>
+                <tr>
+                  <td><code>contradiction_threshold</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label">0.70</span></td>
+                  <td>NLI contradiction score limit. Scores above this value flag logical conflicts.</td>
+                </tr>
+                <tr>
+                  <td><code>entailment_threshold</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label">0.85</span></td>
+                  <td>NLI entailment limit. Scores above this value identify and discard duplicate facts.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout tip">
+            <div class="callout-label">💡 Tip</div>
+            <p>
+              Raise the <code>contradiction_threshold</code> to 0.80 to restrict false positives. Lower the <code>similarity_threshold</code> to 0.75 to let more candidate pairs reach the NLI judge and catch more subtle contradictions.
+            </p>
+          </div>
+
+          <!-- Resilience Settings -->
+          <h3 id="resilience-settings">Resilience Settings</h3>
+          <p>Configures error handling, retries, and local circuit breakers for backend LLM operations.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>retry_max_attempts</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">5</span></td>
+                  <td>Max retries for failed extraction or checking operations before dropping tasks.</td>
+                </tr>
+                <tr>
+                  <td><code>retry_min_wait</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label">2.0</span></td>
+                  <td>Initial wait duration in seconds before the first retry attempt.</td>
+                </tr>
+                <tr>
+                  <td><code>retry_max_wait</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label">30.0</span></td>
+                  <td>Maximum backoff wait duration in seconds. Caps long intervals.</td>
+                </tr>
+                <tr>
+                  <td><code>retry_multiplier</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label">2.0</span></td>
+                  <td>Base multiplier scale used to compute consecutive exponential retry delays.</td>
+                </tr>
+                <tr>
+                  <td><code>enable_circuit_breaker</code></td>
+                  <td><span class="type-label">bool</span></td>
+                  <td><span class="default-label">True</span></td>
+                  <td>Enables local circuit breaker monitoring to block calls during external API down times.</td>
+                </tr>
+                <tr>
+                  <td><code>circuit_breaker_failure_threshold</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">5</span></td>
+                  <td>Consecutive errors required to trip the circuit breaker from CLOSED to OPEN.</td>
+                </tr>
+                <tr>
+                  <td><code>circuit_breaker_recovery_timeout</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label">30.0</span></td>
+                  <td>Cooldown time in seconds before trying a probe request in the HALF-OPEN state.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>The retry backoff schedule resolves to the following sequence:</p>
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">backoff_schedule.txt</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner">Attempt 1: 2.0s delay
+Attempt 2: 4.0s delay
+Attempt 3: 8.0s delay
+Attempt 4: 16.0s delay
+Attempt 5: 30.0s delay (capped at retry_max_wait)</div>
+          </div>
+
+          <!-- Task Settings -->
+          <h3 id="task-settings">Task and Dispatcher Settings</h3>
+          <p>Configures how asynchronous operations are queued and processed by the system.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>enable_background_tasks</code></td>
+                  <td><span class="type-label">bool</span></td>
+                  <td><span class="default-label">True</span></td>
+                  <td>Fires background tracking tasks asynchronously. Set to False only for synchronous tests.</td>
+                </tr>
+                <tr>
+                  <td><code>task_dispatcher_type</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">"asyncio"</span></td>
+                  <td>Selects task dispatcher backend: <code>"asyncio"</code>, <code>"sync"</code>, <code>"celery"</code>, or <code>"rq"</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>dispatcher_kwargs</code></td>
+                  <td><span class="type-label">dict</span></td>
+                  <td><span class="default-label">{}</span></td>
+                  <td>Keyword configurations forwarded directly to the selected queue client instance.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout warning">
+            <div class="callout-label">⚠ Warning</div>
+            <p>
+              The default asyncio task dispatcher is not durable in multi-worker production deployments. Tasks in memory disappear if worker processes terminate. Use Celery or RQ dispatchers for task persistence.
+            </p>
+          </div>
+
+          <!-- Internal Provider Override -->
+          <h3 id="internal-provider">Internal Provider Override</h3>
+          <p>Specifies separate LLM clients for background parsing and embedding computations.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>internal_provider</code></td>
+                  <td><span class="type-label">Optional[Any]</span></td>
+                  <td><span class="default-label none">None</span></td>
+                  <td>Overrides the adapter client used for extractions and NLI. If None, reuses the primary client.</td>
+                </tr>
+                <tr>
+                  <td><code>embed_provider</code></td>
+                  <td><span class="type-label">Optional[Any]</span></td>
+                  <td><span class="default-label none">None</span></td>
+                  <td>Specifies a separate client for generating vectors (e.g. for chat models lacking embed endpoints).</td>
+                </tr>
+                <tr>
+                  <td><code>embed_model</code></td>
+                  <td><span class="type-label">Optional[str]</span></td>
+                  <td><span class="default-label none">None</span></td>
+                  <td>Model name override passed to the selected embedding provider.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout important">
+            <div class="callout-label">Note</div>
+            <p>
+              Configuring separate internal and embedding providers optimizes processing costs. Read the <a href="adapters.html#dual-adapter">Dual-Adapter guide</a> to set up separate tracking models.
+            </p>
+          </div>
+
+          <!-- Belief Storage and Injection -->
+          <h3 id="belief-storage">Belief Storage and Injection</h3>
+          <p>Manages belief caps and injection parameters used when formatting system prompts.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>max_beliefs</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">50</span></td>
+                  <td>Limits the count of formatted belief claims injected to prevent token window overflow.</td>
+                </tr>
+                <tr>
+                  <td><code>belief_sort_strategy</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">"confidence_recency"</span></td>
+                  <td>Determines injection priorities: <code>"confidence_recency"</code>, <code>"recency"</code>, or <code>"confidence"</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Belief TTL -->
+          <h3 id="belief-ttl">Belief TTL</h3>
+          <p>Configures absolute database retention cleanup intervals for older belief rows.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>enable_belief_ttl</code></td>
+                  <td><span class="type-label">bool</span></td>
+                  <td><span class="default-label">False</span></td>
+                  <td>Enables automatic pruning of older records. Defaults to False.</td>
+                </tr>
+                <tr>
+                  <td><code>belief_max_age_seconds</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">86400</span></td>
+                  <td>Age limit in seconds before a stored fact becomes eligible for deletion. Default is 24 hours.</td>
+                </tr>
+                <tr>
+                  <td><code>belief_ttl_check_interval</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">3600</span></td>
+                  <td>Cooldown interval in seconds between consecutive database cleanup sweeps.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout tip">
+            <div class="callout-label">💡 Tip</div>
+            <p>
+              TTL pruning permanently deletes expired facts from database tables. In contrast, staleness scoring filters stale facts out of the active prompt context while leaving database records untouched.
+            </p>
+          </div>
+
+          <!-- Staleness Scoring -->
+          <h3 id="staleness-scoring">Staleness Scoring</h3>
+          <p>Grades facts based on confidence and age to filter out stale context during prompt injection.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>enable_staleness_scoring</code></td>
+                  <td><span class="type-label">bool</span></td>
+                  <td><span class="default-label">True</span></td>
+                  <td>Enables decay calculations. Filters out facts scoring below the threshold.</td>
+                </tr>
+                <tr>
+                  <td><code>staleness_threshold</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label">0.1</span></td>
+                  <td>Minimum score required to inject a belief. Safety fallbacks inject the top 5 records if all are stale.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>Staleness Decay Formula</h4>
+          <p>Relevance decays over time according to this formula:</p>
+          <div class="code-block" style="margin: 12px 0;">
+            <div class="code-inner">Staleness Score = Confidence / (Days Since Last Referenced + 1)</div>
+          </div>
+
+          <p>Decay examples:</p>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Confidence</th>
+                  <th>Days Since Reference</th>
+                  <th>Formula</th>
+                  <th>Score</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1.0</td>
+                  <td>0</td>
+                  <td><code>1.0 / (0 + 1)</code></td>
+                  <td><span class="default-label">1.00</span></td>
+                  <td><span class="badge green">Included</span></td>
+                </tr>
+                <tr>
+                  <td>0.8</td>
+                  <td>3</td>
+                  <td><code>0.8 / (3 + 1)</code></td>
+                  <td><span class="default-label">0.20</span></td>
+                  <td><span class="badge green">Included</span></td>
+                </tr>
+                <tr>
+                  <td>0.5</td>
+                  <td>10</td>
+                  <td><code>0.5 / (10 + 1)</code></td>
+                  <td><span class="default-label none">0.045</span></td>
+                  <td><span class="badge default">Excluded</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Token-Aware Injection -->
+          <h3 id="token-aware">Token-Aware Injection</h3>
+          <p>Filters and prioritizes beliefs dynamically when summary text exceeds a token limit.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>enable_token_aware_injection</code></td>
+                  <td><span class="type-label">bool</span></td>
+                  <td><span class="default-label">True</span></td>
+                  <td>Enables budget checks. Uses vector similarity to select the most relevant beliefs first.</td>
+                </tr>
+                <tr>
+                  <td><code>belief_budget_tokens</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">500</span></td>
+                  <td>Max tokens allocated to belief context in prompts. Estimated using 1 token ≈ 4 characters.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>Token-Aware Filtering Cascade</h4>
+          <p>When formatted belief text exceeds the token budget, the system executes these steps:</p>
+          <ol>
+            <li><strong>Estimate</strong> — Computes the character lengths of candidate beliefs and estimates token counts.</li>
+            <li><strong>Verify</strong> — If the total count falls below the token budget, it injects all facts.</li>
+            <li><strong>Embed</strong> — Generates a vector representation of the current user message.</li>
+            <li><strong>Rank</strong> — Computes cosine similarity between the query vector and candidate belief vectors.</li>
+            <li><strong>Select</strong> — Appends the highest-ranked beliefs into the system message until the budget is full.</li>
+          </ol>
+        </section>
+
+        <!-- SECTION 2: CUSTOM PROMPTS -->
+        <section class="doc-section" id="prompts">
+          <h2>Custom Prompts</h2>
+          <p>
+            Both internal LLM prompts are overridable. Useful when tuning extraction for a specific domain.
+          </p>
+
+          <!-- Extraction Prompt -->
+          <h3 id="extraction-prompt">Extraction Prompt</h3>
+          <p>Sent to the internal LLM adapter after each turn to structure facts into JSON lists.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>extract_prompt_template</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label none">None</span></td>
+                  <td>Fallback extraction template. If set, this template handles both roles, disabling separate user/assistant parsing.</td>
+                </tr>
+                <tr>
+                  <td><code>extract_user_prompt_template</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">Built-in</span></td>
+                  <td>Template used for user messages. Instructs the model to resolve personal pronouns to <code>"USER"</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>extract_assistant_prompt_template</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">Built-in</span></td>
+                  <td>Template used for assistant replies. Instructs the model to map first-person references to <code>"ASSISTANT"</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">custom_extraction.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">TrackerConfig</span>
+
+config = <span class="c-fn">TrackerConfig</span>(
+    extract_user_prompt_template=<span class="c-str">"Extract user assertions: {response}. Format: JSON."</span>,
+    extract_assistant_prompt_template=<span class="c-str">"Extract assistant assertions: {response}. Format: JSON."</span>
+)</div>
+          </div>
+
+          <h4>Expected Output Format</h4>
+          <p>Custom extraction templates must output a JSON list of objects containing the following fields:</p>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Required</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>subject</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>Target of the claim, normalized to <code>"USER"</code>, <code>"ASSISTANT"</code>, or a proper noun.</td>
+                </tr>
+                <tr>
+                  <td><code>predicate</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>The relationship or attribute connecting the subject and value (e.g. <code>"likes"</code>).</td>
+                </tr>
+                <tr>
+                  <td><code>value</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>Factual claim value, normalized to standard formats (e.g. ISO currency or numbers).</td>
+                </tr>
+                <tr>
+                  <td><code>confidence</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>Extraction certainty score assigned by the model, bounded between 0.0 and 1.0.</td>
+                </tr>
+                <tr>
+                  <td><code>belief_type</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label none">None</span></td>
+                  <td>Either <code>"assertion"</code> (default fact) or <code>"update"</code> (explicit correction of a stored belief).</td>
+                </tr>
+                <tr>
+                  <td><code>source</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label none">None</span></td>
+                  <td>Identifier recording which agent generated the response (e.g. <code>"user"</code> or <code>"assistant"</code>).</td>
+                </tr>
+                <tr>
+                  <td><code>is_hypothetical</code></td>
+                  <td><span class="type-label">bool</span></td>
+                  <td><span class="default-label none">None</span></td>
+                  <td>Set to <code>True</code> if the claim is hypothetical, which excludes it from prompt injections.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Judge Prompt -->
+          <h3 id="judge-prompt">Judge Prompt</h3>
+          <p>Evaluates logic relationships between stored premise beliefs and new hypothesis facts.</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>judge_prompt_template</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">Built-in</span></td>
+                  <td>Logical inference check template. Must contain the <code>{premise}</code> and <code>{hypothesis}</code> placeholders.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">custom_judge.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">TrackerConfig</span>
+
+config = <span class="c-fn">TrackerConfig</span>(
+    judge_prompt_template=<span class="c-str">"""Analyze logical relation.
+Premise: {premise}
+Hypothesis: {hypothesis}
+Output JSON: {"relationship": "contradiction|entailment|neutral", "score": float}"""</span>
+)</div>
+          </div>
+
+          <!-- Tips for Writing Custom Prompts -->
+          <h3>Tips for Writing Custom Prompts</h3>
+          <ul>
+            <li><strong>Explicit JSON Format</strong> — Models occasionally wrap outputs in markdown formatting. Instruct the model to return raw JSON only.</li>
+            <li><strong>Subject Normalisation</strong> — Norm values to <code>"USER"</code> or <code>"ASSISTANT"</code> to prevent duplicate keys in the data store.</li>
+            <li><strong>Value Normalisation</strong> — Standardize digits (e.g. <code>5000</code> rather than <code>five thousand</code>) to ensure consistent lookups.</li>
+            <li><strong>Testing Asynchronously</strong> — Set <code>enable_background_tasks=False</code> during prompt engineering to inspect extractions synchronously.</li>
+          </ul>
+        </section>
+
+        <!-- PREV / NEXT NAVIGATION -->
+        <nav class="prev-next-nav">
+          <a href="index.html#quickstart" class="prev-next-link prev">
+            <span class="prev-next-label">← Previous</span>
+            <span class="prev-next-title">Quickstart</span>
+          </a>
+          <a href="adapters.html" class="prev-next-link next">
+            <span class="prev-next-label">Next →</span>
+            <span class="prev-next-title">Adapters</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- RIGHT COLUMN: ON THIS PAGE -->
+      <aside class="on-this-page">
+        <div class="otp-title">On this page</div>
+        <ul class="otp-links">
+          <li><a href="#tracker-config" class="otp-link">TrackerConfig</a></li>
+          <li><a href="#store-settings" class="otp-link indent">Store Settings</a></li>
+          <li><a href="#detection-settings" class="otp-link indent">Detection Settings</a></li>
+          <li><a href="#resilience-settings" class="otp-link indent">Resilience Settings</a></li>
+          <li><a href="#task-settings" class="otp-link indent">Task Settings</a></li>
+          <li><a href="#internal-provider" class="otp-link indent">Internal Provider</a></li>
+          <li><a href="#belief-storage" class="otp-link indent">Belief Storage</a></li>
+          <li><a href="#belief-ttl" class="otp-link indent">Belief TTL</a></li>
+          <li><a href="#staleness-scoring" class="otp-link indent">Staleness Scoring</a></li>
+          <li><a href="#token-aware" class="otp-link indent">Token-Aware Injection</a></li>
+          <li><a href="#prompts" class="otp-link">Custom Prompts</a></li>
+          <li><a href="#extraction-prompt" class="otp-link indent">Extraction Prompt</a></li>
+          <li><a href="#judge-prompt" class="otp-link indent">Judge Prompt</a></li>
+        </ul>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    beliefstate · MIT Licensed ·
+    <a href="https://github.com/abhay-2108/beliefstate" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="https://pypi.org/project/beliefstate/" target="_blank" rel="noopener">PyPI</a> ·
+    <a href="reference.html#changelog">Changelog</a>
+  </div>
+</footer>
+
+<script>
+  // Copy to clipboard handler
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const codeBlock = btn.closest('.code-block');
+      if (codeBlock) {
+        const codeElement = codeBlock.querySelector('.code-inner');
+        if (codeElement) {
+          const textToCopy = codeElement.innerText || codeElement.textContent;
+          navigator.clipboard.writeText(textToCopy)
+            .then(() => {
+              btn.textContent = '✓ copied';
+              setTimeout(() => {
+                btn.textContent = 'copy';
+              }, 1500);
+            })
+            .catch(err => {
+              console.error('Failed to copy: ', err);
+            });
+        }
       }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-
-  sections.forEach(section => observer.observe(section));
-  
-  highlightCurrentLink();
-  window.addEventListener('hashchange', highlightCurrentLink);
-
-  // Close mobile sidebar on link click
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.remove('open');
     });
   });
 
-  // Sidebar Collapse / Expand Logic
-  const sidebarToggle = document.getElementById('sidebar-toggle');
-  
-  // On load, restore state
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
-    document.body.classList.add('sidebar-collapsed');
-  } else {
-    document.body.classList.remove('sidebar-collapsed');
-  }
+  // Active sidebar and on-this-page link highlighting via IntersectionObserver
+  window.addEventListener('DOMContentLoaded', () => {
+    const headings = document.querySelectorAll('h2, h3[id]');
+    const sidebarLinks = document.querySelectorAll('.sidebar-link');
+    const otpLinks = document.querySelectorAll('.otp-link');
 
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
-      localStorage.setItem('sidebar-collapsed', isCollapsed);
-    });
-  }
+    if ('IntersectionObserver' in window && headings.length > 0) {
+      const observerOptions = {
+        root: null,
+        rootMargin: '-10% 0px -70% 0px',
+        threshold: 0
+      };
+
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.getAttribute('id');
+            if (!id) return;
+
+            // Highlight sidebar link
+            sidebarLinks.forEach(link => {
+              const href = link.getAttribute('href');
+              if (href && href.endsWith('#' + id)) {
+                link.classList.add('active');
+              } else {
+                link.classList.remove('active');
+              }
+            });
+
+            // Highlight on-this-page link
+            otpLinks.forEach(link => {
+              const href = link.getAttribute('href');
+              if (href && href.endsWith('#' + id)) {
+                link.classList.add('active');
+              } else {
+                link.classList.remove('active');
+              }
+            });
+          }
+        });
+      }, observerOptions);
+
+      headings.forEach(heading => observer.observe(heading));
+    }
+  });
 </script>
-
 </body>
 </html>

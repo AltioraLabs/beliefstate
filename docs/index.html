@@ -1,380 +1,1251 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BeliefState — Universal LLM Belief State Tracker</title>
-  <meta name="description" content="BeliefState is an asynchronous, zero-latency belief state tracking layer for Python. Extract, track, and resolve contradictions from LLM conversations automatically.">
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>beliefstate — Persistent Belief Tracking for LLM Applications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-<!-- Mobile Menu Button -->
-<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+  :root {
+    --bg:         #0A0A0B;
+    --bg-card:    #111113;
+    --bg-raised:  #18181B;
+    --border:     rgba(255,255,255,0.07);
+    --border-hi:  rgba(255,255,255,0.14);
+    --text-1:     #F4F4F5;
+    --text-2:     #A1A1AA;
+    --text-3:     #52525B;
+    --accent:     #7C6FEB;
+    --accent-lo:  rgba(124,111,235,0.12);
+    --accent-hi:  #9D93F0;
+    --green:      #34D399;
+    --green-lo:   rgba(52,211,235,0.10);
+    --red:        #F87171;
+    --red-lo:     rgba(248,113,113,0.10);
+    --amber:      #F59E0B;
+    --amber-lo:   rgba(245,158,11,0.10);
+    --blue:       #60A5FA;
+    --blue-lo:    rgba(96,165,250,0.10);
+    --sans:       'Inter', system-ui, sans-serif;
+    --mono:       'JetBrains Mono', monospace;
+  }
 
-<div class="docs-layout">
+  html {
+    scroll-behavior: smooth;
+    background: var(--bg);
+  }
 
-<!-- ═══════════════ SIDEBAR ═══════════════ -->
-<aside class="sidebar" id="sidebar">
-  <div class="sidebar-header">
-    <div class="sidebar-logo">BeliefState</div>
-    <div class="sidebar-version">v1.0.2</div>
-  </div>
-  <nav>
-    <ul class="sidebar-nav">
-      <li class="nav-section-title">Getting Started</li>
-      <li><a href="index.html#installation">Installation</a></li>
-      <li><a href="index.html#quickstart">Quickstart</a></li>
-      <li><a href="index.html#core-concepts">Core Concepts</a></li>
+  body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
 
-      <li class="nav-section-title">Configuration</li>
-      <li><a href="configuration.html#tracker-config">TrackerConfig</a></li>
-      <li><a href="configuration.html#prompts">Custom Prompts</a></li>
+  /* ── NAVIGATION ── */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    height: 56px;
+    background: rgba(10,10,11,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
 
-      <li class="nav-section-title">Adapters</li>
-      <li><a href="adapters.html#adapters">Overview</a></li>
-      <li><a href="adapters.html#openai">OpenAI</a></li>
-      <li><a href="adapters.html#anthropic">Anthropic</a></li>
-      <li><a href="adapters.html#gemini">Google Gemini</a></li>
-      <li><a href="adapters.html#ollama">Ollama</a></li>
-      <li><a href="adapters.html#litellm">LiteLLM</a></li>
-      <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
+  .nav-logo {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
 
-      <li class="nav-section-title">Stores</li>
-      <li><a href="stores.html#stores">Overview</a></li>
-      <li><a href="stores.html#sqlite-store">SQLite</a></li>
-      <li><a href="stores.html#redis-store">Redis</a></li>
-      <li><a href="stores.html#memory-store">In-Memory</a></li>
+  .nav-logo-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
 
-      <li class="nav-section-title">Integrations</li>
-      <li><a href="integrations.html#fastapi">FastAPI</a></li>
-      <li><a href="integrations.html#flask">Flask</a></li>
-      <li><a href="integrations.html#asgi">ASGI</a></li>
-      <li><a href="integrations.html#langchain">LangChain</a></li>
-      <li><a href="integrations.html#llamaindex">LlamaIndex</a></li>
-      <li><a href="integrations.html#openai-assistants">OpenAI Assistants</a></li>
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    list-style: none;
+    height: 100%;
+  }
 
-      <li class="nav-section-title">Advanced</li>
-      <li><a href="advanced.html#dispatchers">Background Workers</a></li>
-      <li><a href="advanced.html#resilience">Resilience</a></li>
-      <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR & Privacy</a></li>
+  .nav-links li {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
 
-      <li class="nav-section-title">Reference</li>
-      <li><a href="reference.html#api-reference">API Reference</a></li>
-      <li><a href="reference.html#changelog">Changelog</a></li>
-    </ul>
-  </nav>
-</aside>
+  .nav-links a {
+    font-size: 13px;
+    color: var(--text-2);
+    text-decoration: none;
+    transition: color 0.15s;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    border-bottom: 2px solid transparent;
+    padding: 0 4px;
+  }
 
-<button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Toggle sidebar"></button>
+  .nav-links a:hover {
+    color: var(--text-1);
+  }
 
-<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
-<main class="main-content">
+  .nav-links a.active {
+    color: var(--text-1);
+    border-bottom: 2px solid var(--accent);
+  }
 
-<!-- ── Hero ── -->
-<section class="hero">
-  <div class="hero-badge">Open Source · MIT Licensed</div>
-  <h1>BeliefState</h1>
-  <p class="hero-tagline">
-    An asynchronous, zero-latency belief state tracking layer for Python.
-    Seamlessly intercepts LLM conversations, extracts factual beliefs, resolves contradictions,
-    and saves them to persistent storage — completely in the background.
-  </p>
-  <div class="hero-actions">
-    <div class="install-cmd" onclick="navigator.clipboard.writeText('pip install beliefstate')">
-      <span class="prompt">$</span> pip install beliefstate
-      <span style="color: var(--color-text-dim); font-size: 0.7rem; border: 1px solid var(--color-border); padding: 0.1rem 0.35rem; border-radius: 4px; font-family: var(--font-sans); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; background: rgba(255,255,255,0.03);">Copy</span>
-    </div>
-    <a href="#quickstart" class="btn-primary">Get Started →</a>
-  </div>
-</section>
+  .nav-cta {
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
 
-<!-- ── Feature Highlights ── -->
-<div class="feature-grid">
-  <div class="feature-card">
-    <div class="icon" style="color: var(--color-primary); font-weight: 800; font-family: var(--font-mono);">01</div>
-    <h3>Zero-Latency</h3>
-    <p>Fire-and-forget background tasks. Your app never waits for extraction or contradiction detection.</p>
-  </div>
-  <div class="feature-card">
-    <div class="icon" style="color: var(--color-primary); font-weight: 800; font-family: var(--font-mono);">02</div>
-    <h3>5 Providers</h3>
-    <p>Native adapters for OpenAI, Anthropic, Gemini, Ollama, and LiteLLM with automatic retry and health checks.</p>
-  </div>
-  <div class="feature-card">
-    <div class="icon" style="color: var(--color-primary); font-weight: 800; font-family: var(--font-mono);">03</div>
-    <h3>Smart Contradictions</h3>
-    <p>Semantic embeddings + NLI judge to detect and resolve conflicting beliefs automatically.</p>
-  </div>
-  <div class="feature-card">
-    <div class="icon" style="color: var(--color-primary); font-weight: 800; font-family: var(--font-mono);">04</div>
-    <h3>Dual-Adapter</h3>
-    <p>Use an expensive model for your app and a cheap/local model for background tracking.</p>
-  </div>
-  <div class="feature-card">
-    <div class="icon" style="color: var(--color-primary); font-weight: 800; font-family: var(--font-mono);">05</div>
-    <h3>Production-Grade</h3>
-    <p>Circuit breakers, exponential backoff, health checks, OpenTelemetry tracing, and structured logging.</p>
-  </div>
-  <div class="feature-card">
-    <div class="icon" style="color: var(--color-primary); font-weight: 800; font-family: var(--font-mono);">06</div>
-    <h3>Plug-and-Play</h3>
-    <p>Middleware for FastAPI, Flask, ASGI, and callbacks for LangChain, LlamaIndex, and OpenAI Assistants.</p>
-  </div>
-</div>
+  .nav-cta:hover {
+    background: var(--accent-hi);
+  }
 
-<!-- ═══════════════════════════════════════════════════ -->
-<!-- ── INSTALLATION ── -->
-<!-- ═══════════════════════════════════════════════════ -->
-<section class="doc-section" id="installation">
-  <h2>Installation</h2>
-  <p>Install the core package with pip. BeliefState requires <strong>Python 3.10+</strong>.</p>
+  /* ── LAYOUT ── */
+  .container {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
 
-  <h4>Core Package</h4>
-  <pre><code><span class="cm"># Core package (includes SQLite store, async tracker)</span>
-pip install beliefstate</code></pre>
+  section {
+    padding: 96px 0;
+    border-top: 1px solid var(--border);
+    position: relative;
+  }
 
-  <h4>With Extras</h4>
-  <p>Install optional provider adapters, stores, and integrations as needed:</p>
-  <pre><code><span class="cm"># Individual providers</span>
-pip install <span class="st">"beliefstate[openai]"</span>
-pip install <span class="st">"beliefstate[anthropic]"</span>
-pip install <span class="st">"beliefstate[gemini]"</span>
-pip install <span class="st">"beliefstate[ollama]"</span>
-pip install <span class="st">"beliefstate[litellm]"</span>
+  h1, h2, h3 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+  }
 
-<span class="cm"># Stores</span>
-pip install <span class="st">"beliefstate[redis]"</span>
-pip install <span class="st">"beliefstate[postgres]"</span>
+  h1 {
+    font-size: clamp(36px, 5vw, 58px);
+    line-height: 1.1;
+  }
 
-<span class="cm"># Framework integrations</span>
-pip install <span class="st">"beliefstate[fastapi]"</span>
-pip install <span class="st">"beliefstate[flask]"</span>
-pip install <span class="st">"beliefstate[langchain]"</span>
-pip install <span class="st">"beliefstate[llamaindex]"</span>
+  h2 {
+    font-size: clamp(24px, 3vw, 36px);
+    line-height: 1.2;
+  }
 
-<span class="cm"># Background workers</span>
-pip install <span class="st">"beliefstate[celery]"</span>
-pip install <span class="st">"beliefstate[rq]"</span>
+  h3 {
+    font-size: 18px;
+    line-height: 1.3;
+  }
 
-<span class="cm"># Everything</span>
-pip install <span class="st">"beliefstate[all]"</span></code></pre>
-</section>
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
 
-<!-- ═══════════════════════════════════════════════════ -->
-<!-- ── QUICKSTART ── -->
-<!-- ═══════════════════════════════════════════════════ -->
-<section class="doc-section" id="quickstart">
-  <h2>Quickstart</h2>
-  <p>The fastest way to start tracking beliefs is the <code>@tracker.wrap</code> decorator. It transparently intercepts your LLM call, extracts beliefs from the conversation, and stores them — all without blocking your application.</p>
+  /* ── HERO ── */
+  .hero {
+    padding-top: 160px;
+    padding-bottom: 80px;
+    border-top: none;
+    overflow: hidden;
+  }
 
-  <pre><code><span class="code-label">python</span><span class="kw">import</span> asyncio
-<span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTracker, TrackerConfig
-<span class="kw">from</span> beliefstate.adapters <span class="kw">import</span> OpenAIAdapter
+  .hero-radial-bg {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse at center, rgba(124,111,235,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
 
-# 1. Configure the tracker
-config = <span class="fn">TrackerConfig</span>(
-    enable_background_tasks=<span class="nb">True</span>,
-    store_type=<span class="st">"sqlite"</span>,
-    store_kwargs={<span class="st">"db_path"</span>: <span class="st">"user_beliefs.db"</span>}
-)
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 80px;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
 
-# 2. Initialize adapter and tracker
-adapter = <span class="fn">OpenAIAdapter</span>(model=<span class="st">"gpt-4o"</span>, embed_model=<span class="st">"text-embedding-3-small"</span>)
-tracker = <span class="fn">BeliefTracker</span>(config=config, adapter=adapter)
+  .version-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-lo);
+    border: 1px solid rgba(124,111,235,0.25);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 24px;
+  }
 
-# 3. Wrap your LLM function — that's it!
-<span class="dc">@tracker.wrap</span>
-<span class="kw">async def</span> <span class="fn">chat</span>(messages):
-    <span class="kw">import</span> openai
-    client = openai.<span class="fn">AsyncOpenAI</span>()
-    response = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>(
-        model=<span class="st">"gpt-4o"</span>,
-        messages=messages
-    )
-    <span class="kw">return</span> response
+  .hero h1 {
+    margin-bottom: 20px;
+  }
 
-<span class="kw">async def</span> <span class="fn">main</span>():
-    # Set the active session
-    tracker.<span class="fn">set_session</span>(<span class="st">"user_123"</span>)
+  .hero h1 em {
+    font-style: normal;
+    color: var(--accent-hi);
+  }
 
-    # Run normally — beliefs are extracted silently in the background
-    <span class="kw">await</span> <span class="fn">chat</span>([{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"I'm a Python developer living in Tokyo."</span>}])
+  .hero-sub {
+    font-size: 17px;
+    color: var(--text-2);
+    line-height: 1.7;
+    max-width: 480px;
+    margin-bottom: 36px;
+  }
 
-    # Later, retrieve beliefs as a context prompt
-    context = <span class="kw">await</span> tracker.<span class="fn">get_context_prompt</span>()
-    <span class="nb">print</span>(context)
-    # Output: "USER is Python developer\nUSER lives in Tokyo"
+  .hero-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+  }
 
-if __name__ == "__main__":
-    asyncio.<span class="fn">run</span>(main())</code></pre>
+  /* ── BUTTON SYSTEM ── */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
 
-  <div class="callout tip">
-    <p><strong>Tip:</strong> Call <code>tracker.get_context_prompt()</code> to get formatted beliefs for injecting into your system prompt. This gives your LLM persistent memory across conversations.</p>
-  </div>
-</section>
+  .btn-primary:hover {
+    background: var(--accent-hi);
+    transform: translateY(-1px);
+  }
 
-<!-- ═══════════════════════════════════════════════════ -->
-<!-- ── CORE CONCEPTS ── -->
-<!-- ═══════════════════════════════════════════════════ -->
-<section class="doc-section" id="core-concepts">
-  <h2>Core Concepts</h2>
-  <p>BeliefState follows a simple 3-stage pipeline that runs entirely in the background:</p>
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    color: var(--text-2);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border-hi);
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
 
-  <div class="architecture-diagram">
-    <pre>
-  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-  │   LLM Call   │────>│   Extract    │────>│   Detect     │────>│   Resolve    │
-  │ (Your App)   │     │   Beliefs    │     │ Contradicts  │     │ & Store      │
-  └──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-        │                     │                    │                     │
-    @tracker.wrap        BeliefExtractor    ContradictionDetector   BeliefResolver
-    intercepts call      LLM-based parse    Embedding similarity    Overwrite /
-    non-blocking         subject-pred-val   + NLI Judge scoring     Keep / Raise</pre>
-  </div>
+  .btn-ghost:hover {
+    border-color: var(--text-3);
+    color: var(--text-1);
+  }
 
-  <h3>Pipeline Mechanics</h3>
-  <p>The belief state tracking process executes asynchronously through five discrete stages:</p>
-  <ul>
-    <li>
-      <strong>1. Interception:</strong> The <code>@tracker.wrap</code> decorator (or web framework middleware) intercepts the request payload and response text of your application's LLM calls, recording the conversation turns without modifying the application's runtime.
-    </li>
-    <li>
-      <strong>2. Asynchronous Dispatch:</strong> To achieve zero-latency overhead for your end users, the tracking payload is passed to a pluggable <code>Dispatcher</code>. In default <code>asyncio</code> mode, this registers a background task in the running event loop; in distributed environments, it serializes and offloads the task to Celery or RQ workers.
-    </li>
-    <li>
-      <strong>3. Fact Extraction:</strong> The <code>BeliefExtractor</code> processes the turn history and queries the configured <code>internal_adapter</code>. The model parses the conversation context and extracts declarative facts structured as subject-predicate-value triples, along with confidence estimations.
-    </li>
-    <li>
-      <strong>4. Contradiction Detection:</strong> Newly extracted facts are compared against existing beliefs for the session. The <code>ContradictionDetector</code> runs a two-step filter:
-      <ul>
-        <li><em>Semantic Filtering:</em> Filters stored beliefs using cosine similarity of embedding vectors, focusing only on conceptually related claims.</li>
-        <li><em>Logical Judgment:</em> Selected candidate pairs are analyzed by a Natural Language Inference (NLI) judge to determine if they entail (duplicate) or contradict the existing state.</li>
-      </ul>
-    </li>
-    <li>
-      <strong>5. Conflict Resolution & Storage:</strong> If a contradiction is detected, the <code>BeliefResolver</code> applies a resolution policy (such as overwriting with the newer claim, retaining the old belief, or raising an exception). Resolved facts are then persisted to the store.
-    </li>
-  </ul>
+  .btn-small {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    color: var(--text-2);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-hi);
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
 
-  <h3>Beliefs</h3>
-  <p>A <code>Belief</code> is a structured fact extracted from conversation text. Each belief is a subject-predicate-value triple with metadata:</p>
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> Belief
+  .btn-small:hover {
+    border-color: var(--text-3);
+    color: var(--text-1);
+  }
 
-belief = <span class="fn">Belief</span>(
-    subject=<span class="st">"USER"</span>,           <span class="cm"># Who/what this is about</span>
-    predicate=<span class="st">"lives in"</span>,      <span class="cm"># The relationship</span>
-    value=<span class="st">"Tokyo"</span>,             <span class="cm"># The value</span>
-    confidence=<span class="nu">1.0</span>,            <span class="cm"># 0.0–1.0 extraction confidence</span>
-    turn=<span class="nu">3</span>,                    <span class="cm"># Conversation turn number</span>
-    source=<span class="st">"user"</span>,             <span class="cm"># "user" or "assistant"</span>
-    belief_type=<span class="st">"assertion"</span>,    <span class="cm"># "assertion" or "update"</span>
-    is_hypothetical=<span class="nb">False</span>,     <span class="cm"># Skip hypothetical beliefs in prompts</span>
-)</code></pre>
+  .btn-icon {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: color 0.15s, border-color 0.15s;
+  }
 
-  <h3>Sessions & Conversations</h3>
-  <p>BeliefState uses a <strong>session</strong> model for grouping beliefs by user, and optionally by <strong>conversation thread</strong>:</p>
-  <pre><code><span class="code-label">python</span># Set session (required)
-tracker.<span class="fn">set_session</span>(<span class="st">"user_123"</span>)
+  .btn-icon:hover {
+    color: var(--text-1);
+    border-color: var(--border-hi);
+  }
 
-# Optionally set conversation within the session
-tracker.<span class="fn">set_conversation</span>(<span class="st">"conv_abc"</span>)
+  /* ── INSTALL BAR ── */
+  .install-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
 
-# Retrieve beliefs scoped to conversation
-context = <span class="kw">await</span> tracker.<span class="fn">get_context_prompt</span>(conversation_id=<span class="st">"conv_abc"</span>)</code></pre>
-</section>
+  .install-cmd {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-<!-- ── Footer ── -->
-<footer class="site-footer">
-  <p>
-    MIT Licensed · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a>
-  </p>
-</footer>
+  .install-cmd span.prefix {
+    color: var(--accent);
+  }
 
-</main>
-</div>
+  .install-cmd span.text {
+    color: var(--text-2);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
 
-<!-- ── Sidebar logic ── -->
-<script>
-  // Highlight active sidebar link based on current page and scroll position
-  const sections = document.querySelectorAll('.doc-section');
-  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  /* ── CHAT TERMINAL DEMO ── */
+  .chat-demo {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
 
-  function highlightCurrentLink() {
-    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
-    const currentHash = window.location.hash;
-    
-    let matched = false;
-    navLinks.forEach(link => {
-      link.classList.remove('active');
-      const href = link.getAttribute('href');
-      
-      // If there's a hash, match the exact page + hash
-      if (currentHash && href.endsWith(currentHash)) {
-        link.classList.add('active');
-        matched = true;
-      }
-    });
+  .chat-topbar {
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
 
-    // If no hash or no hash match, match the page itself (first link matching the page)
-    if (!matched) {
-      for (const link of navLinks) {
-        const href = link.getAttribute('href');
-        if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) {
-          link.classList.add('active');
-          break;
-        }
-      }
+  .chat-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .chat-title {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-left: 8px;
+  }
+
+  .chat-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .msg-role {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-3);
+  }
+
+  .msg-text {
+    color: var(--text-2);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    background: var(--bg-raised);
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .belief-inject {
+    background: var(--accent-lo);
+    border: 1px solid rgba(124,111,235,0.14);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+
+  .belief-inject-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent-hi);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .belief-line {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  .contradiction-flag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--red);
+    background: var(--red-lo);
+    border: 1px solid rgba(248,113,113,0.14);
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  .resolved-flag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--green);
+    background: var(--green-lo);
+    border: 1px solid rgba(52,211,235,0.14);
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  /* ── PROBLEM SECTION ── */
+  .problem-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-top: 56px;
+  }
+
+  .problem-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    transition: border-color 0.15s;
+  }
+
+  .problem-card:hover {
+    border-color: var(--border-hi);
+  }
+
+  .problem-card-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--red);
+    margin-bottom: 12px;
+  }
+
+  .problem-card h3 {
+    margin-bottom: 10px;
+  }
+
+  .problem-card p {
+    font-size: 14px;
+    color: var(--text-2);
+    margin-bottom: 24px;
+  }
+
+  .turn-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .turn-pill {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+
+  .turn-pill.bad {
+    border-color: rgba(248,113,113,0.25);
+  }
+
+  .turn-pill.bad span.val {
+    color: var(--red);
+    font-weight: 500;
+  }
+
+  .silent-note {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    text-align: center;
+    margin-top: 10px;
+  }
+
+  /* ── HOW IT WORKS SECTION ── */
+  .how-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    background: var(--border);
+    gap: 2px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 40px;
+  }
+
+  .how-step {
+    background: var(--bg-card);
+    padding: 32px 28px;
+  }
+
+  .how-step-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    margin-bottom: 16px;
+  }
+
+  .icon-square {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--accent-lo);
+    border: 1px solid rgba(124,111,235,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .how-step h3 {
+    font-size: 16px;
+    margin-bottom: 8px;
+  }
+
+  .how-step p {
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  /* ── QUICKSTART SECTION ── */
+  .code-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 40px;
+    margin-top: 40px;
+    align-items: start;
+  }
+
+  .code-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .code-topbar {
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .code-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .code-filename {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    margin-left: 8px;
+  }
+
+  .code-inner {
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: var(--text-2);
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* Syntax Highlighting */
+  .c-kw { color: var(--accent-hi); }
+  .c-fn { color: var(--blue); }
+  .c-str { color: var(--green); }
+  .c-dec { color: var(--amber); }
+  .c-cm { color: var(--text-3); }
+
+  .code-desc h3 {
+    margin-bottom: 16px;
+  }
+
+  .code-desc p {
+    font-size: 14px;
+    color: var(--text-2);
+    margin-bottom: 24px;
+  }
+
+  .green-callout-box {
+    background: var(--green-lo);
+    border: 1px solid rgba(52,211,235,0.2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    line-height: 1.8;
+  }
+
+  /* ── PROVIDERS SECTION ── */
+  .provider-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-top: 40px;
+  }
+
+  .provider-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+    transition: border-color 0.15s;
+  }
+
+  .provider-card:hover {
+    border-color: var(--border-hi);
+  }
+
+  .provider-emoji {
+    font-size: 24px;
+    margin-bottom: 12px;
+  }
+
+  .provider-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-1);
+    margin-bottom: 6px;
+  }
+
+  .provider-note {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  /* ── FEATURES SECTION ── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 40px;
+  }
+
+  .feature-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    transition: border-color 0.15s;
+  }
+
+  .feature-card:hover {
+    border-color: var(--border-hi);
+  }
+
+  .feature-card.featured {
+    border: 2px solid var(--accent);
+  }
+
+  .feature-icon-square {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .feature-card h3 {
+    font-size: 16px;
+    margin-bottom: 10px;
+  }
+
+  .feature-card p {
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  /* ── CTA SECTION ── */
+  .cta-section {
+    text-align: center;
+  }
+
+  .cta-section h2 {
+    margin-bottom: 16px;
+  }
+
+  .cta-section p {
+    color: var(--text-2);
+    font-size: 16px;
+    margin-bottom: 32px;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .cta-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-3);
+  }
+
+  footer a {
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  footer a:hover {
+    color: var(--text-2);
+  }
+
+  /* ── RESPONSIVENESS ── */
+  @media (max-width: 768px) {
+    section {
+      padding: 64px 0;
+    }
+    .hero {
+      padding-top: 120px;
+      padding-bottom: 64px;
+    }
+    .hero-grid {
+      grid-template-columns: 1fr;
+      gap: 48px;
+    }
+    .problem-grid {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    .how-grid {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    .code-grid {
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
+    .provider-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .feature-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .nav-links {
+      display: none;
     }
   }
 
-  // Highlight active sidebar link on scroll (for sections on the current page)
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const targetId = entry.target.id;
-        navLinks.forEach(link => {
-          const href = link.getAttribute('href');
-          if (href.endsWith(`#${targetId}`)) {
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-          }
-        });
+  @media (max-width: 480px) {
+    .provider-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .feature-grid {
+      grid-template-columns: 1fr;
+    }
+    .install-bar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .hero-actions {
+      flex-direction: column;
+    }
+    .hero-actions a {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- FIXED NAVIGATION BAR -->
+<nav>
+  <a href="index.html" class="nav-logo">
+    <span class="nav-logo-dot"></span>
+    beliefstate
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html" class="active">Docs</a></li>
+    <li><a href="configuration.html">Configuration</a></li>
+    <li><a href="adapters.html">Adapters</a></li>
+    <li><a href="stores.html">Stores</a></li>
+    <li><a href="integrations.html">Integrations</a></li>
+    <li><a href="advanced.html">Advanced</a></li>
+    <li><a href="reference.html">Reference</a></li>
+    <li><a href="https://github.com/abhay-2108/beliefstate" target="_blank" rel="noopener">GitHub</a></li>
+  </ul>
+  <a href="#quickstart" class="nav-cta">Get started</a>
+</nav>
+
+<!-- HERO SECTION -->
+<section class="hero">
+  <div class="hero-radial-bg"></div>
+  <div class="container">
+    <div class="hero-grid">
+      <!-- Left Column: Copy -->
+      <div>
+        <div class="version-pill">● Open source · MIT · v1.0.2</div>
+        <h1>Your LLM <em>forgets</em> what it said.<br>beliefstate doesn't.</h1>
+        <p class="hero-sub">
+          beliefstate intercepts LLM conversations, extracts factual claims, and updates a local belief database in the background to catch contradictions before they reach your users.
+        </p>
+        <div class="hero-actions">
+          <a href="#quickstart" class="btn-primary">Quickstart →</a>
+          <a href="https://github.com/abhay-2108/beliefstate" class="btn-ghost" target="_blank" rel="noopener">GitHub ↗</a>
+        </div>
+        <div class="install-bar">
+          <div class="install-cmd">
+            <span class="prefix">$</span>
+            <span class="text">pip install beliefstate</span>
+            <button class="btn-icon copy-btn" id="hero-copy-btn">copy</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Chat Terminal Demo Widget -->
+      <div>
+        <div class="chat-demo">
+          <div class="chat-topbar">
+            <div class="chat-dot" style="background:#EF4444"></div>
+            <div class="chat-dot" style="background:#F59E0B"></div>
+            <div class="chat-dot" style="background:#22C55E"></div>
+            <span class="chat-title">session: support_bot · user_7821</span>
+          </div>
+          <div class="chat-body">
+            <div class="msg">
+              <div class="msg-role">Turn 2 · user</div>
+              <div class="msg-text">We have a strict budget of $5,000 for the initial pilot.</div>
+            </div>
+
+            <div class="belief-inject">
+              <div class="belief-inject-label">beliefstate stored</div>
+              <div class="belief-line">("user", "budget", 5000) · confidence 0.98</div>
+            </div>
+
+            <div class="msg">
+              <div class="msg-role">Turn 2 · assistant</div>
+              <div class="msg-text">Understood. I will restrict all recommendations to stay below $5,000.</div>
+            </div>
+
+            <div class="msg">
+              <div class="msg-role">Turn 14 · assistant</div>
+              <div class="msg-text">Since you have a $10,000 budget, we recommend the premium package.</div>
+              <div class="contradiction-flag">
+                ⚠ contradiction detected · score 0.94
+              </div>
+              <div class="resolved-flag">
+                ✓ LLM self-corrects before user sees it
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- THE PROBLEM SECTION -->
+<section id="problem">
+  <div class="container">
+    <p class="eyebrow">The problem</p>
+    <h2>LLMs are stateless.<br>Conversations are not.</h2>
+    <div class="problem-grid">
+      <!-- Card 1 -->
+      <div class="problem-card">
+        <div class="problem-card-label">Without beliefstate</div>
+        <h3>Silent contradictions ship to users</h3>
+        <p>The model makes claims early in the session, then contradicts them later because it does not maintain active state.</p>
+        <div class="turn-block">
+          <div class="turn-pill">
+            <span class="label">Turn 3:</span> user: My name is Raj.
+          </div>
+          <div class="turn-pill">
+            <span class="label">Turn 6:</span> assistant: Nice to meet you, Raj.
+          </div>
+          <div class="turn-pill bad">
+            <span class="label">Turn 15:</span> assistant: Happy to help, <span class="val">Alex</span>!
+          </div>
+          <div class="silent-note">// wrong name — never caught</div>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="problem-card">
+        <div class="problem-card-label">Without beliefstate</div>
+        <h3>Context window is not memory</h3>
+        <p>Even with long context windows, crucial facts established early in a session get buried or ignored as the prompt grows.</p>
+        <div class="turn-block">
+          <div class="turn-pill">
+            <span class="label">Turn 2:</span> user: Note that I have a severe allergy to peanuts.
+          </div>
+          <div class="turn-pill">
+            <span class="label">Turn 30:</span> user: What dessert options do you recommend?
+          </div>
+          <div class="turn-pill bad">
+            <span class="label">Turn 30:</span> assistant: Try our <span class="val">peanut butter brownie</span>.
+          </div>
+          <div class="silent-note">// allergy fact buried in context — never caught</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS SECTION -->
+<section id="how">
+  <div class="container">
+    <p class="eyebrow">How it works</p>
+    <h2>Tracks every turn.<br>Catches every conflict.</h2>
+    <div class="how-grid">
+      <!-- Step 01 -->
+      <div class="how-step">
+        <div class="how-step-num">01</div>
+        <div class="icon-square">🎯</div>
+        <h3>Intercept</h3>
+        <p>One decorator wraps your existing function. Works with any provider SDK.</p>
+      </div>
+
+      <!-- Step 02 -->
+      <div class="how-step">
+        <div class="how-step-num">02</div>
+        <div class="icon-square">💡</div>
+        <h3>Inject</h3>
+        <p>The system prompt gets relevant facts before the LLM call.</p>
+      </div>
+
+      <!-- Step 03 -->
+      <div class="how-step">
+        <div class="how-step-num">03</div>
+        <div class="icon-square">📤</div>
+        <h3>Return instantly</h3>
+        <p>The response returns to the user immediately. Zero latency added.</p>
+      </div>
+
+      <!-- Step 04 -->
+      <div class="how-step">
+        <div class="how-step-num">04</div>
+        <div class="icon-square">🔍</div>
+        <h3>Extract</h3>
+        <p>beliefstate extracts factual claims in the background as subject–predicate–value triples.</p>
+      </div>
+
+      <!-- Step 05 -->
+      <div class="how-step">
+        <div class="how-step-num">05</div>
+        <div class="icon-square">⚡</div>
+        <h3>Detect</h3>
+        <p>The checker evaluates contradictions using embedding similarity and NLI.</p>
+      </div>
+
+      <!-- Step 06 -->
+      <div class="how-step">
+        <div class="how-step-num">06</div>
+        <div class="icon-square">🛡</div>
+        <h3>Resolve</h3>
+        <p>The dispatcher applies your strategy: warn, ask, block, or update.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUICKSTART SECTION -->
+<section id="quickstart">
+  <div class="container">
+    <p class="eyebrow">Quickstart</p>
+    <h2>Add one decorator. Done.</h2>
+    <div class="code-grid">
+      <!-- Left Column: Code -->
+      <div class="code-block">
+        <div class="code-topbar">
+          <div class="code-dot" style="background:#EF4444"></div>
+          <div class="code-dot" style="background:#F59E0B"></div>
+          <div class="code-dot" style="background:#22C55E"></div>
+          <span class="code-filename">app.py</span>
+          <button class="btn-icon copy-btn">copy</button>
+        </div>
+        <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">BeliefTracker</span>, <span class="c-fn">TrackerConfig</span>
+<span class="c-kw">from</span> beliefstate.adapters <span class="c-kw">import</span> <span class="c-fn">OpenAIAdapter</span>
+<span class="c-kw">import</span> openai
+
+<span class="c-cm"># 1. Configure belief store</span>
+config = <span class="c-fn">TrackerConfig</span>(
+    store_type=<span class="c-str">"sqlite"</span>,
+    store_kwargs={<span class="c-str">"db_path"</span>: <span class="c-str">"beliefs.db"</span>}
+)
+
+<span class="c-cm"># 2. Initialize provider adapter</span>
+adapter = <span class="c-fn">OpenAIAdapter</span>(model=<span class="c-str">"gpt-4o"</span>)
+tracker = <span class="c-fn">BeliefTracker</span>(config=config, adapter=adapter)
+
+<span class="c-cm"># 3. Intercept your LLM handler</span>
+<span class="c-dec">@tracker.wrap</span>
+<span class="c-kw">async def</span> <span class="c-fn">chat</span>(messages):
+    client = openai.<span class="c-fn">AsyncOpenAI</span>()
+    <span class="c-kw">return await</span> client.chat.completions.<span class="c-fn">create</span>(
+        model=<span class="c-str">"gpt-4o"</span>, messages=messages
+    )
+
+<span class="c-cm"># 4. Set session and run</span>
+tracker.<span class="c-fn">set_session</span>(<span class="c-str">"user_123"</span>)
+<span class="c-kw">await</span> <span class="c-fn">chat</span>(messages)</div>
+      </div>
+
+      <!-- Right Column: Description -->
+      <div class="code-desc">
+        <h3>Three lines of integration</h3>
+        <p>beliefstate integrates without altering your core logic. The decorator intercepts messages, queries the database, and injects state automatically.</p>
+        <p>You retain full control over the LLM arguments. You can also query the session database directly or use manual hooks for custom workflows.</p>
+        <div class="green-callout-box">
+          <div>✓ Works with async def and regular def</div>
+          <div>✓ Zero latency on user-facing responses</div>
+          <div>✓ Fails safely — never crashes your app</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROVIDERS SECTION -->
+<section>
+  <div class="container">
+    <p class="eyebrow">Providers</p>
+    <h2>Works with every LLM.</h2>
+    <div class="provider-grid">
+      <!-- Card 1 -->
+      <div class="provider-card">
+        <div class="provider-emoji">🤖</div>
+        <div class="provider-name">OpenAI</div>
+        <div class="provider-note">gpt-4o / embeddings</div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="provider-card">
+        <div class="provider-emoji">🧠</div>
+        <div class="provider-name">Anthropic</div>
+        <div class="provider-note">claude-3-5-sonnet</div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="provider-card">
+        <div class="provider-emoji">✨</div>
+        <div class="provider-name">Gemini</div>
+        <div class="provider-note">gemini-2.5-flash</div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="provider-card">
+        <div class="provider-emoji">🦙</div>
+        <div class="provider-name">Ollama</div>
+        <div class="provider-note">local / offline</div>
+      </div>
+
+      <!-- Card 5 -->
+      <div class="provider-card">
+        <div class="provider-emoji">⚡</div>
+        <div class="provider-name">LiteLLM</div>
+        <div class="provider-note">100+ API models</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES SECTION -->
+<section>
+  <div class="container">
+    <p class="eyebrow">Capabilities</p>
+    <h2>Everything you need. Nothing you don't.</h2>
+    <div class="feature-grid">
+      <!-- Card 1 (Zero latency - Featured with 2px accent border) -->
+      <div class="feature-card featured">
+        <div class="feature-icon-square" style="background:var(--accent-lo); border:1px solid rgba(124,111,235,0.2); color:var(--accent-hi);">⚡</div>
+        <h3>Zero latency</h3>
+        <p>Fires background tasks for extraction and checking after returning the response.</p>
+      </div>
+
+      <!-- Card 2 (Semantic detect) -->
+      <div class="feature-card">
+        <div class="feature-icon-square" style="background:var(--green-lo); border:1px solid rgba(52,211,235,0.2); color:var(--green);">🔍</div>
+        <h3>Semantic detection</h3>
+        <p>Utilizes vector embeddings and natural language inference rather than exact string matching.</p>
+      </div>
+
+      <!-- Card 3 (Dual-adapter) -->
+      <div class="feature-card">
+        <div class="feature-icon-square" style="background:var(--blue-lo); border:1px solid rgba(96,165,250,0.2); color:var(--blue);">💰</div>
+        <h3>Dual-adapter cost saving</h3>
+        <p>Runs expensive user models alongside lightweight local models (like Ollama) for tracking.</p>
+      </div>
+
+      <!-- Card 4 (Circuit breaker) -->
+      <div class="feature-card">
+        <div class="feature-icon-square" style="background:var(--amber-lo); border:1px solid rgba(245,158,11,0.2); color:var(--amber);">🛡</div>
+        <h3>Circuit breakers</h3>
+        <p>Implements automated retries and fail-fast triggers to prevent downtime.</p>
+      </div>
+
+      <!-- Card 5 (Integrations) -->
+      <div class="feature-card">
+        <div class="feature-icon-square" style="background:var(--accent-lo); border:1px solid rgba(124,111,235,0.2); color:var(--accent-hi);">🔌</div>
+        <h3>Framework integrations</h3>
+        <p>Provides middleware for FastAPI and callbacks for LangChain and LlamaIndex.</p>
+      </div>
+
+      <!-- Card 6 (GDPR) -->
+      <div class="feature-card">
+        <div class="feature-icon-square" style="background:var(--green-lo); border:1px solid rgba(52,211,235,0.2); color:var(--green);">📋</div>
+        <h3>GDPR compliant</h3>
+        <p>Supports permanent session deletion with task draining and receipts.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA SECTION -->
+<section class="cta-section">
+  <div class="container">
+    <p class="eyebrow">Get started</p>
+    <h2>Ready to track beliefs?</h2>
+    <p>Install in less than a minute. Add state to your agent conversations today.</p>
+    <div class="cta-actions">
+      <a href="configuration.html" class="btn-primary">Read the docs →</a>
+      <a href="https://github.com/abhay-2108/beliefstate" class="btn-ghost" target="_blank" rel="noopener">View on GitHub ↗</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    beliefstate · MIT Licensed ·
+    <a href="https://github.com/abhay-2108/beliefstate" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="https://pypi.org/project/beliefstate/" target="_blank" rel="noopener">PyPI</a> ·
+    <a href="reference.html#changelog">Changelog</a>
+  </div>
+</footer>
+
+<script>
+  // Copy to clipboard handler
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const codeBlock = btn.closest('.code-block');
+      let textToCopy = 'pip install beliefstate';
+      if (codeBlock) {
+        const codeElement = codeBlock.querySelector('.code-inner');
+        if (codeElement) {
+          textToCopy = codeElement.innerText || codeElement.textContent;
+        }
       }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-
-  sections.forEach(section => observer.observe(section));
-  
-  highlightCurrentLink();
-  window.addEventListener('hashchange', highlightCurrentLink);
-
-  // Close mobile sidebar on link click
-  navLinks.forEach(link => {
-    link.addEventListener('click', () => {
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.remove('open');
+      navigator.clipboard.writeText(textToCopy)
+        .then(() => {
+          btn.textContent = '✓ copied';
+          setTimeout(() => {
+            btn.textContent = 'copy';
+          }, 1500);
+        })
+        .catch(err => {
+          console.error('Failed to copy: ', err);
+        });
     });
   });
-
-  // Sidebar Collapse / Expand Logic
-  const sidebarToggle = document.getElementById('sidebar-toggle');
-  
-  // On load, restore state
-  if (localStorage.getItem('sidebar-collapsed') === 'true') {
-    document.body.classList.add('sidebar-collapsed');
-  } else {
-    document.body.classList.remove('sidebar-collapsed');
-  }
-
-  if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-      const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
-      localStorage.setItem('sidebar-collapsed', isCollapsed);
-    });
-  }
 </script>
-
 </body>
 </html>

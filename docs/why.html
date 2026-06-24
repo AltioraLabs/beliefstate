@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why BeliefState? — BeliefState Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">
+    <span class="nav-logo-dot"></span>
+    beliefstate
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html#problem">The problem</a></li>
+    <li><a href="index.html#how">How it works</a></li>
+    <li><a href="why.html" class="active">Why beliefstate?</a></li>
+    <li><a href="configuration.html">Docs</a></li>
+    <li><a href="https://github.com/abhay-2108/beliefstate">GitHub</a></li>
+  </ul>
+  <a href="index.html#quickstart" class="nav-cta">Get started</a>
+</nav>
+
+<!-- Mobile Menu Button -->
+<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+
+<div class="docs-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <!-- Sidebar Search -->
+    <div class="sidebar-search">
+      <button class="search-trigger" id="searchTriggerBtn">
+        <span>Search docs...</span>
+        <span class="search-shortcut">Ctrl K</span>
+      </button>
+    </div>
+    
+    <nav class="sidebar-nav">
+      <ul>
+        <li class="nav-section-title">Getting Started</li>
+        <li><a href="index.html">Introduction</a></li>
+        <li><a href="why.html" class="active">Why beliefstate?</a></li>
+
+        <li class="nav-section-title">Core Reference</li>
+        <li><a href="configuration.html">Configuration</a></li>
+        <li><a href="adapters.html">Adapters</a></li>
+        <li><a href="stores.html">Stores</a></li>
+
+        <li class="nav-section-title">Usage &amp; Deployment</li>
+        <li><a href="integrations.html">Integrations</a></li>
+        <li><a href="advanced.html">Advanced Features</a></li>
+
+        <li class="nav-section-title">Help &amp; API</li>
+        <li><a href="reference.html">API Reference &amp; FAQ</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <section class="doc-section" id="why-beliefstate">
+      <div class="eyebrow">Architecture</div>
+      <h2>Why BeliefState?</h2>
+      <p>
+        Building a simple chat loop with an LLM is easy. Building a production conversational agent that maintains consistent, long-term, and logical state is hard. BeliefState was built to bridge the gap between stateless LLM APIs and stateful conversational applications.
+      </p>
+
+      <h3>The Core Problem: LLMs are Stateless</h3>
+      <p>
+        Every request to an LLM API (like OpenAI's GPT-4o or Anthropic's Claude) is completely independent. The model does not remember the previous turn, the user's name, or what preferences were established unless they are sent in the prompt history. This leads to three fundamental issues:
+      </p>
+
+      <div class="problem-grid" style="margin-top:24px; margin-bottom:24px;">
+        <div class="problem-card">
+          <div class="problem-card-label" style="color:var(--accent);">01. Context Window Dilution</div>
+          <h3>The "Lost in the Middle" Effect</h3>
+          <p>
+            As conversations grow, the system prompt and conversation history occupy more tokens. In long contexts, models fail to retrieve facts buried in the middle of a massive token stream, leading to hallucination.
+          </p>
+        </div>
+        <div class="problem-card">
+          <div class="problem-card-label" style="color:var(--accent);">02. Exponential Cost Scaling</div>
+          <h3>Token Inflation</h3>
+          <p>
+            Resending a long, multi-turn conversation history on every single turn causes your API costs to scale quadratically. You pay repeatedly for the model to re-process facts established hours or days ago.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout warning">
+        <p><strong>⚠️ Silent Contradictions:</strong> The biggest risk of stateless history is contradiction. A model might agree to a $5,000 budget in turn 2, but forget it and offer a $10,000 package in turn 14, frustrating the user and breaking trust.</p>
+      </div>
+    </section>
+
+    <section class="doc-section" id="context-vs-memory">
+      <h2>Context Window is Not Memory</h2>
+      <p>
+        Developers often assume that expanding context windows (like Gemini's 1M+ tokens or Claude's 200k tokens) renders state tracking obsolete. In practice, long context windows are <strong>transport channels, not working memory</strong>.
+      </p>
+      <ul>
+        <li><strong>Reasoning Latency:</strong> Feeding hundreds of turns into an LLM increases the time-to-first-token (TTFT) and overall generation latency.</li>
+        <li><strong>Noise Sensitivity:</strong> Long histories contain conversational filler (e.g. "Got it!", "Thanks!"). LLMs struggle to separate key user facts from temporary conversational noise.</li>
+        <li><strong>Truncation Failure:</strong> If you truncate history to save cost or latency, you risk deleting critical user constraints (like dietary restrictions, database keys, or project rules).</li>
+      </ul>
+      <p>
+        <strong>BeliefState</strong> solves this by extracting facts into a structured, persistent <strong>belief state store</strong> in the background. Instead of feeding the raw history back to the model, you retrieve a compact, relevant, and clean summary of facts and inject it as system context.
+      </p>
+    </section>
+
+    <section class="doc-section" id="design-patterns">
+      <h2>Common Design Patterns</h2>
+      <p>
+        Here is how belief state tracking is used in real-world production architectures:
+      </p>
+
+      <h3>1. Customer Support &amp; Concierge Agents</h3>
+      <p>
+        Ensure consistent enforcement of user-declared preferences (e.g., budget, allergies, shipping address) across multiple sessions.
+      </p>
+      <pre><code><span class="cm"># Turn 1: User specifies constraint</span>
+user: "I need to plan a trip to Tokyo. My budget is $3,000."
+<span class="cm"># beliefstate extracts: (USER, budget, "USD 3000")</span>
+
+<span class="cm"># Turn 25: Assistant tries to suggest a premium hotel</span>
+assistant: "I recommend the Ritz-Carlton. It's only $1,200 per night!"
+<span class="cm"># beliefstate background check detects:</span>
+<span class="cm">#   Contradiction: Proposed lodging budget exceeds user budget limits!</span>
+<span class="cm"># Resolution: Injects conflict into prompt context to trigger model self-correction.</span></code></pre>
+
+      <h3>2. Developer Coding Agents</h3>
+      <p>
+        Maintain consistency in file structures, runtime environments, and architectural decisions throughout a complex coding workspace session.
+      </p>
+      <pre><code><span class="cm"># Turn 3: Agent decides framework</span>
+agent: "I will write the backend in FastAPI using aiosqlite for persistence."
+<span class="cm"># beliefstate extracts: (PROJECT, database, "aiosqlite"), (PROJECT, framework, "FastAPI")</span>
+
+<span class="cm"># Turn 18: Agent forgets and attempts to import psycopg2</span>
+agent: "Let's import psycopg2 and connect to the postgres database..."
+<span class="cm"># beliefstate background checker triggers:</span>
+<span class="cm">#   Contradiction: Project uses aiosqlite database, not postgres/psycopg2!</span>
+<span class="cm"># Resolution: Prompt correction blocks the commit and keeps the agent aligned.</span></code></pre>
+    </section>
+
+    <section class="doc-section" id="architecture-advantage">
+      <h2>Why use beliefstate instead of standard Vector DBs?</h2>
+      <p>
+        Standard RAG (Retrieval-Augmented Generation) uses vector search to retrieve chunks of raw text history. This fails for state tracking:
+      </p>
+      <table class="param-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Standard Vector Search (RAG)</th>
+            <th>BeliefState Tracking</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Data Structure</strong></td>
+            <td>Unstructured text chunks. Can contain duplicate/outdated facts.</td>
+            <td>Structured Subject-Predicate-Value triples. Deduplicated automatically.</td>
+          </tr>
+          <tr>
+            <td><strong>Contradiction Detection</strong></td>
+            <td>❌ No concept of logical contradiction. Returns both facts.</td>
+            <td>✅ Active NLI judge evaluates semantic conflicts.</td>
+          </tr>
+          <tr>
+            <td><strong>Latency Impact</strong></td>
+            <td>Synchronous retrieval blocks the LLM generation loop.</td>
+            <td>Background thread/worker extraction adds <strong>zero</strong> user latency.</td>
+          </tr>
+          <tr>
+            <td><strong>Resolution</strong></td>
+            <td>Returns conflicting chunks, forcing the LLM to figure it out.</td>
+            <td>Resolves conflicts immediately using customizable policies (overwrite/keep/warn).</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <div class="code-callout">
+        ✓ Structured memory state<br>
+        ✓ Clean, deduplicated context<br>
+        ✓ Safe for production applications
+      </div>
+    </section>
+
+    <!-- Site Footer -->
+    <footer class="site-footer">
+      <p>
+        beliefstate · MIT Licensed ·
+        <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> ·
+        <a href="https://pypi.org/project/beliefstate/">PyPI</a>
+      </p>
+    </footer>
+  </main>
+</div>
+
+<!-- SEARCH MODAL (Shared) -->
+<div class="search-modal-backdrop" id="searchBackdrop">
+  <div class="search-modal">
+    <div class="search-modal-header">
+      <span class="search-modal-icon">🔍</span>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search documentation..." autocomplete="off">
+      <button class="search-close-btn" id="searchCloseBtn">ESC</button>
+    </div>
+    <div class="search-results" id="searchResults">
+      <!-- Search results injected here -->
+    </div>
+  </div>
+</div>
+
+<script src="search.js"></script>
+<script>
+  // Close mobile sidebar on link click
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  navLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+    });
+  });
+</script>
+</body>
+</html>

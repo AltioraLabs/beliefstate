@@ -1,316 +1,1392 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Integrations — BeliefState Documentation</title>
-  <meta name="description" content="Framework integration guide for BeliefState. Middleware parameters for FastAPI, Flask, ASGI, and callbacks for LangChain, LlamaIndex, OpenAI Assistants.">
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Framework Integrations — beliefstate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg:         #0A0A0B;
+    --bg-card:    #111113;
+    --bg-raised:  #18181B;
+    --border:     rgba(255,255,255,0.07);
+    --border-hi:  rgba(255,255,255,0.14);
+    --text-1:     #F4F4F5;
+    --text-2:     #A1A1AA;
+    --text-3:     #52525B;
+    --accent:     #7C6FEB;
+    --accent-lo:  rgba(124,111,235,0.12);
+    --accent-hi:  #9D93F0;
+    --green:      #34D399;
+    --green-lo:   rgba(52,211,235,0.10);
+    --red:        #F87171;
+    --red-lo:     rgba(248,113,113,0.10);
+    --amber:      #F59E0B;
+    --amber-lo:   rgba(245,158,11,0.10);
+    --blue:       #60A5FA;
+    --blue-lo:    rgba(96,165,250,0.10);
+    --sans:       'Inter', system-ui, sans-serif;
+    --mono:       'JetBrains Mono', monospace;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background: var(--bg);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NAVIGATION ── */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    height: 56px;
+    background: rgba(10,10,11,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-logo {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+
+  .nav-logo-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    list-style: none;
+    height: 100%;
+  }
+
+  .nav-links li {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+
+  .nav-links a {
+    font-size: 13px;
+    color: var(--text-2);
+    text-decoration: none;
+    transition: color 0.15s;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    border-bottom: 2px solid transparent;
+    padding: 0 4px;
+  }
+
+  .nav-links a:hover {
+    color: var(--text-1);
+  }
+
+  .nav-cta {
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--accent);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+
+  .nav-cta:hover {
+    background: var(--accent-hi);
+  }
+
+  /* ── LAYOUT ── */
+  .page-wrapper {
+    display: flex;
+    min-height: calc(100vh - 56px);
+    margin-top: 56px;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: sticky;
+    top: 56px;
+    width: 220px;
+    flex-shrink: 0;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    background: var(--bg);
+  }
+
+  .sidebar-group-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-3);
+    padding: 8px 20px;
+    margin-top: 16px;
+  }
+
+  .sidebar-group:first-child .sidebar-group-title {
+    margin-top: 0;
+  }
+
+  .sidebar-link {
+    display: block;
+    padding: 6px 20px;
+    font-size: 13px;
+    color: var(--text-2);
+    text-decoration: none;
+    transition: color 0.15s, background-color 0.15s;
+  }
+
+  .sidebar-link:hover {
+    color: var(--text-1);
+    background: rgba(255,255,255,0.03);
+  }
+
+  .sidebar-link.active {
+    color: var(--accent);
+    border-left: 2px solid var(--accent);
+    padding-left: 18px;
+    background: var(--accent-lo);
+  }
+
+  /* ── MAIN CONTENT ── */
+  .doc-main {
+    flex: 1;
+    min-width: 0;
+    padding: 48px 64px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .doc-container {
+    display: flex;
+    gap: 48px;
+    width: 100%;
+    max-width: 1080px;
+  }
+
+  .doc-content {
+    flex: 1;
+    min-width: 0;
+    max-width: 820px;
+  }
+
+  /* ── ON THIS PAGE ── */
+  .on-this-page {
+    position: sticky;
+    top: 104px;
+    width: 200px;
+    flex-shrink: 0;
+    height: fit-content;
+    align-self: flex-start;
+  }
+
+  .otp-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-3);
+    margin-bottom: 12px;
+  }
+
+  .otp-links {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .otp-link {
+    font-size: 12px;
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color 0.15s;
+    display: block;
+  }
+
+  .otp-link:hover {
+    color: var(--text-2);
+  }
+
+  .otp-link.active {
+    color: var(--accent);
+  }
+
+  .otp-link.indent {
+    padding-left: 12px;
+  }
+
+  /* ── ELEMENTS ── */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  h1 {
+    font-size: clamp(36px, 5vw, 58px);
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-1);
+    margin-bottom: 16px;
+  }
+
+  .lead {
+    font-size: 16px;
+    color: var(--text-2);
+    line-height: 1.7;
+    max-width: 600px;
+    margin-bottom: 24px;
+  }
+
+  .hr-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+
+  /* Doc sections */
+  .doc-section {
+    padding-top: 48px;
+    border-top: 1px solid var(--border);
+  }
+
+  .doc-section:first-of-type {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-1);
+    margin: 48px 0 16px;
+    padding-top: 48px;
+    letter-spacing: -0.02em;
+  }
+
+  .doc-section:first-of-type h2:first-of-type {
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-1);
+    margin: 32px 0 12px;
+    letter-spacing: -0.02em;
+  }
+
+  h4 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-2);
+    margin: 24px 0 8px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  p {
+    font-size: 15px;
+    color: var(--text-2);
+    line-height: 1.8;
+    max-width: 720px;
+    margin-bottom: 16px;
+  }
+
+  ul, ol {
+    margin: 16px 0;
+    padding-left: 20px;
+  }
+
+  li {
+    margin-bottom: 8px;
+    color: var(--text-2);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  li strong {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+
+  /* ── TWO-COLUMN GRID ── */
+  .two-col-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 24px 0;
+  }
+
+  /* ── CODE BLOCKS ── */
+  .code-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 24px 0;
+  }
+
+  .code-topbar {
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .code-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .code-filename {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    margin-left: 8px;
+  }
+
+  .btn-icon {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: color 0.15s, border-color 0.15s;
+    margin-left: auto;
+  }
+
+  .btn-icon:hover {
+    color: var(--text-1);
+    border-color: var(--border-hi);
+  }
+
+  .code-inner {
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: var(--text-2);
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  code.inline {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--accent-hi);
+    background: var(--bg-raised);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* Syntax Highlighting */
+  .c-kw { color: var(--accent-hi); }
+  .c-fn { color: #60A5FA; }
+  .c-str { color: var(--green); }
+  .c-dec { color: var(--amber); }
+  .c-cm { color: var(--text-3); }
+
+  /* ── TABLES ── */
+  .table-wrapper {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead {
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 10px 16px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--text-2);
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr:hover {
+    background: rgba(255,255,255,0.02);
+  }
+
+  td code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-1);
+    background: var(--bg-raised);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  td span.type-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent-hi);
+  }
+
+  td span.default-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--green);
+  }
+
+  td span.default-label.none {
+    color: var(--text-3);
+  }
+
+  td span.default-label.required {
+    color: var(--red);
+  }
+
+  /* ── CALLOUTS ── */
+  .callout {
+    margin: 24px 0;
+    padding: 14px 16px;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+  }
+
+  .callout p {
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 0;
+  }
+
+  .callout-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .callout.tip {
+    background: var(--blue-lo);
+    border-left: 3px solid var(--blue);
+  }
+  .callout.tip .callout-label {
+    color: var(--blue);
+  }
+
+  .callout.warning {
+    background: var(--amber-lo);
+    border-left: 3px solid var(--amber);
+  }
+  .callout.warning .callout-label {
+    color: var(--amber);
+  }
+
+  .callout.important {
+    background: var(--accent-lo);
+    border-left: 3px solid var(--accent);
+  }
+  .callout.important .callout-label {
+    color: var(--accent-hi);
+  }
+
+  .callout.danger {
+    background: var(--red-lo);
+    border-left: 3px solid var(--red);
+  }
+  .callout.danger .callout-label {
+    color: var(--red);
+  }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .badge.default {
+    background: var(--bg-raised);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+
+  .badge.accent {
+    background: var(--accent-lo);
+    color: var(--accent-hi);
+    border: 1px solid rgba(124,111,235,0.25);
+  }
+
+  .badge.green {
+    background: var(--green-lo);
+    color: var(--green);
+    border: 1px solid rgba(52,211,153,0.2);
+  }
+
+  .badge.red {
+    background: var(--red-lo);
+    color: var(--red);
+    border: 1px solid rgba(248,113,113,0.2);
+  }
+
+  /* ── PREV / NEXT NAVIGATION ── */
+  .prev-next-nav {
+    border-top: 1px solid var(--border);
+    padding-top: 40px;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 56px;
+    margin-bottom: 24px;
+  }
+
+  .prev-next-link {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: color 0.15s;
+  }
+
+  .prev-next-link.prev {
+    align-items: flex-start;
+  }
+
+  .prev-next-link.next {
+    align-items: flex-end;
+  }
+
+  .prev-next-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  .prev-next-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-1);
+    transition: color 0.15s;
+  }
+
+  .prev-next-link:hover .prev-next-title {
+    color: var(--accent);
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-3);
+  }
+
+  footer a {
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  footer a:hover {
+    color: var(--text-2);
+  }
+
+  /* ── RESPONSIVENESS ── */
+  @media (max-width: 1024px) {
+    .on-this-page {
+      display: none;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .page-wrapper {
+      flex-direction: column;
+    }
+    .sidebar {
+      display: none;
+    }
+    .doc-main {
+      padding: 24px 20px;
+    }
+    .nav-links {
+      display: none;
+    }
+    .two-col-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
 </head>
 <body>
 
-<!-- Mobile Menu Button -->
-<button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle menu">☰</button>
+<!-- FIXED NAVIGATION BAR -->
+<nav>
+  <a href="index.html" class="nav-logo">
+    <span class="nav-logo-dot"></span>
+    beliefstate
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html">Docs</a></li>
+    <li><a href="configuration.html">Configuration</a></li>
+    <li><a href="adapters.html">Adapters</a></li>
+    <li><a href="stores.html">Stores</a></li>
+    <li><a href="integrations.html">Integrations</a></li>
+    <li><a href="advanced.html">Advanced</a></li>
+    <li><a href="reference.html">Reference</a></li>
+    <li><a href="https://github.com/abhay-2108/beliefstate" target="_blank" rel="noopener">GitHub</a></li>
+  </ul>
+  <a href="index.html#quickstart" class="nav-cta">Get started</a>
+</nav>
 
-<div class="docs-layout">
+<div class="page-wrapper">
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Getting Started</div>
+      <a href="index.html#installation" class="sidebar-link">Installation</a>
+      <a href="index.html#quickstart" class="sidebar-link">Quickstart</a>
+      <a href="index.html#core-concepts" class="sidebar-link">Core Concepts</a>
+    </div>
 
-<!-- ═══════════════ SIDEBAR ═══════════════ -->
-<aside class="sidebar" id="sidebar">
-  <div class="sidebar-header">
-    <div class="sidebar-logo">BeliefState</div>
-    <div class="sidebar-version">v1.0.2</div>
-  </div>
-  <nav>
-    <ul class="sidebar-nav">
-      <li class="nav-section-title">Getting Started</li>
-      <li><a href="index.html#installation">Installation</a></li>
-      <li><a href="index.html#quickstart">Quickstart</a></li>
-      <li><a href="index.html#core-concepts">Core Concepts</a></li>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Configuration</div>
+      <a href="configuration.html#tracker-config" class="sidebar-link">TrackerConfig</a>
+      <a href="configuration.html#prompts" class="sidebar-link">Custom Prompts</a>
+    </div>
 
-      <li class="nav-section-title">Configuration</li>
-      <li><a href="configuration.html#tracker-config">TrackerConfig</a></li>
-      <li><a href="configuration.html#prompts">Custom Prompts</a></li>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Adapters</div>
+      <a href="adapters.html#adapters" class="sidebar-link">Overview</a>
+      <a href="adapters.html#openai" class="sidebar-link">OpenAI</a>
+      <a href="adapters.html#anthropic" class="sidebar-link">Anthropic</a>
+      <a href="adapters.html#gemini" class="sidebar-link">Google Gemini</a>
+      <a href="adapters.html#ollama" class="sidebar-link">Ollama</a>
+      <a href="adapters.html#litellm" class="sidebar-link">LiteLLM</a>
+      <a href="adapters.html#dual-adapter" class="sidebar-link">Dual-Adapter</a>
+    </div>
 
-      <li class="nav-section-title">Adapters</li>
-      <li><a href="adapters.html#adapters">Overview</a></li>
-      <li><a href="adapters.html#openai">OpenAI</a></li>
-      <li><a href="adapters.html#anthropic">Anthropic</a></li>
-      <li><a href="adapters.html#gemini">Google Gemini</a></li>
-      <li><a href="adapters.html#ollama">Ollama</a></li>
-      <li><a href="adapters.html#litellm">LiteLLM</a></li>
-      <li><a href="adapters.html#dual-adapter">Dual-Adapter</a></li>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Stores</div>
+      <a href="stores.html#stores" class="sidebar-link">Overview</a>
+      <a href="stores.html#sqlite-store" class="sidebar-link">SQLite</a>
+      <a href="stores.html#redis-store" class="sidebar-link">Redis</a>
+      <a href="stores.html#memory-store" class="sidebar-link">In-Memory</a>
+    </div>
 
-      <li class="nav-section-title">Stores</li>
-      <li><a href="stores.html#stores">Overview</a></li>
-      <li><a href="stores.html#sqlite-store">SQLite</a></li>
-      <li><a href="stores.html#redis-store">Redis</a></li>
-      <li><a href="stores.html#memory-store">In-Memory</a></li>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Integrations</div>
+      <a href="integrations.html#fastapi" class="sidebar-link active">FastAPI</a>
+      <a href="integrations.html#flask" class="sidebar-link">Flask</a>
+      <a href="integrations.html#asgi" class="sidebar-link">ASGI</a>
+      <a href="integrations.html#langchain" class="sidebar-link">LangChain</a>
+      <a href="integrations.html#llamaindex" class="sidebar-link">LlamaIndex</a>
+      <a href="integrations.html#openai-assistants" class="sidebar-link">OpenAI Assistants</a>
+    </div>
 
-      <li class="nav-section-title">Integrations</li>
-      <li><a href="integrations.html#fastapi">FastAPI</a></li>
-      <li><a href="integrations.html#flask">Flask</a></li>
-      <li><a href="integrations.html#asgi">ASGI</a></li>
-      <li><a href="integrations.html#langchain">LangChain</a></li>
-      <li><a href="integrations.html#llamaindex">LlamaIndex</a></li>
-      <li><a href="integrations.html#openai-assistants">OpenAI Assistants</a></li>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Advanced</div>
+      <a href="advanced.html#dispatchers" class="sidebar-link">Background Workers</a>
+      <a href="advanced.html#resilience" class="sidebar-link">Resilience</a>
+      <a href="advanced.html#observability" class="sidebar-link">Observability</a>
+      <a href="advanced.html#gdpr" class="sidebar-link">GDPR &amp; Privacy</a>
+    </div>
 
-      <li class="nav-section-title">Advanced</li>
-      <li><a href="advanced.html#dispatchers">Background Workers</a></li>
-      <li><a href="advanced.html#resilience">Resilience</a></li>
-      <li><a href="advanced.html#observability">Observability</a></li>
-      <li><a href="advanced.html#gdpr">GDPR &amp; Privacy</a></li>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">Reference</div>
+      <a href="reference.html#api-reference" class="sidebar-link">API Reference</a>
+      <a href="reference.html#changelog" class="sidebar-link">Changelog</a>
+    </div>
+  </aside>
 
-      <li class="nav-section-title">Reference</li>
-      <li><a href="reference.html#api-reference">API Reference</a></li>
-      <li><a href="reference.html#changelog">Changelog</a></li>
-    </ul>
-  </nav>
-</aside>
+  <!-- MAIN CONTENT -->
+  <main class="doc-main">
+    <div class="doc-container">
+      <div class="doc-content">
+        <p class="eyebrow">Reference</p>
+        <h1>Integrations</h1>
+        <p class="lead">
+          Connect beliefstate to your active web applications, orchestration flows, and agent run cycles using native framework wrappers.
+        </p>
 
-<button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Toggle sidebar"></button>
+        <hr class="hr-divider">
 
-<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
-<main class="main-content">
+        <!-- SECTION 1: FASTAPI -->
+        <section class="doc-section" id="fastapi">
+          <h2>FastAPI Integration</h2>
+          <p>
+            The FastAPI middleware extracts session IDs from request headers and sets session context automatically — your endpoint handlers need no changes.
+          </p>
 
-<!-- ═══════════════════════════════════════════════════ -->
-<!-- ── FASTAPI ── -->
-<!-- ═══════════════════════════════════════════════════ -->
-<section class="doc-section" id="fastapi">
-  <h2>FastAPI Integration</h2>
-  <p>The FastAPI middleware automatically extracts session IDs from incoming HTTP request headers and sets them in the BeliefState session context. This means your endpoint handlers don't need to manually call <code>tracker.set_session()</code> — the middleware does it transparently for every request.</p>
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">fastapi_server.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> fastapi <span class="c-kw">import</span> FastAPI, Depends
+<span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">FastAPIBeliefTrackerMiddleware</span>, <span class="c-fn">get_session_id</span>
 
-  <h4>Middleware Parameters</h4>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>app</code></td><td><code>ASGIApp</code></td><td><em>(required)</em></td><td>The ASGI application instance (FastAPI app). Passed automatically by FastAPI's <code>add_middleware()</code>.</td></tr>
-      <tr><td><code>header_name</code></td><td><code>str</code></td><td><code>"X-Session-ID"</code></td><td>HTTP header name to extract the session ID from. The middleware reads this header from every incoming request. If the header is missing, the session defaults to <code>"default"</code>.</td></tr>
-    </tbody>
-  </table>
+app = FastAPI()
 
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI, Depends
-<span class="kw">from</span> beliefstate <span class="kw">import</span> FastAPIBeliefTrackerMiddleware, get_session_id
-
-app = <span class="fn">FastAPI</span>()
-
-<span class="cm"># Option 1: Middleware (sets session context automatically)</span>
-app.<span class="fn">add_middleware</span>(
+# 1. Register middleware globally
+app.<span class="c-fn">add_middleware</span>(
     FastAPIBeliefTrackerMiddleware,
-    header_name=<span class="st">"X-Session-ID"</span>
+    header_name=<span class="c-str">"X-Session-ID"</span>
 )
 
-<span class="cm"># Option 2: Dependency injection</span>
-<span class="dc">@app.post</span>(<span class="st">"/chat"</span>)
-<span class="kw">async def</span> <span class="fn">chat</span>(message: <span class="nb">str</span>, session_id: <span class="nb">str</span> = <span class="fn">Depends</span>(get_session_id)):
-    <span class="cm"># session_id is extracted from X-Session-ID header</span>
-    <span class="cm"># session context is automatically set</span>
-    response = <span class="kw">await</span> <span class="fn">chat_with_llm</span>(message)
-    <span class="kw">return</span> {<span class="st">"response"</span>: response}</code></pre>
+# 2. Endpoint executes automatically with context
+<span class="c-dec">@app.post</span>(<span class="c-str">"/chat"</span>)
+<span class="c-kw">async def</span> <span class="c-fn">chat</span>(message: <span class="c-str">str</span>):
+    response = <span class="c-kw">await</span> <span class="c-fn">run_chat_model</span>(message)
+    <span class="c-kw">return</span> {<span class="c-str">"response"</span>: response}
 
-  <div class="callout tip">
-    <p><strong>Context Propagation Mechanics:</strong> Web frameworks process multiple requests concurrently on different asynchronous task contexts. BeliefState uses Python's standard <code>contextvars.ContextVar</code> (<code>session_context</code>) to store and isolate session identifiers.
-    <ol>
-      <li>The ASGI middleware intercepts the request headers and extracts the session key.</li>
-      <li>It sets the value via <code>token = session_context.set(session_id)</code>, propagating the variable down the active execution flow.</li>
-      <li>When the request handler finishes, the middleware executes a <code>finally</code> block to call <code>session_context.reset(token)</code>, ensuring zero context leakage across different requests.</li>
-    </ol>
-    </p>
-  </div>
+# 3. Alternative: Explicit dependency injection
+<span class="c-dec">@app.post</span>(<span class="c-str">"/chat-explicit"</span>)
+<span class="c-kw">async def</span> <span class="c-fn">chat_explicit</span>(
+    message: <span class="c-str">str</span>,
+    session_id: <span class="c-str">str</span> = <span class="c-kw">Depends</span>(<span class="c-fn">get_session_id</span>)
+):
+    response = <span class="c-kw">await</span> <span class="c-fn">run_chat_model</span>(message)
+    <span class="c-kw">return</span> {<span class="c-str">"response"</span>: response, <span class="c-str">"session_id"</span>: session_id}</div>
+          </div>
 
-  <h4>Testing Locally</h4>
-  <p>Send requests with the session header to test the integration:</p>
-  <pre><code><span class="code-label">bash</span># Set session via header
-curl -X POST http://localhost:8000/chat \
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>app</code></td>
+                  <td><span class="type-label">ASGIApp</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>The target FastAPI application instance.</td>
+                </tr>
+                <tr>
+                  <td><code>header_name</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">"X-Session-ID"</span></td>
+                  <td>The HTTP header key utilized to look up session identifiers.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="context-propagation">Context Propagation Mechanics</h3>
+          <p>The middleware manages concurrent request execution states using context variables:</p>
+          <ol>
+            <li><strong>Lookup</strong> — Middleware intercepts incoming headers and extracts the session identifier value, executing <code>session_context.set(session_id)</code>.</li>
+            <li><strong>Propagation</strong> — The context propagates through the async call chain, enabling trackers to retrieve state without explicit parameters.</li>
+            <li><strong>Cleanup</strong> — A <code>finally</code> execution block executes <code>session_context.reset()</code> to restore initial empty contexts.</li>
+          </ol>
+
+          <h3>Testing Locally</h3>
+          <p>Trigger requests with target headers to verify session propagation:</p>
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">curl_test.sh</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner">curl -X POST http://localhost:8000/chat \
   -H "X-Session-ID: user_123" \
   -H "Content-Type: application/json" \
-  -d '{"message": "I live in Tokyo"}'</code></pre>
-</section>
+  -d '{"message": "I reside in London"}'</div>
+          </div>
 
-<!-- ── Flask ── -->
-<section class="doc-section" id="flask">
-  <h3>Flask Integration</h3>
-  <p>For Flask applications, BeliefState provides both a WSGI middleware wrapper and Flask request hooks. The WSGI middleware wraps Flask's <code>wsgi_app</code> and extracts session IDs from request headers, while the hooks integrate with Flask's request lifecycle.</p>
+          <div class="callout tip">
+            <div class="callout-label">💡 Tip</div>
+            <p>
+              If X-Session-ID header is missing, the session defaults to 'default' — all requests without a header share one belief store. Always send a session header in production.
+            </p>
+          </div>
+        </section>
 
-  <h4>Middleware Parameters</h4>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>app</code></td><td><code>WSGIApp</code></td><td><em>(required)</em></td><td>The WSGI application instance (Flask's <code>wsgi_app</code>).</td></tr>
-      <tr><td><code>header_name</code></td><td><code>str</code></td><td><code>"X-Session-ID"</code></td><td>HTTP header name to extract the session ID from.</td></tr>
-    </tbody>
-  </table>
+        <!-- SECTION 2: FLASK -->
+        <section class="doc-section" id="flask">
+          <h2>Flask Integration</h2>
+          <p>
+            For Flask WSGI backends, beliefstate supports request context extraction via WSGI middleware or lifecycle hooks.
+          </p>
 
-  <h4>Hook Registration Parameters</h4>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>app</code></td><td><code>Flask</code></td><td><em>(required)</em></td><td>The Flask application instance.</td></tr>
-      <tr><td><code>header_name</code></td><td><code>str</code></td><td><code>"X-Session-ID"</code></td><td>HTTP header name to extract the session ID from. Registered as a <code>before_request</code> hook.</td></tr>
-    </tbody>
-  </table>
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">flask_server.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> flask <span class="c-kw">import</span> Flask
+<span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">FlaskBeliefTrackerMiddleware</span>, <span class="c-fn">register_flask_hooks</span>
 
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> flask <span class="kw">import</span> Flask
-<span class="kw">from</span> beliefstate <span class="kw">import</span> FlaskBeliefTrackerMiddleware, register_flask_hooks
+app = Flask(__name__)
 
-app = <span class="fn">Flask</span>(__name__)
+# Option A: WSGI Middleware wrapper (Recommended)
+app.wsgi_app = <span class="c-fn">FlaskBeliefTrackerMiddleware</span>(
+    app.wsgi_app,
+    header_name=<span class="c-str">"X-Session-ID"</span>
+)
 
-<span class="cm"># WSGI middleware for context propagation</span>
-app.wsgi_app = <span class="fn">FlaskBeliefTrackerMiddleware</span>(app.wsgi_app, header_name=<span class="st">"X-Session-ID"</span>)
+# Option B: Lifecycle Hooks registration
+<span class="c-fn">register_flask_hooks</span>(app, header_name=<span class="c-str">"X-Session-ID"</span>)</div>
+          </div>
 
-<span class="cm"># Flask request hooks (alternative or additional)</span>
-<span class="fn">register_flask_hooks</span>(app, header_name=<span class="st">"X-Session-ID"</span>)</code></pre>
+          <h4>Middleware Parameters</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>app</code></td>
+                  <td><span class="type-label">WSGIApp</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>The underlying WSGI application instance.</td>
+                </tr>
+                <tr>
+                  <td><code>header_name</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">"X-Session-ID"</span></td>
+                  <td>HTTP header key holding session identifiers.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-  <div class="callout info">
-    <p><strong>Middleware vs. Hooks:</strong> The WSGI middleware intercepts requests at the WSGI layer (before Flask processes them), while hooks use Flask's <code>before_request</code> / <code>teardown_request</code> lifecycle. Either approach works — the middleware is recommended for consistency with other frameworks.</p>
-  </div>
-</section>
+          <h4>Hook Parameters</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>app</code></td>
+                  <td><span class="type-label">Flask</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>The Flask application instance.</td>
+                </tr>
+                <tr>
+                  <td><code>header_name</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">"X-Session-ID"</span></td>
+                  <td>HTTP header key holding session identifiers.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-<!-- ── ASGI ── -->
-<section class="doc-section" id="asgi">
-  <h3>Generic ASGI Middleware</h3>
-  <p>The ASGI middleware works with any ASGI-compatible framework: Starlette, Litestar, Quart, or any custom ASGI application. It's the same middleware used internally by the FastAPI integration.</p>
+          <div class="callout important">
+            <div class="callout-label">Note</div>
+            <p>
+              Middleware vs Hooks — either works. Middleware recommended for consistency with other frameworks.
+            </p>
+          </div>
+        </section>
 
-  <h4>Parameters</h4>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>app</code></td><td><code>ASGIApp</code></td><td><em>(required)</em></td><td>The ASGI application instance.</td></tr>
-      <tr><td><code>header_name</code></td><td><code>str</code></td><td><code>"X-Session-ID"</code></td><td>HTTP header name to extract the session ID from. Case-insensitive (per HTTP spec).</td></tr>
-    </tbody>
-  </table>
+        <!-- SECTION 3: ASGI -->
+        <section class="doc-section" id="asgi">
+          <h2>Generic ASGI Middleware</h2>
+          <p>
+            Works with Starlette, Litestar, Quart, or any ASGI-compatible framework.
+          </p>
 
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> starlette.applications <span class="kw">import</span> Starlette
-<span class="kw">from</span> beliefstate <span class="kw">import</span> BeliefTrackerASGIMiddleware
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">starlette_server.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> starlette.applications <span class="c-kw">import</span> Starlette
+<span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">BeliefTrackerASGIMiddleware</span>
 
-app = <span class="fn">Starlette</span>()
-app.<span class="fn">add_middleware</span>(BeliefTrackerASGIMiddleware, header_name=<span class="st">"X-Session-ID"</span>)
-<!-- Works with any ASGI framework: Starlette, Litestar, Quart, etc. --></code></pre>
-</section>
+app = Starlette()
+app.<span class="c-fn">add_middleware</span>(
+    BeliefTrackerASGIMiddleware,
+    header_name=<span class="c-str">"X-Session-ID"</span>
+)</div>
+          </div>
 
-<!-- ── LangChain ── -->
-<section class="doc-section" id="langchain">
-  <h3>LangChain Callback</h3>
-  <p>The LangChain callback handler integrates with LangChain's callback system. It intercepts the <code>on_llm_end</code> lifecycle event, capturing the prompt and response text, then dispatches a background belief tracking task. Attach it to any LangChain chain, agent, or LLM invocation.</p>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>app</code></td>
+                  <td><span class="type-label">ASGIApp</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>The target ASGI application instance.</td>
+                </tr>
+                <tr>
+                  <td><code>header_name</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">"X-Session-ID"</span></td>
+                  <td>Case-insensitive header key indicating session ID.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-  <h4>Constructor Parameters</h4>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>tracker</code></td><td><code>BeliefTracker</code></td><td><em>(required)</em></td><td>The <code>BeliefTracker</code> instance to use for belief extraction. Must be initialized with an adapter and config before passing.</td></tr>
-    </tbody>
-  </table>
+          <div class="callout important">
+            <div class="callout-label">Note</div>
+            <p>
+              HTTP header keys are processed case-insensitively, complying with the RFC 7230 specification guidelines.
+            </p>
+          </div>
+        </section>
 
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> beliefstate <span class="kw">import</span> session_context, BeliefTrackerLangchainCallback
+        <!-- SECTION 4: LANGCHAIN -->
+        <section class="doc-section" id="langchain">
+          <h2>LangChain Callback</h2>
+          <p>
+            Hooks into LangChain's on_llm_end lifecycle event.
+          </p>
 
-# Set session context before invoking the chain
-session_context.<span class="fn">set</span>(<span class="st">"user_123"</span>)
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">langchain_callback.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> session_context, <span class="c-fn">BeliefTrackerLangchainCallback</span>
 
-# Attach callback handler to your chain
-handler = <span class="fn">BeliefTrackerLangchainCallback</span>(tracker=tracker)
-await llm.<span class="fn">ainvoke</span>(<span class="st">"Hello!"</span>, config={<span class="st">"callbacks"</span>: [handler]})</code></pre>
+# 1. Establish session variable scope beforehand
+session_context.<span class="c-fn">set</span>(<span class="c-str">"user_123"</span>)
 
-  <div class="callout info">
-    <p><strong>Important:</strong> You must set <code>session_context</code> before invoking the chain, since LangChain callbacks don't have access to HTTP headers. Use <code>session_context.set("user_123")</code> or wrap calls inside a middleware that sets the context.</p>
-  </div>
-</section>
+# 2. Instantiate callback hook
+handler = <span class="c-fn">BeliefTrackerLangchainCallback</span>(tracker=tracker)
 
-<!-- ── LlamaIndex ── -->
-<section class="doc-section" id="llamaindex">
-  <h3>LlamaIndex Callback</h3>
-  <p>The LlamaIndex callback integrates with LlamaIndex's callback manager system. It captures LLM events via <code>on_event_end</code> and dispatches tracking tasks. Register it in the global <code>Settings.callback_manager</code> to automatically track all LLM calls.</p>
+# 3. Provide handler during chain execution
+<span class="c-kw">await</span> chain.<span class="c-fn">ainvoke</span>(
+    {<span class="c-str">"input"</span>: <span class="c-str">"I prefer Python"</span>},
+    config={<span class="c-str">"callbacks"</span>: [handler]}
+)</div>
+          </div>
 
-  <h4>Constructor Parameters</h4>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>tracker</code></td><td><code>BeliefTracker</code></td><td><em>(required)</em></td><td>The <code>BeliefTracker</code> instance to use for belief extraction.</td></tr>
-    </tbody>
-  </table>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>tracker</code></td>
+                  <td><span class="type-label">BeliefTracker</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>The active BeliefTracker tracking instance.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-  <pre><code><span class="code-label">python</span><span class="kw">from</span> llama_index.core <span class="kw">import</span> Settings
-<span class="kw">from</span> llama_index.core.callbacks <span class="kw">import</span> CallbackManager
-<span class="kw">from</span> beliefstate <span class="kw">import</span> LlamaIndexBeliefTrackerCallback
+          <div class="callout important">
+            <div class="callout-label">Important</div>
+            <p>
+              You must set session_context before invoking the chain. LangChain callbacks don't have access to HTTP request headers.
+            </p>
+          </div>
 
-callback = <span class="fn">LlamaIndexBeliefTrackerCallback</span>(tracker=tracker)
-Settings.callback_manager = <span class="fn">CallbackManager</span>([callback])</code></pre>
-</section>
+          <h3>Callback Lifecycle</h3>
+          <p>The callback coordinates execution during the run cycle:</p>
+          <ol>
+            <li>Callback intercepts output text and input prompt.</li>
+            <li>Grabs <code>session_id</code> from <code>ContextVar</code>.</li>
+            <li>Dispatches background tracking task.</li>
+          </ol>
+        </section>
 
-<!-- ── OpenAI Assistants ── -->
-<section class="doc-section" id="openai-assistants">
-  <h3>OpenAI Assistants Observer</h3>
-  <p>The Assistants observer watches an OpenAI Assistant run and extracts beliefs from the thread messages once the run completes. Unlike the <code>@tracker.wrap</code> pattern, this observer polls the run status and processes the full thread conversation in bulk.</p>
+        <!-- SECTION 5: LLAMAINDEX -->
+        <section class="doc-section" id="llamaindex">
+          <h2>LlamaIndex Callback</h2>
+          <p>
+            Registers a callback handler with LlamaIndex's callback manager to track llama-index execution queries automatically.
+          </p>
 
-  <h4>Function Parameters</h4>
-  <table class="param-table">
-    <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>tracker</code></td><td><code>BeliefTracker</code></td><td><em>(required)</em></td><td>The <code>BeliefTracker</code> instance.</td></tr>
-      <tr><td><code>client</code></td><td><code>AsyncOpenAI</code></td><td><em>(required)</em></td><td>The OpenAI async client used to poll the run status and retrieve thread messages.</td></tr>
-      <tr><td><code>thread_id</code></td><td><code>str</code></td><td><em>(required)</em></td><td>The OpenAI thread ID containing the conversation messages.</td></tr>
-      <tr><td><code>run_id</code></td><td><code>str</code></td><td><em>(required)</em></td><td>The run ID to observe. The observer waits for this run to complete before extracting beliefs.</td></tr>
-      <tr><td><code>session_id</code></td><td><code>str</code></td><td><em>(required)</em></td><td>Session ID to associate extracted beliefs with. Maps to a user or conversation in your belief store.</td></tr>
-    </tbody>
-  </table>
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">llamaindex_setup.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> llama_index.core <span class="c-kw">import</span> Settings
+<span class="c-kw">from</span> llama_index.core.callbacks <span class="c-kw">import</span> CallbackManager
+<span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">LlamaIndexBeliefTrackerCallback</span>
 
-  <pre><code><span class="code-label">python</span><span class="kw">import</span> asyncio
-<span class="kw">from</span> beliefstate <span class="kw">import</span> observe_run
+# Initialize callback handler
+callback = <span class="c-fn">LlamaIndexBeliefTrackerCallback</span>(tracker=tracker)
 
-<span class="cm"># Observe assistant run and extract beliefs from thread messages</span>
-asyncio.<span class="fn">create_task</span>(
-    <span class="fn">observe_run</span>(
+# Assign globally to settings manager
+Settings.callback_manager = <span class="c-fn">CallbackManager</span>([callback])</div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>tracker</code></td>
+                  <td><span class="type-label">BeliefTracker</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>The active BeliefTracker tracking instance.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout important">
+            <div class="callout-label">Note</div>
+            <p>
+              Registers globally via <code>Settings</code> — all LLM calls in the process are tracked automatically.
+            </p>
+          </div>
+        </section>
+
+        <!-- SECTION 6: OPENAI ASSISTANTS -->
+        <section class="doc-section" id="openai-assistants">
+          <h2>OpenAI Assistants Observer</h2>
+          <p>
+            Polls a run to completion, then extracts beliefs from the full thread conversation in bulk.
+          </p>
+
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">assistants_observer.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">import</span> asyncio
+<span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">observe_run</span>
+
+# Run observer task concurrently
+asyncio.<span class="c-fn">create_task</span>(
+    <span class="c-fn">observe_run</span>(
         tracker=tracker,
         client=openai_client,
         thread_id=thread_id,
         run_id=run.id,
-        session_id=<span class="st">"session_123"</span>
+        session_id=<span class="c-str">"user_123"</span>
     )
-)</code></pre>
+)</div>
+          </div>
 
-  <div class="callout tip">
-    <p><strong>Callback Hook Lifecycles:</strong> The LangChain and LlamaIndex callback handlers inherit from their respective framework lifecycle hooks (e.g. <code>on_llm_end</code> or <code>on_event_end</code>).
-    When the model finishes generating a response:
-    <ol>
-      <li>The callback intercepts the output response text and input prompt history.</li>
-      <li>It grabs the active <code>session_id</code> and <code>conversation_id</code> from thread context variables.</li>
-      <li>It packages this payload and schedules a background belief tracking task asynchronously via the tracker dispatcher, keeping the application response pipeline completely non-blocking.</li>
-    </ol>
-    </p>
-  </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>tracker</code></td>
+                  <td><span class="type-label">BeliefTracker</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>The active BeliefTracker tracking instance.</td>
+                </tr>
+                <tr>
+                  <td><code>client</code></td>
+                  <td><span class="type-label">AsyncOpenAI</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>OpenAI client connection client.</td>
+                </tr>
+                <tr>
+                  <td><code>thread_id</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>OpenAI assistant thread key.</td>
+                </tr>
+                <tr>
+                  <td><code>run_id</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>Assistant run session ID.</td>
+                </tr>
+                <tr>
+                  <td><code>session_id</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>Belief state session context key.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-  <h3>Error Handling in Integrations</h3>
-  <p>All integrations are designed to be <strong>fail-safe</strong>. If any part of the belief tracking pipeline fails (adapter error, store error, parsing error), the failure is logged as a warning but <strong>never propagates to your application</strong>. Your users always receive their LLM response, even if background tracking encounters an error.</p>
-</section>
+          <div class="callout important">
+            <div class="callout-label">Note</div>
+            <p>
+              Difference from <code>@tracker.wrap</code> — the observer processes the full thread after the run completes, not turn-by-turn.
+            </p>
+          </div>
+        </section>
 
-<!-- ── Footer ── -->
-<footer class="site-footer">
-  <p>
-    MIT Licensed · <a href="https://github.com/abhay-2108/beliefstate">GitHub</a> · <a href="https://pypi.org/project/beliefstate/">PyPI</a>
-  </p>
-</footer>
+        <!-- SECTION 7: ERROR HANDLING -->
+        <section class="doc-section" id="error-handling">
+          <h2>Error Handling in Integrations</h2>
+          <p>
+            BeliefState is built to operate as a non-blocking tracking layer. Under-the-hood, all integrations wrap execution segments to isolate exception contexts and safeguard your primary application flow.
+          </p>
 
-</main>
+          <div class="two-col-layout">
+            <div>
+              <h4>What always happens</h4>
+              <ul>
+                <li>User receives LLM response</li>
+                <li>Error is logged as warning</li>
+                <li>Session context is cleaned up</li>
+              </ul>
+            </div>
+            <div>
+              <h4>What never happens</h4>
+              <ul>
+                <li>Exception propagates to your app</li>
+                <li>User request fails due to tracking error</li>
+                <li>Belief store left in inconsistent state</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- PREV / NEXT NAVIGATION -->
+        <nav class="prev-next-nav">
+          <a href="stores.html" class="prev-next-link prev">
+            <span class="prev-next-label">← Previous</span>
+            <span class="prev-next-title">Stores</span>
+          </a>
+          <a href="advanced.html" class="prev-next-link next">
+            <span class="prev-next-label">Next →</span>
+            <span class="prev-next-title">Advanced</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- RIGHT COLUMN: ON THIS PAGE -->
+      <aside class="on-this-page">
+        <div class="otp-title">On this page</div>
+        <ul class="otp-links">
+          <li><a href="#fastapi" class="otp-link">FastAPI</a></li>
+          <li><a href="#flask" class="otp-link">Flask</a></li>
+          <li><a href="#asgi" class="otp-link">ASGI</a></li>
+          <li><a href="#langchain" class="otp-link">LangChain</a></li>
+          <li><a href="#llamaindex" class="otp-link">LlamaIndex</a></li>
+          <li><a href="#openai-assistants" class="otp-link">OpenAI Assistants</a></li>
+          <li><a href="#error-handling" class="otp-link">Error Handling</a></li>
+        </ul>
+      </aside>
+    </div>
+  </main>
 </div>
 
-<!-- ── Sidebar logic ── -->
-<script>
-  const sections = document.querySelectorAll('.doc-section');
-  const navLinks = document.querySelectorAll('.sidebar-nav a');
-  function highlightCurrentLink() {
-    const currentPath = window.location.pathname.split('/').pop() || 'index.html';
-    const currentHash = window.location.hash;
-    let matched = false;
-    navLinks.forEach(link => { link.classList.remove('active'); const href = link.getAttribute('href'); if (currentHash && href.endsWith(currentHash)) { link.classList.add('active'); matched = true; } });
-    if (!matched) { for (const link of navLinks) { const href = link.getAttribute('href'); if (href.startsWith(currentPath) || (currentPath === 'index.html' && href.startsWith('index.html')) || (currentPath === '' && href.startsWith('index.html'))) { link.classList.add('active'); break; } } }
-  }
-  const observer = new IntersectionObserver((entries) => { entries.forEach(entry => { if (entry.isIntersecting) { const targetId = entry.target.id; navLinks.forEach(link => { const href = link.getAttribute('href'); if (href.endsWith(`#${targetId}`)) { navLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); } }); } }); }, { rootMargin: '-20% 0px -70% 0px' });
-  sections.forEach(section => observer.observe(section));
-  highlightCurrentLink();
-  window.addEventListener('hashchange', highlightCurrentLink);
-  navLinks.forEach(link => { link.addEventListener('click', () => { const sidebar = document.querySelector('.sidebar'); if (sidebar) sidebar.classList.remove('open'); }); });
-  const sidebarToggle = document.getElementById('sidebar-toggle');
-  if (localStorage.getItem('sidebar-collapsed') === 'true') { document.body.classList.add('sidebar-collapsed'); } else { document.body.classList.remove('sidebar-collapsed'); }
-  if (sidebarToggle) { sidebarToggle.addEventListener('click', () => { const isCollapsed = document.body.classList.toggle('sidebar-collapsed'); localStorage.setItem('sidebar-collapsed', isCollapsed); }); }
-</script>
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    beliefstate · MIT Licensed ·
+    <a href="https://github.com/abhay-2108/beliefstate" target="_blank" rel="noopener">GitHub</a> ·
+    <a href="https://pypi.org/project/beliefstate/" target="_blank" rel="noopener">PyPI</a> ·
+    <a href="reference.html#changelog">Changelog</a>
+  </div>
+</footer>
 
+<script>
+  // Copy to clipboard handler
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const codeBlock = btn.closest('.code-block');
+      if (codeBlock) {
+        const codeElement = codeBlock.querySelector('.code-inner');
+        if (codeElement) {
+          const textToCopy = codeElement.innerText || codeElement.textContent;
+          navigator.clipboard.writeText(textToCopy)
+            .then(() => {
+              btn.textContent = '✓ copied';
+              setTimeout(() => {
+                btn.textContent = 'copy';
+              }, 1500);
+            })
+            .catch(err => {
+              console.error('Failed to copy: ', err);
+            });
+        }
+      }
+    });
+  });
+
+  // Active sidebar and on-this-page link highlighting via IntersectionObserver
+  window.addEventListener('DOMContentLoaded', () => {
+    const headings = document.querySelectorAll('section.doc-section, h3[id]');
+    const sidebarLinks = document.querySelectorAll('.sidebar-link');
+    const otpLinks = document.querySelectorAll('.otp-link');
+
+    if ('IntersectionObserver' in window && headings.length > 0) {
+      const observerOptions = {
+        root: null,
+        rootMargin: '-10% 0px -70% 0px',
+        threshold: 0
+      };
+
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.getAttribute('id');
+            if (!id) return;
+
+            // Highlight sidebar link
+            sidebarLinks.forEach(link => {
+              const href = link.getAttribute('href');
+              if (href && href.endsWith('#' + id)) {
+                link.classList.add('active');
+              } else {
+                link.classList.remove('active');
+              }
+            });
+
+            // Highlight on-this-page link
+            otpLinks.forEach(link => {
+              const href = link.getAttribute('href');
+              if (href && href.endsWith('#' + id)) {
+                link.classList.add('active');
+              } else {
+                link.classList.remove('active');
+              }
+            });
+          }
+        });
+      }, observerOptions);
+
+      headings.forEach(heading => observer.observe(heading));
+    }
+  });
+</script>
 </body>
 </html>
