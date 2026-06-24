@@ -1138,6 +1138,106 @@ class BeliefTracker:
 
         return new_messages
 
+    def _generic_inject_context(
+        self,
+        context_prompt: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+        """Fallback context injector that supports messages/contents/system arguments generically."""
+        # 1. Try "messages" in kwargs
+        if "messages" in kwargs:
+            messages = kwargs["messages"]
+            if isinstance(messages, list):
+                new_kwargs = kwargs.copy()
+                new_kwargs["messages"] = self._fallback_inject_messages(
+                    messages, context_prompt
+                )
+                return args, new_kwargs
+
+        # 2. Try "contents" in kwargs (Gemini style)
+        if "contents" in kwargs:
+            new_kwargs = kwargs.copy()
+            if "config" in new_kwargs:
+                new_kwargs["config"] = self._fallback_inject_config(
+                    new_kwargs["config"], context_prompt
+                )
+            else:
+                new_kwargs["config"] = {"system_instruction": context_prompt}
+            return args, new_kwargs
+
+        # 3. Try "system" in kwargs (Anthropic/LiteLLM style)
+        if "system" in kwargs or any(k.lower() == "system" for k in kwargs):
+            key = next(k for k in kwargs if k.lower() == "system")
+            new_kwargs = kwargs.copy()
+            orig = new_kwargs.get(key, "")
+            new_kwargs[key] = f"{orig}\n\n{context_prompt}" if orig else context_prompt
+            return args, new_kwargs
+
+        # 4. Try positional args
+        new_args = list(args)
+        for idx, arg in enumerate(new_args[:2]):
+            if isinstance(arg, list):
+                new_args[idx] = self._fallback_inject_messages(arg, context_prompt)
+                return tuple(new_args), kwargs
+
+        return args, kwargs
+
+    def _fallback_inject_messages(
+        self, messages: List[Any], context_prompt: str
+    ) -> List[Any]:
+        new_messages = [m.copy() if isinstance(m, dict) else m for m in messages]
+        system_idx = -1
+        for idx, m in enumerate(new_messages):
+            if isinstance(m, dict) and m.get("role") == "system":
+                system_idx = idx
+                break
+            elif hasattr(m, "role") and m.role == "system":
+                system_idx = idx
+                break
+
+        if system_idx != -1:
+            m = new_messages[system_idx]
+            if isinstance(m, dict):
+                orig_content = m.get("content", "")
+                m["content"] = (
+                    f"{orig_content}\n\n{context_prompt}"
+                    if orig_content
+                    else context_prompt
+                )
+            else:
+                orig_content = getattr(m, "content", "")
+                m.content = (
+                    f"{orig_content}\n\n{context_prompt}"
+                    if orig_content
+                    else context_prompt
+                )
+        else:
+            new_messages.insert(0, {"role": "system", "content": context_prompt})
+
+        return new_messages
+
+    def _fallback_inject_config(self, config: Any, context_prompt: str) -> Any:
+        if isinstance(config, dict):
+            new_config = config.copy()
+            orig = new_config.get("system_instruction", "")
+            new_config["system_instruction"] = (
+                f"{orig}\n\n{context_prompt}" if orig else context_prompt
+            )
+            return new_config
+        elif hasattr(config, "system_instruction"):
+            orig = getattr(config, "system_instruction", "")
+            new_system = f"{orig}\n\n{context_prompt}" if orig else context_prompt
+            if hasattr(config, "model_copy"):
+                return config.model_copy(update={"system_instruction": new_system})
+            else:
+                import copy
+
+                new_config = copy.copy(config)
+                setattr(new_config, "system_instruction", new_system)
+                return new_config
+        return config
+
     async def _track_background(
         self, call: LLMCall, response: LLMResponse, session_id: str, turn: int
     ) -> None:
@@ -1261,8 +1361,12 @@ class BeliefTracker:
         asyncio.run(self.track_async(call_dict, response_dict, session_id, turn))
 
     def wrap(
-        self, func: Callable[..., Coroutine[Any, Any, Any]], stream: bool = False
-    ) -> Callable[..., Coroutine[Any, Any, Any]]:
+        self,
+        func: Optional[Callable[..., Coroutine[Any, Any, Any]]] = None,
+        *,
+        stream: bool = False,
+        auto_inject: bool = True,
+    ) -> Any:
         """Decorator to wrap an async LLM function and track beliefs.
 
         If adapter was not provided during initialization, auto-detects from first call.
@@ -1272,6 +1376,9 @@ class BeliefTracker:
             stream: If True, expects func to return an async generator
                    (streaming response). Accumulates chunks and runs
                    extraction after stream is exhausted.
+            auto_inject: If True, automatically injects a summary of
+                         established beliefs into the system prompt
+                         before calling the wrapped function.
 
         Example:
             # Non-streaming (default)
@@ -1289,95 +1396,156 @@ class BeliefTracker:
             response = await call_llm_streaming()  # Automatically accumulates stream
         """
 
-        @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            session_id = session_context.get()
-            self._session_turn_counters[session_id] = (
-                self._session_turn_counters.get(session_id, 0) + 1
-            )
-            current_turn = self._session_turn_counters[session_id]
-
-            # 1. Execute the user's actual LLM call (blocks until finished)
-            native_response = await func(*args, **kwargs)
-
-            # Handle streaming: accumulate chunks into full response
-            if stream:
-                return AsyncStreamWrapper(
-                    native_response,
-                    self,
-                    args,
-                    kwargs,
-                    session_id,
-                    current_turn,
+        def decorator(
+            f: Callable[..., Coroutine[Any, Any, Any]],
+        ) -> Callable[..., Coroutine[Any, Any, Any]]:
+            @wraps(f)
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                session_id = session_context.get()
+                self._session_turn_counters[session_id] = (
+                    self._session_turn_counters.get(session_id, 0) + 1
                 )
+                current_turn = self._session_turn_counters[session_id]
 
-            # 2. Auto-detect adapter on first call if needed
-            if self._auto_detect_adapter and self.app_adapter is None:
-                logger.info("Auto-detecting adapter from response type...")
-                self.app_adapter = _detect_adapter(native_response)
+                if auto_inject:
+                    # Extract last user message to use for relevance filtering
+                    last_user_msg = ""
+                    messages_list = None
+                    if "messages" in kwargs and isinstance(kwargs["messages"], list):
+                        messages_list = kwargs["messages"]
+                    elif "contents" in kwargs and isinstance(kwargs["contents"], list):
+                        messages_list = kwargs["contents"]
+                    else:
+                        for arg in args:
+                            if isinstance(arg, list):
+                                messages_list = arg
+                                break
 
-                # Initialize internal adapter and wrapped components
-                from beliefstate.resilience import ResilientAdapterWrapper
+                    if messages_list:
+                        for m in reversed(messages_list):
+                            if isinstance(m, dict) and m.get("role") == "user":
+                                last_user_msg = str(m.get("content", ""))
+                                break
+                            elif hasattr(m, "role") and m.role == "user":
+                                last_user_msg = str(getattr(m, "content", ""))
+                                break
+                            elif isinstance(m, str):
+                                last_user_msg = m
+                                break
 
-                self.internal_adapter = ResilientAdapterWrapper(
-                    self.app_adapter, self.config
-                )
-                self._ensure_initialized()
+                    conversation_id = conversation_context.get()
+                    context_prompt = await self.get_context_prompt(
+                        session_id=session_id,
+                        conversation_id=conversation_id,
+                        current_user_message=last_user_msg if last_user_msg else None,
+                    )
 
-            # 3. Normalize inputs and outputs for the background tracker
-            try:
-                llm_call = self.app_adapter.to_llm_call(*args, **kwargs)
-                llm_response = self.app_adapter.to_llm_response(native_response)
+                    if context_prompt:
+                        injected = False
+                        if self.app_adapter and hasattr(
+                            self.app_adapter, "inject_context"
+                        ):
+                            try:
+                                res = self.app_adapter.inject_context(
+                                    context_prompt, *args, **kwargs
+                                )
+                                if isinstance(res, tuple) and len(res) == 2:
+                                    args, kwargs = res
+                                    injected = True
+                            except Exception:
+                                pass
 
-                # Ensure extractor and detector are initialized
-                self._ensure_initialized()
+                        if not injected:
+                            args, kwargs = self._generic_inject_context(
+                                context_prompt, *args, **kwargs
+                            )
 
-                # Track provider info for this session
-                provider_name = self.app_adapter.__class__.__name__
-                if session_id in self._session_providers:
-                    # Check for mid-session provider change
-                    if self._session_providers[session_id] != provider_name:
+                # 1. Execute the user's actual LLM call (blocks until finished)
+                native_response = await f(*args, **kwargs)
+
+                # Handle streaming: accumulate chunks into full response
+                if stream:
+                    return AsyncStreamWrapper(
+                        native_response,
+                        self,
+                        args,
+                        kwargs,
+                        session_id,
+                        current_turn,
+                    )
+
+                # 2. Auto-detect adapter on first call if needed
+                if self._auto_detect_adapter and self.app_adapter is None:
+                    logger.info("Auto-detecting adapter from response type...")
+                    self.app_adapter = _detect_adapter(native_response)
+
+                    # Initialize internal adapter and wrapped components
+                    from beliefstate.resilience import ResilientAdapterWrapper
+
+                    self.internal_adapter = ResilientAdapterWrapper(
+                        self.app_adapter, self.config
+                    )
+                    self._ensure_initialized()
+
+                # 3. Normalize inputs and outputs for the background tracker
+                try:
+                    llm_call = self.app_adapter.to_llm_call(*args, **kwargs)
+                    llm_response = self.app_adapter.to_llm_response(native_response)
+
+                    # Ensure extractor and detector are initialized
+                    self._ensure_initialized()
+
+                    # Track provider info for this session
+                    provider_name = self.app_adapter.__class__.__name__
+                    if session_id in self._session_providers:
+                        # Check for mid-session provider change
+                        if self._session_providers[session_id] != provider_name:
+                            logger.warning(
+                                f"Mid-session provider change for session "
+                                f"{session_id}: switched from "
+                                f"{self._session_providers[session_id]} to "
+                                f"{provider_name}. This may cause "
+                                f"embedding/extraction inconsistencies."
+                            )
+                    else:
+                        # First call in this session
+                        self._session_providers[session_id] = provider_name
+
+                    # Warn if internal_adapter not set with premium models
+                    premium_models = ["gpt-4", "gpt-4-turbo", "claude-3", "gemini-pro"]
+                    if not self.internal_adapter and any(
+                        model_hint in provider_name.lower()
+                        for model_hint in premium_models
+                    ):
                         logger.warning(
-                            f"Mid-session provider change for session "
-                            f"{session_id}: switched from "
-                            f"{self._session_providers[session_id]} to "
-                            f"{provider_name}. This may cause "
-                            f"embedding/extraction inconsistencies."
+                            f"No internal_adapter configured for premium "
+                            f"provider {provider_name}. Belief extraction will "
+                            f"use the same premium provider, increasing costs. "
+                            f"Consider setting internal_adapter to a cheaper "
+                            f"model (e.g., GPT-3.5, Claude Instant)."
                         )
-                else:
-                    # First call in this session
-                    self._session_providers[session_id] = provider_name
 
-                # Warn if internal_adapter not set with premium models
-                premium_models = ["gpt-4", "gpt-4-turbo", "claude-3", "gemini-pro"]
-                if not self.internal_adapter and any(
-                    model_hint in provider_name.lower() for model_hint in premium_models
-                ):
-                    logger.warning(
-                        f"No internal_adapter configured for premium "
-                        f"provider {provider_name}. Belief extraction will "
-                        f"use the same premium provider, increasing costs. "
-                        f"Consider setting internal_adapter to a cheaper "
-                        f"model (e.g., GPT-3.5, Claude Instant)."
-                    )
+                    # 4. Dispatch background tracking
+                    if self.config.enable_background_tasks:
+                        self.dispatcher.dispatch(
+                            self, llm_call, llm_response, session_id, current_turn
+                        )
+                    else:
+                        # Run synchronously (useful for testing)
+                        await self._track_background(
+                            llm_call, llm_response, session_id, current_turn
+                        )
+                except Exception as e:
+                    # Never fail the user's main application due to tracker parsing errors
+                    logger.error(f"Tracker wrapper error: {e}", exc_info=True)
 
-                # 4. Dispatch background tracking
-                if self.config.enable_background_tasks:
-                    self.dispatcher.dispatch(
-                        self, llm_call, llm_response, session_id, current_turn
-                    )
-                else:
-                    # Run synchronously (useful for testing)
-                    await self._track_background(
-                        llm_call, llm_response, session_id, current_turn
-                    )
-            except Exception as e:
-                # Never fail the user's main application due to tracker parsing errors
-                logger.error(f"Tracker wrapper error: {e}", exc_info=True)
+                return native_response
 
-            return native_response
+            return wrapper
 
-        return wrapper
+        if func is None:
+            return decorator
+        return decorator(func)
 
     async def _accumulate_stream(self, stream_generator: Any) -> Any:
         """Accumulate chunks from a streaming response into a complete response object.

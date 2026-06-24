@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
     RetryConfig,
@@ -95,6 +95,74 @@ class LiteLLMAdapter(ProviderAdapter):
                 text = response["choices"][0].get("message", {}).get("content", "")
 
         return LLMResponse(text=text, raw_response=response)
+
+    def inject_context(
+        self,
+        context_prompt: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+        """Inject context prompt into LiteLLM arguments."""
+        if "system" in kwargs:
+            new_kwargs = kwargs.copy()
+            system = new_kwargs.get("system", "")
+            new_kwargs["system"] = (
+                f"{system}\n\n{context_prompt}" if system else context_prompt
+            )
+            return args, new_kwargs
+
+        messages = kwargs.get("messages", [])
+        in_kwargs = "messages" in kwargs
+        arg_idx = -1
+
+        if not messages and len(args) > 0 and isinstance(args[0], list):
+            messages = args[0]
+            in_kwargs = False
+            arg_idx = 0
+
+        if not messages:
+            in_kwargs = True
+            messages = []
+
+        new_messages = [m.copy() if isinstance(m, dict) else m for m in messages]
+        system_idx = -1
+        for idx, m in enumerate(new_messages):
+            if isinstance(m, dict) and m.get("role") == "system":
+                system_idx = idx
+                break
+            elif hasattr(m, "role") and m.role == "system":
+                system_idx = idx
+                break
+
+        if system_idx != -1:
+            m = new_messages[system_idx]
+            if isinstance(m, dict):
+                orig_content = m.get("content", "")
+                m["content"] = (
+                    f"{orig_content}\n\n{context_prompt}"
+                    if orig_content
+                    else context_prompt
+                )
+            else:
+                orig_content = getattr(m, "content", "")
+                m.content = (
+                    f"{orig_content}\n\n{context_prompt}"
+                    if orig_content
+                    else context_prompt
+                )
+        else:
+            new_messages.insert(0, {"role": "system", "content": context_prompt})
+
+        if in_kwargs:
+            new_kwargs = kwargs.copy()
+            new_kwargs["messages"] = new_messages
+            return args, new_kwargs
+        elif arg_idx != -1:
+            new_args = list(args)
+            new_args[arg_idx] = new_messages
+            return tuple(new_args), kwargs
+
+        return args, kwargs
 
     async def _generate_with_backoff(
         self, call: LLMCall, response_format: Optional[Any] = None

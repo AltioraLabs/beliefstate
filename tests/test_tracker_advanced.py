@@ -429,3 +429,119 @@ class TestClearAndRemove:
         remaining = await tracker.get_beliefs("s1")
         assert len(remaining) == 1
         assert remaining[0].value == "Paris"
+
+
+# ── auto_inject tests ────────────────────────────────────────────────────
+
+
+class TestAutoInject:
+    @pytest.mark.asyncio
+    async def test_auto_inject_default_true(self):
+        config = make_config()
+        # Mock adapter
+        mock_adapter = MagicMock()
+        mock_adapter.to_llm_call.return_value = MagicMock()
+        mock_adapter.to_llm_response.return_value = MagicMock()
+
+        tracker = BeliefTracker(config=config, adapter=mock_adapter)
+        tracker.set_session("session_auto_inject")
+
+        # Add a belief to store
+        b = Belief(
+            subject="USER",
+            predicate="likes",
+            value="coffee",
+            confidence=1.0,
+            turn=1,
+            source="user",
+        )
+        await tracker.store.add_belief("session_auto_inject", b)
+
+        received_args = []
+        received_kwargs = {}
+
+        @tracker.wrap
+        async def call_llm(*args, **kwargs):
+            nonlocal received_args, received_kwargs
+            received_args = args
+            received_kwargs = kwargs
+            return "dummy response"
+
+        messages = [{"role": "user", "content": "hello"}]
+        await call_llm(messages=messages)
+
+        # Verify messages kwargs has injected belief context
+        injected_messages = received_kwargs["messages"]
+        assert len(injected_messages) == 2
+        assert injected_messages[0]["role"] == "system"
+        assert "coffee" in injected_messages[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_auto_inject_explicit_false(self):
+        config = make_config()
+        mock_adapter = MagicMock()
+        mock_adapter.to_llm_call.return_value = MagicMock()
+        mock_adapter.to_llm_response.return_value = MagicMock()
+
+        tracker = BeliefTracker(config=config, adapter=mock_adapter)
+        tracker.set_session("session_auto_inject_false")
+
+        # Add a belief to store
+        b = Belief(
+            subject="USER",
+            predicate="likes",
+            value="coffee",
+            confidence=1.0,
+            turn=1,
+            source="user",
+        )
+        await tracker.store.add_belief("session_auto_inject_false", b)
+
+        received_kwargs = {}
+
+        @tracker.wrap(auto_inject=False)
+        async def call_llm(*args, **kwargs):
+            nonlocal received_kwargs
+            received_kwargs = kwargs
+            return "dummy response"
+
+        messages = [{"role": "user", "content": "hello"}]
+        await call_llm(messages=messages)
+
+        # Verify messages kwargs does not have injected belief context
+        assert received_kwargs["messages"] == messages
+
+    @pytest.mark.asyncio
+    async def test_auto_inject_with_different_providers(self):
+        config = make_config()
+
+        # Test Anthropic style: injects into kwargs["system"]
+        from beliefstate.adapters.anthropic import AnthropicAdapter
+
+        anthropic_adapter = AnthropicAdapter()
+
+        tracker = BeliefTracker(config=config, adapter=anthropic_adapter)
+        tracker.set_session("session_anthropic")
+
+        b = Belief(
+            subject="USER",
+            predicate="likes",
+            value="tea",
+            confidence=1.0,
+            turn=1,
+            source="user",
+        )
+        await tracker.store.add_belief("session_anthropic", b)
+
+        received_kwargs = {}
+
+        @tracker.wrap
+        async def call_llm(*args, **kwargs):
+            nonlocal received_kwargs
+            received_kwargs = kwargs
+            # Return a valid Anthropic-like dict response
+            return {"content": [{"text": "response text"}]}
+
+        await call_llm(messages=[{"role": "user", "content": "hi"}], system="Be polite")
+        assert "tea" in received_kwargs["system"]
+        assert "Be polite" in received_kwargs["system"]

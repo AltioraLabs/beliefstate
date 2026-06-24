@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
     RetryConfig,
@@ -123,6 +123,62 @@ class GeminiAdapter(ProviderAdapter):
             text = getattr(response, "text", "")
 
         return LLMResponse(text=text, raw_response=response)
+
+    def inject_context(
+        self,
+        context_prompt: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+        """Inject context prompt into Gemini config.system_instruction."""
+        new_kwargs = kwargs.copy()
+        config = new_kwargs.get("config")
+
+        if config is None:
+            try:
+                from google.genai import types
+
+                config = types.GenerateContentConfig(system_instruction=context_prompt)
+                new_kwargs["config"] = config
+            except ImportError:
+                new_kwargs["config"] = {"system_instruction": context_prompt}
+        else:
+            if hasattr(config, "system_instruction"):
+                try:
+                    orig_system = getattr(config, "system_instruction", "")
+                    new_system = (
+                        f"{orig_system}\n\n{context_prompt}"
+                        if orig_system
+                        else context_prompt
+                    )
+                    if hasattr(config, "model_copy"):
+                        config = config.model_copy(
+                            update={"system_instruction": new_system}
+                        )
+                    else:
+                        import copy
+
+                        config = copy.copy(config)
+                        config.system_instruction = new_system
+                    new_kwargs["config"] = config
+                except Exception:
+                    orig_system = getattr(config, "system_instruction", "")
+                    config.system_instruction = (
+                        f"{orig_system}\n\n{context_prompt}"
+                        if orig_system
+                        else context_prompt
+                    )
+            elif isinstance(config, dict):
+                config = config.copy()
+                orig_system = config.get("system_instruction", "")
+                config["system_instruction"] = (
+                    f"{orig_system}\n\n{context_prompt}"
+                    if orig_system
+                    else context_prompt
+                )
+                new_kwargs["config"] = config
+
+        return args, new_kwargs
 
     async def _generate_with_backoff(
         self, call: LLMCall, response_format: Optional[Any] = None

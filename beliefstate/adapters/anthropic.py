@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
     RetryConfig,
@@ -91,6 +91,21 @@ class AnthropicAdapter(ProviderAdapter):
             text = response.content[0].text
 
         return LLMResponse(text=text, raw_response=response)
+
+    def inject_context(
+        self,
+        context_prompt: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+        """Inject context prompt into Anthropic kwargs['system']."""
+        new_kwargs = kwargs.copy()
+        system = new_kwargs.get("system", "")
+        if system:
+            new_kwargs["system"] = f"{system}\n\n{context_prompt}"
+        else:
+            new_kwargs["system"] = context_prompt
+        return args, new_kwargs
 
     async def _generate_with_backoff(
         self, call: LLMCall, response_format: Optional[Any] = None
