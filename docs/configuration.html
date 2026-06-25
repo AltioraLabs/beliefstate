@@ -742,10 +742,10 @@
     .nav-links, .nav-cta {
       display: none;
     }
-    .mobile-menu-toggle {
+    nav:not(.prev-next-nav) .mobile-menu-toggle {
       display: flex;
     }
-    .mobile-menu-overlay {
+    body .mobile-menu-overlay {
       display: block;
     }
     h1 {
@@ -788,11 +788,18 @@
       font-size: 12px;
     }
     .prev-next-link {
-      width: 100%;
+      width: 48%;
+      padding: 8px 12px;
+    }
+    .prev-next-label {
+      font-size: 9px;
+    }
+    .prev-next-title {
+      font-size: 12px;
     }
     .prev-next-nav {
-      flex-direction: column;
-      gap: 12px;
+      flex-direction: row;
+      gap: 10px;
     }
     .table-wrapper {
       max-width: 100%;
@@ -1940,51 +1947,6 @@ Output JSON: {"relationship": "contradiction|entailment|neutral", "score": float
     });
   });
 
-  // Active sidebar and on-this-page link highlighting via IntersectionObserver
-  window.addEventListener('DOMContentLoaded', () => {
-    const headings = document.querySelectorAll('h2, h3[id]');
-    const sidebarLinks = document.querySelectorAll('.sidebar-link');
-    const otpLinks = document.querySelectorAll('.otp-link');
-
-    if ('IntersectionObserver' in window && headings.length > 0) {
-      const observerOptions = {
-        root: null,
-        rootMargin: '-10% 0px -70% 0px',
-        threshold: 0
-      };
-
-      const observer = new IntersectionObserver(entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const id = entry.target.getAttribute('id');
-            if (!id) return;
-
-            // Highlight sidebar link
-            sidebarLinks.forEach(link => {
-              const href = link.getAttribute('href');
-              if (href && href.endsWith('#' + id)) {
-                link.classList.add('active');
-              } else {
-                link.classList.remove('active');
-              }
-            });
-
-            // Highlight on-this-page link
-            otpLinks.forEach(link => {
-              const href = link.getAttribute('href');
-              if (href && href.endsWith('#' + id)) {
-                link.classList.add('active');
-              } else {
-                link.classList.remove('active');
-              }
-            });
-          }
-        });
-      }, observerOptions);
-
-      headings.forEach(heading => observer.observe(heading));
-    }
-  });
 </script>
 <script src="script.js"></script>
 </body>

@@ -38,4 +38,79 @@ document.addEventListener('DOMContentLoaded', () => {
       document.body.classList.remove('no-scroll');
     }
   });
+
+  // Active sidebar and on-this-page link highlighting via IntersectionObserver
+  const headings = document.querySelectorAll('section.doc-section, h3[id]');
+  const sidebarLinks = document.querySelectorAll('.sidebar-link');
+  const otpLinks = document.querySelectorAll('.otp-link');
+
+  if ('IntersectionObserver' in window && headings.length > 0) {
+    const observerOptions = {
+      root: null,
+      rootMargin: '-80px 0px -60% 0px',
+      threshold: 0
+    };
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.getAttribute('id');
+          if (!id) return;
+
+          const section = entry.target.closest('.doc-section');
+          const sectionId = section ? section.getAttribute('id') : id;
+
+          // Highlight sidebar link
+          sidebarLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            if (href) {
+              try {
+                const url = new URL(link.href, window.location.href);
+                const isCurrentPage = url.pathname === window.location.pathname || 
+                                      url.pathname.endsWith('/' + window.location.pathname.split('/').pop());
+                if (isCurrentPage && url.hash === '#' + sectionId) {
+                  link.classList.add('active');
+                } else if (isCurrentPage) {
+                  link.classList.remove('active');
+                }
+              } catch (e) {
+                // fallback if URL parsing fails
+                if (href.endsWith('#' + sectionId) || href.endsWith('/#' + sectionId)) {
+                  link.classList.add('active');
+                } else {
+                  link.classList.remove('active');
+                }
+              }
+            }
+          });
+
+          // Highlight on-this-page link
+          otpLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            if (href) {
+              try {
+                const url = new URL(link.href, window.location.href);
+                const isCurrentPage = url.pathname === window.location.pathname || 
+                                      url.pathname.endsWith('/' + window.location.pathname.split('/').pop());
+                if (isCurrentPage && url.hash === '#' + id) {
+                  link.classList.add('active');
+                } else if (isCurrentPage) {
+                  link.classList.remove('active');
+                }
+              } catch (e) {
+                // fallback if URL parsing fails
+                if (href.endsWith('#' + id) || href.endsWith('/#' + id)) {
+                  link.classList.add('active');
+                } else {
+                  link.classList.remove('active');
+                }
+              }
+            }
+          });
+        }
+      });
+    }, observerOptions);
+
+    headings.forEach(heading => observer.observe(heading));
+  }
 });

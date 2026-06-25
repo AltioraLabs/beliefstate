@@ -595,6 +595,15 @@
     .doc-content {
       max-width: 100%;
     }
+    .nav-links, .nav-cta {
+      display: none;
+    }
+    nav:not(.prev-next-nav) .mobile-menu-toggle {
+      display: flex;
+    }
+    body .mobile-menu-overlay {
+      display: block;
+    }
     .table-wrapper {
       max-width: 100%;
       overflow-x: auto;
@@ -605,11 +614,18 @@
       min-width: 650px;
     }
     .prev-next-link {
-      width: 100%;
+      width: 48%;
+      padding: 8px 12px;
+    }
+    .prev-next-label {
+      font-size: 9px;
+    }
+    .prev-next-title {
+      font-size: 12px;
     }
     .prev-next-nav {
-      flex-direction: column;
-      gap: 12px;
+      flex-direction: row;
+      gap: 10px;
     }
   }
 
