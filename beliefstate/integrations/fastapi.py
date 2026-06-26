@@ -1,6 +1,13 @@
 import logging
 from typing import Optional, AsyncGenerator, Any
-from fastapi import Header, Request
+
+try:
+    from fastapi import Header, Request
+
+    HAS_FASTAPI = True
+except ImportError:
+    Header = Request = Any  # type: ignore
+    HAS_FASTAPI = False
 from beliefstate.tracker import session_context
 from beliefstate.integrations.asgi import BeliefTrackerASGIMiddleware
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id

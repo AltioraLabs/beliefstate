@@ -1,6 +1,13 @@
 import logging
 from typing import Optional, Any
-from flask import Flask, request, g
+
+try:
+    from flask import Flask, request, g
+
+    HAS_FLASK = True
+except ImportError:
+    Flask = request = g = Any  # type: ignore
+    HAS_FLASK = False
 from beliefstate.tracker import session_context
 from beliefstate.integrations.wsgi import BeliefTrackerWSGIMiddleware
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id

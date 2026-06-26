@@ -1,9 +1,10 @@
 import json
-import struct
 import logging
+import os
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 from beliefstate.store.base import Store
+from beliefstate.store.utils import cosine_similarity, pack_embedding, unpack_embedding
 from beliefstate.models import Belief
 
 logger = logging.getLogger(__name__)
@@ -12,21 +13,6 @@ try:
     import aiosqlite
 except ImportError:
     aiosqlite = None  # type: ignore[assignment]
-
-
-def pack_embedding(emb: list[float]) -> bytes:
-    """Pack float32 array as binary bytes for storage."""
-    if not emb:
-        return b""
-    return struct.pack(f"{len(emb)}f", *emb)
-
-
-def unpack_embedding(data: bytes) -> list[float]:
-    """Unpack binary bytes back to float32 list."""
-    if not data:
-        return []
-    n = len(data) // 4
-    return list(struct.unpack(f"{n}f", data))
 
 
 def cosine_similarity_py(emb1_str: str, emb2_json_str: str) -> float:
@@ -42,12 +28,7 @@ def cosine_similarity_py(emb1_str: str, emb2_json_str: str) -> float:
             return 0.0
         if len(v1) != len(v2):
             return 0.0
-        dot = sum(a * b for a, b in zip(v1, v2))
-        mag1 = sum(a * a for a in v1) ** 0.5
-        mag2 = sum(b * b for b in v2) ** 0.5
-        if mag1 == 0.0 or mag2 == 0.0:
-            return 0.0
-        return float(dot / (mag1 * mag2))
+        return float(cosine_similarity(v1, v2))
     except Exception:
         return 0.0
 
@@ -61,16 +42,11 @@ def cosine_similarity_binary(emb1_bytes: bytes, emb2_bytes: bytes) -> float:
         n2 = len(emb2_bytes) // 4
         if n1 == 0 or n2 == 0:
             return 0.0
-        v1 = struct.unpack(f"{n1}f", emb1_bytes)
-        v2 = struct.unpack(f"{n2}f", emb2_bytes)
+        v1 = unpack_embedding(emb1_bytes)
+        v2 = unpack_embedding(emb2_bytes)
         if n1 != n2:
             return 0.0
-        dot = sum(a * b for a, b in zip(v1, v2))
-        mag1 = sum(a * a for a in v1) ** 0.5
-        mag2 = sum(b * b for b in v2) ** 0.5
-        if mag1 == 0.0 or mag2 == 0.0:
-            return 0.0
-        return float(dot / (mag1 * mag2))
+        return float(cosine_similarity(v1, v2))
     except Exception:
         return 0.0
 
@@ -94,7 +70,6 @@ class SQLiteStore(Store):
             raise RuntimeError(
                 "aiosqlite is not installed. Run `pip install aiosqlite`"
             )
-        import os
 
         if self.db_path != ":memory:":
             parent = os.path.dirname(self.db_path)
@@ -486,24 +461,30 @@ class SQLiteStore(Store):
         return self._row_to_belief(row)
 
     async def remove_belief(
-        self, session_id: str, subject: str, predicate: str
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+        conversation_id: Optional[str] = None,
     ) -> None:
         conn = await self._get_connection()
         subject = subject.lower()
         predicate = predicate.lower()
+        cid = conversation_id or ""
 
         # Audit before delete
-        existing = await self.get_by_key(subject, predicate, session_id)
+        existing = await self.get_by_key(
+            subject, predicate, session_id, conversation_id
+        )
         if existing:
             await self._audit(existing, "delete")
-            await conn.commit()
 
         await conn.execute(
             """
             DELETE FROM beliefs
-            WHERE session_id = ? AND subject = ? AND predicate = ?
+            WHERE session_id = ? AND conversation_id = ? AND subject = ? AND predicate = ?
         """,
-            (session_id, subject, predicate),
+            (session_id, cid, subject, predicate),
         )
         await conn.commit()
 
@@ -545,7 +526,8 @@ class SQLiteStore(Store):
             async with conn.execute("SELECT 1") as cursor:
                 row = await cursor.fetchone()
             return row is not None
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Health check failed: {e}")
             return False
 
     async def prune_expired_beliefs(
@@ -576,7 +558,7 @@ class SQLiteStore(Store):
             )
         return int(deleted_count)
 
-    async def get_session_belief_age_stats(self, session_id: str) -> dict[str, Any]:
+    async def get_session_belief_age_stats(self, session_id: str) -> Dict[str, Any]:
         conn = await self._get_connection()
         async with conn.execute(
             """

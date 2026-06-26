@@ -169,6 +169,8 @@ class PostgreSQLStore(Store):
     async def add_belief(self, session_id: str, belief: Belief) -> None:
         pool = await self._get_pool()
         conversation_id = belief.conversation_id or ""
+        subject = (belief.subject or "").lower()
+        predicate = (belief.predicate or "").lower()
         created_at = belief.created_at or datetime.now(timezone.utc)
         last_referenced_at = belief.last_referenced_at or datetime.now(timezone.utc)
 
@@ -182,7 +184,7 @@ class PostgreSQLStore(Store):
         old_value = None
         try:
             existing = await self.get_by_key(
-                belief.subject, belief.predicate, session_id, conversation_id
+                subject, predicate, session_id, conversation_id
             )
             if existing:
                 old_value = existing.value
@@ -214,8 +216,8 @@ class PostgreSQLStore(Store):
             """,
                 session_id,
                 conversation_id,
-                belief.subject,
-                belief.predicate,
+                subject,
+                predicate,
                 belief.value,
                 belief.confidence,
                 belief.turn,
@@ -236,6 +238,35 @@ class PostgreSQLStore(Store):
                 await self._audit(conn, belief, "contradiction_update", old_value)
             elif old_value is None:
                 await self._audit(conn, belief, "create")
+
+    def _row_to_belief(self, r: Any) -> Belief:
+        """Convert a database row to a Belief object."""
+        c_at = r["created_at"]
+        if c_at and c_at.tzinfo is None:
+            c_at = c_at.replace(tzinfo=timezone.utc)
+        l_ref = r["last_referenced_at"]
+        if l_ref and l_ref.tzinfo is None:
+            l_ref = l_ref.replace(tzinfo=timezone.utc)
+
+        return Belief(
+            subject=r["subject"],
+            predicate=r["predicate"],
+            value=r["value"],
+            confidence=r["confidence"],
+            turn=r["turn"],
+            source=r["source"],
+            source_quote=r.get("source_quote") or "",
+            category=r.get("category") or "",
+            embedding=r["embedding"] or [],
+            embedding_model=r["embedding_model"] or "",
+            embedding_dim=r["embedding_dim"] or 0,
+            belief_type=r["belief_type"] or "assertion",
+            is_hypothetical=bool(r["is_hypothetical"]),
+            created_at=c_at or datetime.now(timezone.utc),
+            last_referenced_at=l_ref or datetime.now(timezone.utc),
+            session_id=r["session_id"],
+            conversation_id=r["conversation_id"],
+        )
 
     async def get_beliefs(
         self, session_id: str, conversation_id: Optional[str] = None
@@ -260,38 +291,7 @@ class PostgreSQLStore(Store):
                     session_id,
                 )
 
-        beliefs = []
-        for r in rows:
-            # Normalize naive datetimes
-            c_at = r["created_at"]
-            if c_at and c_at.tzinfo is None:
-                c_at = c_at.replace(tzinfo=timezone.utc)
-            l_ref = r["last_referenced_at"]
-            if l_ref and l_ref.tzinfo is None:
-                l_ref = l_ref.replace(tzinfo=timezone.utc)
-
-            beliefs.append(
-                Belief(
-                    subject=r["subject"],
-                    predicate=r["predicate"],
-                    value=r["value"],
-                    confidence=r["confidence"],
-                    turn=r["turn"],
-                    source=r["source"],
-                    source_quote=r.get("source_quote") or "",
-                    category=r.get("category") or "",
-                    embedding=r["embedding"] or [],
-                    embedding_model=r["embedding_model"] or "",
-                    embedding_dim=r["embedding_dim"] or 0,
-                    belief_type=r["belief_type"] or "assertion",
-                    is_hypothetical=bool(r["is_hypothetical"]),
-                    created_at=c_at or datetime.now(timezone.utc),
-                    last_referenced_at=l_ref or datetime.now(timezone.utc),
-                    session_id=r["session_id"],
-                    conversation_id=r["conversation_id"],
-                )
-            )
-        return beliefs
+        return [self._row_to_belief(r) for r in rows]
 
     async def search_beliefs(
         self,
@@ -335,37 +335,7 @@ class PostgreSQLStore(Store):
                     limit,
                 )
 
-        beliefs = []
-        for r in rows:
-            c_at = r["created_at"]
-            if c_at and c_at.tzinfo is None:
-                c_at = c_at.replace(tzinfo=timezone.utc)
-            l_ref = r["last_referenced_at"]
-            if l_ref and l_ref.tzinfo is None:
-                l_ref = l_ref.replace(tzinfo=timezone.utc)
-
-            beliefs.append(
-                Belief(
-                    subject=r["subject"],
-                    predicate=r["predicate"],
-                    value=r["value"],
-                    confidence=r["confidence"],
-                    turn=r["turn"],
-                    source=r["source"],
-                    source_quote=r.get("source_quote") or "",
-                    category=r.get("category") or "",
-                    embedding=r["embedding"] or [],
-                    embedding_model=r["embedding_model"] or "",
-                    embedding_dim=r["embedding_dim"] or 0,
-                    belief_type=r["belief_type"] or "assertion",
-                    is_hypothetical=bool(r["is_hypothetical"]),
-                    created_at=c_at or datetime.now(timezone.utc),
-                    last_referenced_at=l_ref or datetime.now(timezone.utc),
-                    session_id=r["session_id"],
-                    conversation_id=r["conversation_id"],
-                )
-            )
-        return beliefs
+        return [self._row_to_belief(r) for r in rows]
 
     async def _audit(
         self,
@@ -382,8 +352,8 @@ class PostgreSQLStore(Store):
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
             belief.session_id or "",
             belief.conversation_id or "",
-            belief.subject,
-            belief.predicate,
+            (belief.subject or "").lower(),
+            (belief.predicate or "").lower(),
             old_value,
             belief.value,
             operation,
@@ -435,32 +405,7 @@ class PostgreSQLStore(Store):
         if row is None:
             return None
 
-        c_at = row["created_at"]
-        if c_at and c_at.tzinfo is None:
-            c_at = c_at.replace(tzinfo=timezone.utc)
-        l_ref = row["last_referenced_at"]
-        if l_ref and l_ref.tzinfo is None:
-            l_ref = l_ref.replace(tzinfo=timezone.utc)
-
-        return Belief(
-            subject=row["subject"],
-            predicate=row["predicate"],
-            value=row["value"],
-            confidence=row["confidence"],
-            turn=row["turn"],
-            source=row["source"],
-            source_quote=row.get("source_quote") or "",
-            category=row.get("category") or "",
-            embedding=row["embedding"] or [],
-            embedding_model=row["embedding_model"] or "",
-            embedding_dim=row["embedding_dim"] or 0,
-            belief_type=row["belief_type"] or "assertion",
-            is_hypothetical=bool(row["is_hypothetical"]),
-            created_at=c_at or datetime.now(timezone.utc),
-            last_referenced_at=l_ref or datetime.now(timezone.utc),
-            session_id=row["session_id"],
-            conversation_id=row["conversation_id"],
-        )
+        return self._row_to_belief(row)
 
     async def get_audit_history(
         self,
@@ -487,21 +432,29 @@ class PostgreSQLStore(Store):
         return [dict(r) for r in rows]
 
     async def remove_belief(
-        self, session_id: str, subject: str, predicate: str
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+        conversation_id: Optional[str] = None,
     ) -> None:
         pool = await self._get_pool()
+        cid = conversation_id or ""
         async with pool.acquire() as conn:
             # Audit before delete
             try:
-                existing = await self.get_by_key(subject, predicate, session_id)
+                existing = await self.get_by_key(
+                    subject, predicate, session_id, conversation_id
+                )
                 if existing:
                     await self._audit(conn, existing, "delete")
             except Exception as e:
                 logger.debug(f"Audit lookup failed (non-critical): {e}")
 
             await conn.execute(
-                "DELETE FROM beliefs WHERE session_id = $1 AND subject = $2 AND predicate = $3",
+                "DELETE FROM beliefs WHERE session_id = $1 AND conversation_id = $2 AND subject = $3 AND predicate = $4",
                 session_id,
+                cid,
                 subject,
                 predicate,
             )

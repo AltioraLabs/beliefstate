@@ -1,28 +1,13 @@
-import struct
-import math
+import json
 from typing import Any, Dict, List, Optional
 from beliefstate.store.base import Store
+from beliefstate.store.utils import cosine_similarity
 from beliefstate.models import Belief
 
 try:
     import redis.asyncio as redis
 except ImportError:
     redis = None  # type: ignore[assignment]
-
-
-def pack_embedding(emb: list[float]) -> bytes:
-    """Pack float32 array as binary bytes for storage."""
-    if not emb:
-        return b""
-    return struct.pack(f"{len(emb)}f", *emb)
-
-
-def unpack_embedding(data: bytes) -> list[float]:
-    """Unpack binary bytes back to float32 list."""
-    if not data:
-        return []
-    n = len(data) // 4
-    return list(struct.unpack(f"{n}f", data))
 
 
 class RedisStore(Store):
@@ -93,12 +78,7 @@ class RedisStore(Store):
                 continue
             if len(b.embedding) != len(embedding):
                 continue
-            v1 = b.embedding
-            v2 = embedding
-            dot = sum(a * b for a, b in zip(v1, v2))
-            mag1 = math.sqrt(sum(a * a for a in v1))
-            mag2 = math.sqrt(sum(b * b for b in v2))
-            sim = dot / (mag1 * mag2) if mag1 > 0 and mag2 > 0 else 0.0
+            sim = cosine_similarity(b.embedding, embedding)
             if sim >= threshold:
                 scored_beliefs.append((b, sim))
 
@@ -139,7 +119,11 @@ class RedisStore(Store):
         return True
 
     async def remove_belief(
-        self, session_id: str, subject: str, predicate: str
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+        conversation_id: Optional[str] = None,
     ) -> None:
         if not self._client:
             raise RuntimeError(
@@ -203,7 +187,6 @@ class RedisStore(Store):
             return []
         key = self._get_audit_key(session_id, subject, predicate)
         data = await self._client.lrange(key, 0, -1)
-        import json
 
         results = []
         for item in data:

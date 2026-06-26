@@ -38,7 +38,11 @@ class Store(Protocol):
         ...
 
     async def remove_belief(
-        self, session_id: str, subject: str, predicate: str
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+        conversation_id: Optional[str] = None,
     ) -> None:
         """Remove a specific belief based on its subject and predicate."""
         ...

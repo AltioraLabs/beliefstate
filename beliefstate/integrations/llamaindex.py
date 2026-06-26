@@ -96,8 +96,10 @@ class LlamaIndexBeliefTrackerCallback(BaseCallbackHandler):  # type: ignore[misc
                 llm_response = LLMResponse(text=text, raw_response=raw)
 
                 session_id = session_context.get()
-                self.tracker.turn_counter += 1
-                current_turn = self.tracker.turn_counter
+                current_turn = (
+                    self.tracker._session_turn_counters.get(session_id, 0) + 1
+                )
+                self.tracker._session_turn_counters[session_id] = current_turn
 
                 if self.tracker.config.enable_background_tasks:
                     self.tracker.dispatcher.dispatch(

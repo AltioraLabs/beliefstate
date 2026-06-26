@@ -113,6 +113,7 @@ async def observe_run(
     run_id: str,
     session_id: Optional[str] = None,
     poll_interval: float = 1.0,
+    timeout: float = 300.0,
 ) -> None:
     """
     Polls an OpenAI Assistant Run until completion, then reconstructs the messages
@@ -123,7 +124,14 @@ async def observe_run(
 
     sid = session_id or session_context.get()
 
+    import time
+
+    start = time.monotonic()
     while True:
+        elapsed = time.monotonic() - start
+        if elapsed > timeout:
+            logger.error(f"OpenAI Assistant Run {run_id} timed out after {timeout}s")
+            return
         run = await client.beta.threads.runs.retrieve(
             thread_id=thread_id, run_id=run_id
         )
@@ -143,8 +151,8 @@ async def observe_run(
 
     call, response = process_openai_assistant_message(thread_messages, run_id)
 
-    tracker.turn_counter += 1
-    current_turn = tracker.turn_counter
+    current_turn = tracker._session_turn_counters.get(sid, 0) + 1
+    tracker._session_turn_counters[sid] = current_turn
 
     if tracker.config.enable_background_tasks:
         tracker.dispatcher.dispatch(tracker, call, response, sid, current_turn)

@@ -149,9 +149,8 @@ class OllamaAdapter(ProviderAdapter):
         if isinstance(response, dict):
             text = response.get("message", {}).get("content", "")
         else:
-            text = getattr(response, "message", {}).get("content", "")
-            if not text and hasattr(response, "message"):
-                text = getattr(response.message, "content", "")
+            msg = getattr(response, "message", None)
+            text = getattr(msg, "content", "") if msg else ""
 
         return LLMResponse(text=text, raw_response=response)
 
@@ -303,7 +302,7 @@ class OllamaAdapter(ProviderAdapter):
             emb_args.update(self.embed_kwargs)
 
         response = await self.client.embeddings(**emb_args)
-        return cast(List[float], response.get("embedding", []))
+        return cast(List[float], getattr(response, "embedding", []))
 
     async def get_embedding(self, text: str) -> List[float]:
         """Get embedding for a single text.

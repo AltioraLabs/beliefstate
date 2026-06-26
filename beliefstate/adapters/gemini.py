@@ -76,6 +76,7 @@ class GeminiAdapter(ProviderAdapter):
                 self.client = None
             except ValueError as e:
                 self.log.error(f"Configuration error: {e}")
+                self.client = None
 
     def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
         contents = kwargs.get("contents", [])

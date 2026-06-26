@@ -2,8 +2,11 @@
 
 import asyncio
 import logging
+import random
 from typing import Any, Callable, Optional, TypeVar
 from functools import wraps
+
+from beliefstate.resilience import is_transient_error
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +36,6 @@ class RetryConfig:
         delay = min(delay, self.max_delay)
 
         if self.jitter:
-            import random
-
             delay *= random.uniform(0.5, 1.0)
 
         return delay
@@ -50,38 +51,6 @@ class PermanentError(Exception):
     """Indicates an error that won't succeed on retry."""
 
     pass
-
-
-def is_transient_error(error: Exception) -> bool:
-    """Determine if an error is transient (worth retrying)."""
-    error_msg = str(error).lower()
-    error_type = type(error).__name__
-
-    # Common transient errors
-    transient_indicators = [
-        "rate limit",
-        "timeout",
-        "connection reset",
-        "connection refused",
-        "temporarily unavailable",
-        "service unavailable",
-        "gateway",
-        "503",
-        "429",
-        "504",
-        "ephemeral",
-        "transient",
-    ]
-
-    # OpenAI / Anthropic connection errors
-    if "APIConnectionError" in error_type or "APITimeoutError" in error_type:
-        return True
-
-    # Generic checks
-    if any(indicator in error_msg for indicator in transient_indicators):
-        return True
-
-    return False
 
 
 async def retry_with_backoff(
@@ -209,44 +178,6 @@ def validate_api_key(api_key: Optional[str], provider: str) -> None:
             f"{provider} API key is not configured. "
             f"Set the appropriate environment variable or pass it explicitly."
         )
-
-
-async def validate_model_availability(
-    list_models_func: Callable[..., Any],
-    model_name: str,
-    provider: str,
-    timeout: float = 5.0,
-) -> bool:
-    """Validate that a model is available from a provider.
-
-    Args:
-        list_models_func: Async function that returns available models
-        model_name: Model to check
-        provider: Provider name for logging
-        timeout: Timeout for availability check
-
-    Returns:
-        True if model is available, False otherwise
-    """
-    try:
-        models = await with_timeout(
-            list_models_func(), timeout, f"list models from {provider}"
-        )
-        if isinstance(models, dict):
-            models = models.get("data", [])
-        available = any(
-            (isinstance(m, dict) and m.get("id") == model_name)
-            or (hasattr(m, "id") and m.id == model_name)
-            for m in models
-        )
-        if available:
-            logger.info(f"Model {model_name} is available on {provider}")
-        else:
-            logger.warning(f"Model {model_name} not found on {provider}")
-        return available
-    except Exception as e:
-        logger.warning(f"Could not verify model availability on {provider}: {e}")
-        return False
 
 
 class StructuredLogger:

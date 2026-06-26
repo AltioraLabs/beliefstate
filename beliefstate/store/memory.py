@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Any
 from collections import OrderedDict
 import logging
 from beliefstate.store.base import Store
+from beliefstate.store.utils import cosine_similarity
 from beliefstate.models import Belief
 
 logger = logging.getLogger(__name__)
@@ -82,8 +83,6 @@ class InMemoryBeliefStore(Store):
         limit: int = 5,
         conversation_id: Optional[str] = None,
     ) -> List[Belief]:
-        import math
-
         beliefs = await self.get_beliefs(session_id, conversation_id)
         scored_beliefs = []
 
@@ -92,12 +91,7 @@ class InMemoryBeliefStore(Store):
                 continue
             if len(b.embedding) != len(embedding):
                 continue
-            v1 = b.embedding
-            v2 = embedding
-            dot = sum(a * b for a, b in zip(v1, v2))
-            mag1 = math.sqrt(sum(a * a for a in v1))
-            mag2 = math.sqrt(sum(b * b for b in v2))
-            sim = dot / (mag1 * mag2) if mag1 > 0 and mag2 > 0 else 0.0
+            sim = cosine_similarity(b.embedding, embedding)
             if sim >= threshold:
                 scored_beliefs.append((b, sim))
 
@@ -112,14 +106,10 @@ class InMemoryBeliefStore(Store):
         conversation_id: Optional[str] = None,
     ) -> Optional[Belief]:
         """Retrieve a single belief by its composite key."""
-        beliefs = await self.get_beliefs(session_id, conversation_id)
-        for b in beliefs:
-            if (
-                b.subject.lower() == subject.lower()
-                and b.predicate.lower() == predicate.lower()
-            ):
-                return b
-        return None
+        if session_id not in self._beliefs:
+            return None
+        field = f"{subject.lower()}::{predicate.lower()}"
+        return self._beliefs[session_id].get(field)
 
     async def upsert(self, belief: Belief) -> bool:
         """Insert or update a belief with turn-based optimistic concurrency.
@@ -138,7 +128,11 @@ class InMemoryBeliefStore(Store):
         return True
 
     async def remove_belief(
-        self, session_id: str, subject: str, predicate: str
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+        conversation_id: Optional[str] = None,
     ) -> None:
         if session_id not in self._beliefs:
             return

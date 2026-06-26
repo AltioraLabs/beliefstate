@@ -158,7 +158,7 @@ async def test_llamaindex_callback_handler():
     mock_tracker.config = MagicMock()
     mock_tracker.config.enable_background_tasks = True
     mock_tracker.dispatcher = MagicMock()
-    mock_tracker.turn_counter = 0
+    mock_tracker._session_turn_counters = {}
 
     callback = LlamaIndexBeliefTrackerCallback(tracker=mock_tracker)
 
@@ -189,7 +189,7 @@ async def test_llamaindex_callback_handler():
     )
 
     assert event_id not in callback.pending_calls
-    assert mock_tracker.turn_counter == 1
+    assert mock_tracker._session_turn_counters.get("session-llama-789") == 1
     mock_tracker.dispatcher.dispatch.assert_called_once()
 
     # Extract args passed to dispatcher.dispatch
@@ -269,7 +269,7 @@ async def test_observe_run_polling_and_dispatch():
     mock_tracker.config = MagicMock()
     mock_tracker.config.enable_background_tasks = True
     mock_tracker.dispatcher = MagicMock()
-    mock_tracker.turn_counter = 0
+    mock_tracker._session_turn_counters = {}
 
     mock_client = AsyncMock()
 
@@ -308,7 +308,7 @@ async def test_observe_run_polling_and_dispatch():
         thread_id="thread_123"
     )
 
-    assert mock_tracker.turn_counter == 1
+    assert mock_tracker._session_turn_counters.get("session-openai-999") == 1
     mock_tracker.dispatcher.dispatch.assert_called_once()
 
     _, call_arg, response_arg, session_id_arg, turn_arg = (
@@ -352,7 +352,7 @@ async def test_langchain_callback_handler():
     mock_tracker = MagicMock()
     mock_tracker.config = MagicMock()
     mock_tracker.config.enable_background_tasks = False
-    mock_tracker.turn_counter = 0
+    mock_tracker._session_turn_counters = {}
     mock_tracker._track_background = AsyncMock()
 
     callback = BeliefTrackerLangchainCallback(tracker=mock_tracker)
@@ -387,7 +387,7 @@ async def test_langchain_callback_handler():
     await callback.on_llm_end(response=response, run_id=run_id)
 
     assert run_id not in callback.pending_calls
-    assert mock_tracker.turn_counter == 1
+    assert mock_tracker._session_turn_counters.get("session-langchain") == 1
     mock_tracker._track_background.assert_called_once()
 
     # 2. Test standard LLM start

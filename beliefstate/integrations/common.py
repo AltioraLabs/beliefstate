@@ -1,5 +1,6 @@
 """Shared utilities for all integrations."""
 
+import asyncio
 import logging
 import time
 from typing import Any, Callable, Optional
@@ -115,7 +116,7 @@ def track_request(integration_type: str = "integration") -> Callable[..., Any]:
                 raise
 
         # Return async wrapper if the function is async, otherwise sync wrapper
-        if hasattr(func, "__await__") or "async" in str(func):
+        if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
 

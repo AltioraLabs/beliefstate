@@ -28,6 +28,9 @@ def test_protocol_runtime_checks() -> None:
         async def health_check(self) -> bool:
             return True
 
+        def inject_context(self, context_prompt: str, *args: Any, **kwargs: Any) -> Any:
+            return args, kwargs
+
     p = MockValidProvider()
     assert isinstance(p, ProviderAdapter)
 

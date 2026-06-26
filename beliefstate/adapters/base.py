@@ -36,6 +36,10 @@ class ProviderAdapter(Protocol):
         """Generate embeddings for a list of texts using this provider natively."""
         ...
 
+    def inject_context(self, context_prompt: str, *args: Any, **kwargs: Any) -> Any:
+        """Inject context into the LLM call arguments."""
+        ...
+
     async def health_check(self) -> bool:
         """Check if the provider is accessible and responding correctly.
 
