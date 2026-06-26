@@ -9,7 +9,7 @@ try:
     )
 except ImportError:
     FastAPIBeliefTrackerMiddleware = None  # type: ignore[assignment,misc]
-    get_session_id = None  # type: ignore[assignment,misc]
+    get_session_id = None  # type: ignore[assignment]
 
 try:
     from beliefstate.integrations.flask import (
@@ -18,7 +18,7 @@ try:
     )
 except ImportError:
     FlaskBeliefTrackerMiddleware = None  # type: ignore[assignment,misc]
-    register_flask_hooks = None  # type: ignore[assignment,misc]
+    register_flask_hooks = None  # type: ignore[assignment]
 
 try:
     from beliefstate.integrations.llamaindex import LlamaIndexBeliefTrackerCallback
@@ -31,8 +31,8 @@ try:
         observe_run,
     )
 except ImportError:
-    process_openai_assistant_message = None  # type: ignore[assignment,misc]
-    observe_run = None  # type: ignore[assignment,misc]
+    process_openai_assistant_message = None  # type: ignore[assignment]
+    observe_run = None  # type: ignore[assignment]
 
 __all__ = [
     "BeliefTrackerASGIMiddleware",
