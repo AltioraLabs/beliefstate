@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/data_flow.png" alt="BeliefState" width="600">
-</p>
-
 <h1 align="center">BeliefState</h1>
 
 <p align="center">
