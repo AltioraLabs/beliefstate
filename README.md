@@ -56,6 +56,8 @@ await chat([{"role": "user", "content": "I live in Tokyo and work at Google."}])
 | **Framework integrations** | LangChain, LlamaIndex, FastAPI, Flask, OpenAI Assistants — out of the box |
 | **Production resilience** | Retry with backoff, circuit breakers, health checks, structured logging |
 | **Pluggable dispatchers** | Celery, Redis Queue, or in-process — survive server restarts |
+| **GDPR-ready** | One-call `clear_session()` with auditable deletion receipts |
+| **Observability** | OpenTelemetry traces and metrics — built-in, optional |
 
 ---
 
@@ -148,11 +150,28 @@ audit = await tracker.store.get_audit_history(
 )
 ```
 
-### 3. Cleanup
+### 3. Context Injection
+
+Inject stored beliefs directly into LLM prompts:
 
 ```python
-# Graceful shutdown — waits for background tasks to finish
+messages = [{"role": "user", "content": "What should I work on today?"}]
+augmented = await tracker.inject_context(messages, session_id="user_123")
+# Adds a system message with relevant beliefs (token-budget aware)
+```
+
+The `inject_context` method respects `max_beliefs`, `belief_budget_tokens`, and `enable_token_aware_injection` settings. It appends beliefs to the existing system message or creates one if absent.
+
+### 4. Graceful Shutdown
+
+```python
+# Drain background tasks and close the store
 await tracker.shutdown(grace_seconds=5.0)
+
+# Or use as an async context manager
+async with BeliefTracker(adapter=adapter, config=config) as tracker:
+    # ... your app code ...
+# Store is automatically closed on exit
 ```
 
 ---
@@ -246,14 +265,18 @@ tracker = BeliefTracker(
 
 ## Stores
 
-| Store | Use Case | Configuration |
-|-------|----------|---------------|
-| **SQLite** | Single-server production apps | `store_kwargs={"db_path": "beliefs.db"}` |
-| **PostgreSQL** | Multi-server, high-concurrency | `store_kwargs={"dsn": "postgresql://..."}` |
-| **Redis** | Distributed caching, multiple workers | `store_kwargs={"redis_url": "redis://localhost:6379/0"}` |
-| **Memory** | Testing, transient sessions | `store_type="memory"` |
+| Store | Use Case | Configuration | Concurrency |
+|-------|----------|---------------|-------------|
+| **SQLite** | Single-server production apps | `store_kwargs={"db_path": "beliefs.db"}` | WAL mode, async via `aiosqlite` |
+| **PostgreSQL** | Multi-server, high-concurrency | `store_kwargs={"dsn": "postgresql://..."}` | Row-level locking, connection pooling |
+| **Redis** | Distributed caching, multiple workers | `store_kwargs={"redis_url": "redis://localhost:6379/0"}` | Atomic Lua scripts, Redis Cluster |
+| **Memory** | Testing, transient sessions | `store_type="memory"` | Async locks, no persistence |
 
-All stores implement the same interface and include full audit trails, case-insensitive lookup, and `conversation_id` scoping.
+All stores implement the same interface and include:
+- **Full audit trail** — every belief mutation is recorded with timestamp and reason
+- **Case-insensitive lookup** — subjects and predicates are normalized on insert
+- **`conversation_id` scoping** — isolate beliefs within multi-conversation sessions
+- **Embedding storage** — beliefs carry their embedding and model name for reuse
 
 ---
 
@@ -348,6 +371,8 @@ register_global_tracker(tracker)
 
 ## Configuration Reference
 
+### TrackerConfig
+
 ```python
 from beliefstate import TrackerConfig
 from beliefstate.adapters import RetryConfig
@@ -357,15 +382,19 @@ config = TrackerConfig(
     store_type="sqlite",                    # sqlite | redis | postgres | memory
     store_kwargs={"db_path": "beliefs.db"},
 
+    # Detection thresholds
+    similarity_threshold=0.82,              # embedding similarity for deduplication
+    contradiction_threshold=0.70,           # NLI score to flag contradictions
+    entailment_threshold=0.85,              # skip beliefs entailed by existing ones
+
     # Extraction
-    extraction_model="gpt-4o-mini",         # model for background extraction
+    extraction_model="gpt-4o-mini",
     embedding_model="text-embedding-3-small",
-    max_beliefs_per_turn=50,
-    similarity_threshold=0.7,
+    max_beliefs=50,                         # max beliefs injected into prompts
+    belief_sort_strategy="confidence_recency",  # confidence_recency | recency | confidence
 
     # Background tasks
     enable_background_tasks=True,
-    max_concurrent_extractions=10,
 
     # Resilience
     retry_max_attempts=5,
@@ -377,10 +406,124 @@ config = TrackerConfig(
     enable_circuit_breaker=True,
     circuit_breaker_failure_threshold=5,
     circuit_breaker_recovery_timeout=30.0,
+
+    # Belief TTL (optional)
+    enable_belief_ttl=False,
+    belief_max_age_seconds=86400,           # 24 hours
+    belief_ttl_check_interval=3600,
+
+    # Staleness scoring (session resumption)
+    enable_staleness_scoring=True,
+    staleness_threshold=0.1,                # confidence / days_since_referenced
+
+    # Token-aware injection
+    enable_token_aware_injection=True,
+    belief_budget_tokens=500,               # max tokens for belief injection
+
+    # Judge timeout
+    judge_timeout=60.0,                     # seconds for LLM judge calls
+
+    # Confidence caps
+    user_confidence_cap=0.99,               # beliefs from user messages
+    assistant_confidence_cap=0.85,          # beliefs from assistant responses
+
+    # Custom prompts
+    extract_prompt_template="...",          # override extraction prompt
+    judge_prompt_template="...",            # override contradiction detection prompt
 )
 ```
 
-See `beliefstate/tracker.py` for the full `TrackerConfig` schema.
+### RetryConfig
+
+```python
+from beliefstate.adapters import RetryConfig
+
+retry = RetryConfig(
+    max_retries=3,          # maximum retry attempts
+    initial_delay=1.0,      # initial delay in seconds
+    max_delay=30.0,         # cap on exponential backoff
+    exponential_base=2.0,   # backoff multiplier
+    jitter=True,            # add randomness to prevent thundering herd
+)
+```
+
+---
+
+## Observability
+
+### Structured Logging
+
+BeliefState logs all pipeline events with structured context:
+
+```python
+import logging
+logging.basicConfig(level=logging.INFO)
+# Every log line includes: session_id, turn, belief count, contradictions
+```
+
+### OpenTelemetry
+
+Built-in OpenTelemetry integration for traces and metrics:
+
+```python
+from beliefstate.observability import setup_otel
+
+# Enable with defaults (sends to localhost:4317)
+setup_otel()
+
+# Custom endpoint (e.g., Datadog, Jaeger)
+setup_otel(otel_exporter_otlp_endpoint="http://datadog-agent:4317")
+
+# Disable
+setup_otel(enabled=False)
+```
+
+Captures: extraction latency, contradiction detection timing, store operation durations, adapter call performance, and deduplication rates.
+
+---
+
+## GDPR & Privacy
+
+One-call session deletion with an auditable receipt:
+
+```python
+receipt = await tracker.clear_session(session_id="user_123")
+# receipt.session_id = "user_123"
+# receipt.beliefs_deleted = 47
+# receipt.deleted_at = datetime(2025-06-25, 12, 0, tzinfo=UTC)
+# receipt.in_flight_tasks_drained = 3
+```
+
+`clear_session()` drains in-flight background tasks, deletes all beliefs and audit history, clears conflict resolution state, and returns a `DeletionReceipt` for compliance logging.
+
+---
+
+## Hedging & Deduplication
+
+BeliefState avoids injecting duplicate beliefs into prompts:
+
+- **Embedding similarity** — beliefs with cosine similarity above `similarity_threshold` are deduplicated on insert
+- **Entailment detection** — new beliefs entailed by existing ones (score >= `entailment_threshold`) are skipped
+- **Confidence calibration** — `calibrate_confidence()` adjusts confidence based on source (user vs. assistant), extraction quality, and contradiction history
+
+```python
+from beliefstate.extractor import calibrate_confidence
+from beliefstate.models import Belief
+
+# Manually calibrate a belief's confidence
+calibrated = calibrate_confidence(belief)
+```
+
+---
+
+## Concurrency Model
+
+BeliefState handles concurrent access safely:
+
+- **Per-session async locks** — each session gets its own lock to prevent race conditions during belief extraction
+- **Turn-based optimistic concurrency** — beliefs track their turn number; stale writes are rejected
+- **Background task tracking** — `_pending_tasks` set tracks all in-flight extraction jobs for proper shutdown drain
+- **Store-level atomicity** — SQLite uses WAL mode, PostgreSQL uses row-level locks, Redis uses Lua scripts
 
 ---
 
@@ -393,6 +536,11 @@ See `beliefstate/tracker.py` for the full `TrackerConfig` schema.
 | `set_session(session_id, conversation_id)` | Set the active session context |
 | `wrap(fn)` | Decorator that intercepts LLM calls and extracts beliefs |
 | `track(call, response, session_id)` | Manually track a single LLM call/response |
+| `inject_context(messages, session_id)` | Inject stored beliefs into LLM messages |
+| `get_context_prompt(session_id)` | Get the belief summary string for prompt injection |
+| `clear_session(session_id)` | GDPR deletion — drain, delete, return receipt |
+| `get_pending_conflicts(session_id)` | Pop unresolved contradiction conflicts for human review |
+| `get_stats_dict(session_id)` | Get session statistics as a dictionary |
 | `shutdown(grace_seconds)` | Gracefully drain background tasks and close the store |
 
 ### Store Interface
@@ -406,6 +554,8 @@ See `beliefstate/tracker.py` for the full `TrackerConfig` schema.
 | `remove_belief(session_id, subject, predicate)` | Delete a belief |
 | `get_audit_history(session_id, subject, predicate)` | Full mutation history |
 | `health_check()` | Verify store connectivity |
+| `clear(session_id)` | Delete all data for a session |
+| `open()` / `close()` | Lifecycle hooks for connection management |
 
 ### Adapter Interface
 
@@ -414,7 +564,7 @@ See `beliefstate/tracker.py` for the full `TrackerConfig` schema.
 | `generate(call, response_format)` | Generate a completion |
 | `embed(texts)` | Embed a list of texts |
 | `health_check()` | Verify provider connectivity |
-| `inject_context(prompt)` | Inject context into a prompt |
+| `inject_context(prompt)` | Provider-specific context injection (system messages, etc.) |
 
 ---
 
