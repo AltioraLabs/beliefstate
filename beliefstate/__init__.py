@@ -8,11 +8,16 @@ All adapter and integration imports are lazy — they only fail when you
 from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.models import Belief
 from beliefstate.config import TrackerConfig
-from beliefstate.store.base import Store
+from beliefstate.store.base import Store, summary_for_prompt
 from beliefstate.store.sqlite import SQLiteStore
-from beliefstate.tracker import BeliefTracker, session_context
-from beliefstate.extractor import BeliefExtractor
-from beliefstate.detector import ContradictionDetector
+from beliefstate.tracker import BeliefTracker, session_context, TrackerStats
+from beliefstate.extractor import BeliefExtractor, calibrate_confidence
+from beliefstate.detector import (
+    ContradictionDetector,
+    Outcome,
+    DetectionResult,
+    normalize_value,
+)
 from beliefstate.resolver import BeliefResolver
 from beliefstate.logging_utils import TrackerEvent, log_event
 
@@ -135,15 +140,21 @@ __all__ = [
     "Belief",
     "TrackerConfig",
     "Store",
+    "summary_for_prompt",
     "SQLiteStore",
     "RedisStore",
     "PostgreSQLStore",
     "InMemoryBeliefStore",
     "ProviderAdapter",
     "BeliefExtractor",
+    "calibrate_confidence",
     "ContradictionDetector",
+    "Outcome",
+    "DetectionResult",
+    "normalize_value",
     "BeliefResolver",
     "BeliefTracker",
+    "TrackerStats",
     "session_context",
     # Resilience
     "ResilientAdapterWrapper",

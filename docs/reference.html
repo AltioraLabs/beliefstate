@@ -1261,6 +1261,9 @@
       <a href="#belief-model">→ Belief</a>
       <a href="#tracker-config">→ TrackerConfig</a>
       <a href="#deletion-receipt">→ DeletionReceipt</a>
+      <a href="#tracker-stats">→ TrackerStats</a>
+      <a href="#outcome-detection-result">→ Outcome &amp; DetectionResult</a>
+      <a href="#utility-functions">→ Utility Functions</a>
       <a href="#exceptions">→ Exceptions</a>
       <a href="#provider-adapter">→ ProviderAdapter Protocol</a>
       <a href="#changelog">Changelog</a>
@@ -1365,7 +1368,11 @@
     config: TrackerConfig,
     adapter: ProviderAdapter,
     internal_adapter: Optional[ProviderAdapter] = <span class="c-kw">None</span>,
-    dispatcher: Optional[Dispatcher] = <span class="c-kw">None</span>
+    dispatcher: Optional[Dispatcher] = <span class="c-kw">None</span>,
+    judge: Optional[LLMJudge] = <span class="c-kw">None</span>,
+    store: Optional[Store] = <span class="c-kw">None</span>,
+    detector: Optional[BeliefDetector] = <span class="c-kw">None</span>,
+    resolver: Optional[BeliefResolver] = <span class="c-kw">None</span>
 )</div>
           </div>
 
@@ -1425,9 +1432,9 @@
                 </tr>
                 <tr>
                   <td><code>get_beliefs</code></td>
-                  <td><code>get_beliefs(session_id, conversation_id) async</code></td>
+                  <td><code>get_beliefs(session_id, conversation_id=None, category=None, belief_type=None) async</code></td>
                   <td><span class="type-label">list[Belief]</span></td>
-                  <td>Query stored beliefs</td>
+                  <td>Query stored beliefs with optional filters.</td>
                 </tr>
                 <tr>
                   <td><code>health_check</code></td>
@@ -1546,6 +1553,18 @@
                   <td><span class="default-label none">None</span></td>
                   <td>UTC timestamp of last prompt injection.</td>
                 </tr>
+                <tr>
+                  <td><code>category</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">"general"</span></td>
+                  <td>Domain category (e.g., 'preference', 'fact', 'context').</td>
+                </tr>
+                <tr>
+                  <td><code>source_quote</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label">""</span></td>
+                  <td>Original text snippet (max 100 chars) that triggered extraction.</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -1588,9 +1607,9 @@
                 </tr>
                 <tr>
                   <td><code>in_flight_tasks_drained</code></td>
-                  <td><span class="type-label">bool</span></td>
-                  <td><span class="default-label required">required</span></td>
-                  <td>True if all concurrent tracking tasks were fully drained.</td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">0</span></td>
+                  <td>Count of background tasks cancelled during shutdown.</td>
                 </tr>
                 <tr>
                   <td><code>deleted_at</code></td>
@@ -1600,6 +1619,218 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- SUBSECTION: TrackerStats -->
+          <h3 id="tracker-stats">TrackerStats</h3>
+          <p>
+            Runtime statistics tracker built into BeliefTracker. Exposes counters and a rolling success rate window.
+          </p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>total_turns_processed</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td>Total number of conversation turns processed.</td>
+                </tr>
+                <tr>
+                  <td><code>total_beliefs_extracted</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td>Total belief triples extracted across all turns.</td>
+                </tr>
+                <tr>
+                  <td><code>total_contradictions_detected</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td>Total contradictions detected.</td>
+                </tr>
+                <tr>
+                  <td><code>total_duplicates_skipped</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td>Total exact/entailed duplicates skipped during deduplication.</td>
+                </tr>
+                <tr>
+                  <td><code>extraction_errors</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td>Total extraction errors encountered.</td>
+                </tr>
+                <tr>
+                  <td><code>last_error</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td>Message from the most recent error.</td>
+                </tr>
+                <tr>
+                  <td><code>last_successful_extraction</code></td>
+                  <td><span class="type-label">Optional[datetime]</span></td>
+                  <td>UTC timestamp of last successful extraction.</td>
+                </tr>
+                <tr>
+                  <td><code>extraction_success_rate</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td>Rolling success rate (last 100 turns). Returns 1.0 when empty.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">stats_usage.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner">stats = tracker.<span class="c-fn">get_stats</span>()
+<span class="c-kw">print</span>(stats.total_beliefs_extracted)
+<span class="c-kw">print</span>(stats.<span class="c-fn">extraction_success_rate</span>)  <span class="c-cm"># rolling 100-turn window</span></div>
+          </div>
+
+          <!-- SUBSECTION: Outcome and DetectionResult -->
+          <h3 id="outcome-detection-result">Outcome &amp; DetectionResult</h3>
+          <p>
+            Detection outcomes for each belief after running through the contradiction detector and deduplication pipeline.
+          </p>
+
+          <h4>Outcome</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Value</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Outcome.NEW</code></td>
+                  <td>Belief is novel — no existing match found. Proceeds to store.</td>
+                </tr>
+                <tr>
+                  <td><code>Outcome.DUPLICATE</code></td>
+                  <td>Belief is an exact or entailed duplicate of an existing belief.</td>
+                </tr>
+                <tr>
+                  <td><code>Outcome.CONTRADICTION</code></td>
+                  <td>Belief contradicts an existing belief (NLI score above threshold).</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>DetectionResult</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>belief</code></td>
+                  <td><span class="type-label">Belief</span></td>
+                  <td>The new belief that was evaluated.</td>
+                </tr>
+                <tr>
+                  <td><code>outcome</code></td>
+                  <td><span class="type-label">Outcome</span></td>
+                  <td>Result of the detection: NEW, DUPLICATE, or CONTRADICTION.</td>
+                </tr>
+                <tr>
+                  <td><code>matched_belief</code></td>
+                  <td><span class="type-label">Optional[Belief]</span></td>
+                  <td>The existing belief that matched, if any.</td>
+                </tr>
+                <tr>
+                  <td><code>score</code></td>
+                  <td><span class="type-label">float</span></td>
+                  <td>Similarity or NLI score for the match.</td>
+                </tr>
+                <tr>
+                  <td><code>reason</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td>Human-readable explanation of the detection result.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- SUBSECTION: Utility Functions -->
+          <h3 id="utility-functions">Utility Functions</h3>
+          <p>Public utility functions exported from the <code>beliefstate</code> package.</p>
+
+          <h4>calibrate_confidence(belief)</h4>
+          <p>
+            Post-extraction confidence calibration. Scans the belief's <code>source_quote</code> for hedging patterns (e.g., "might", "perhaps", "not sure") and lowers the confidence score to a pattern-specific ceiling. Sets <code>is_hypothetical=True</code> for strong hedging (ceiling ≤ 0.60).
+          </p>
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">calibrate.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> calibrate_confidence
+
+<span class="c-cm"># After extraction, calibrate based on hedging patterns</span>
+belief = <span class="c-fn">calibrate_confidence</span>(belief)
+<span class="c-cm"># If source_quote contains "might" → confidence capped at 0.60</span>
+<span class="c-cm"># If source_quote contains "not sure" → confidence capped at 0.50, is_hypothetical=True</span></div>
+          </div>
+
+          <h4>normalize_value(value)</h4>
+          <p>
+            NFKC-normalizes a belief value for exact-match deduplication comparison. Lowercases, strips punctuation, and collapses whitespace. Used by the detector's O(1) exact duplicate check.
+          </p>
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">normalize.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> normalize_value
+
+<span class="c-fn">normalize_value</span>(<span class="c-str">"New York, NY"</span>)   <span class="c-cm"># → "new york ny"</span>
+<span class="c-fn">normalize_value</span>(<span class="c-str">"$5,000"</span>)        <span class="c-cm"># → "5000"</span>
+<span class="c-fn">normalize_value</span>(<span class="c-str">"  Hello  World "</span>) <span class="c-cm"># → "hello world"</span></div>
+          </div>
+
+          <h4>summary_for_prompt(beliefs, max_beliefs=50, max_speculative_beliefs=5)</h4>
+          <p>
+            Formats a list of beliefs into a compact, category-grouped summary string suitable for injection into LLM system prompts. Speculative beliefs (is_hypothetical=True) are grouped separately and capped at <code>max_speculative_beliefs</code>.
+          </p>
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">summary.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate.store.base <span class="c-kw">import</span> summary_for_prompt
+
+text = <span class="c-fn">summary_for_prompt</span>(beliefs, max_beliefs=<span class="c-num">30</span>)
+<span class="c-cm"># Output:</span>
+<span class="c-cm"># Known facts about USER:</span>
+<span class="c-cm"># - preference: likes vegetarian food (confidence 0.95)</span>
+<span class="c-cm"># - fact: lives in Seattle (confidence 0.90)</span>
+<span class="c-cm">#</span>
+<span class="c-cm"># Speculative (unconfirmed):</span>
+<span class="c-cm"># - planning: considering a move (confidence 0.40)</span></div>
           </div>
 
           <!-- SUBSECTION: Exceptions -->
@@ -1618,16 +1849,16 @@
               </thead>
               <tbody>
                 <tr>
-                  <td><code>BeliefContradictionError</code></td>
-                  <td>Resolution strategy is BLOCK and contradiction detected</td>
-                </tr>
-                <tr>
                   <td><code>CircuitBreakerOpenException</code></td>
                   <td>Circuit breaker is OPEN</td>
                 </tr>
                 <tr>
-                  <td><code>ExtractionError</code></td>
-                  <td>All retry attempts exhausted, beliefs could not be extracted</td>
+                  <td><code>TransientError</code></td>
+                  <td>Retryable error (network timeout, rate limit)</td>
+                </tr>
+                <tr>
+                  <td><code>PermanentError</code></td>
+                  <td>Non-retryable error (auth failure, invalid request)</td>
                 </tr>
               </tbody>
             </table>
@@ -1776,6 +2007,9 @@
           <li><a href="#belief-model" class="otp-link indent">→ Belief</a></li>
           <li><a href="#tracker-config" class="otp-link indent">→ TrackerConfig</a></li>
           <li><a href="#deletion-receipt" class="otp-link indent">→ DeletionReceipt</a></li>
+          <li><a href="#tracker-stats" class="otp-link indent">→ TrackerStats</a></li>
+          <li><a href="#outcome-detection-result" class="otp-link indent">→ Outcome &amp; DetectionResult</a></li>
+          <li><a href="#utility-functions" class="otp-link indent">→ Utility Functions</a></li>
           <li><a href="#exceptions" class="otp-link indent">→ Exceptions</a></li>
           <li><a href="#provider-adapter" class="otp-link indent">→ ProviderAdapter Protocol</a></li>
           <li><a href="#changelog" class="otp-link">Changelog</a></li>

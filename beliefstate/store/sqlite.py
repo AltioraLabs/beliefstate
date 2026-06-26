@@ -1,4 +1,5 @@
 import json
+import struct
 import logging
 from typing import List, Optional, Any
 from datetime import datetime, timezone
@@ -13,18 +14,60 @@ except ImportError:
     aiosqlite = None  # type: ignore[assignment]
 
 
-def cosine_similarity_py(emb1_str: str, emb2_json_str: str) -> float:
-    try:
-        import json
-        import math
+def pack_embedding(emb: list[float]) -> bytes:
+    """Pack float32 array as binary bytes for storage."""
+    if not emb:
+        return b""
+    return struct.pack(f"{len(emb)}f", *emb)
 
+
+def unpack_embedding(data: bytes) -> list[float]:
+    """Unpack binary bytes back to float32 list."""
+    if not data:
+        return []
+    n = len(data) // 4
+    return list(struct.unpack(f"{n}f", data))
+
+
+def cosine_similarity_py(emb1_str: str, emb2_json_str: str) -> float:
+    """Compute cosine similarity between two JSON-encoded embedding strings.
+
+    Kept for backwards compatibility with existing in-progress queries.
+    New code should use binary embeddings.
+    """
+    try:
         v1 = json.loads(emb1_str)
         v2 = json.loads(emb2_json_str)
         if not v1 or not v2:
             return 0.0
+        if len(v1) != len(v2):
+            return 0.0
         dot = sum(a * b for a, b in zip(v1, v2))
-        mag1 = math.sqrt(sum(a * a for a in v1))
-        mag2 = math.sqrt(sum(b * b for b in v2))
+        mag1 = sum(a * a for a in v1) ** 0.5
+        mag2 = sum(b * b for b in v2) ** 0.5
+        if mag1 == 0.0 or mag2 == 0.0:
+            return 0.0
+        return float(dot / (mag1 * mag2))
+    except Exception:
+        return 0.0
+
+
+def cosine_similarity_binary(emb1_bytes: bytes, emb2_bytes: bytes) -> float:
+    """Compute cosine similarity between two binary-packed float32 embeddings."""
+    try:
+        if not emb1_bytes or not emb2_bytes:
+            return 0.0
+        n1 = len(emb1_bytes) // 4
+        n2 = len(emb2_bytes) // 4
+        if n1 == 0 or n2 == 0:
+            return 0.0
+        v1 = struct.unpack(f"{n1}f", emb1_bytes)
+        v2 = struct.unpack(f"{n2}f", emb2_bytes)
+        if n1 != n2:
+            return 0.0
+        dot = sum(a * b for a, b in zip(v1, v2))
+        mag1 = sum(a * a for a in v1) ** 0.5
+        mag2 = sum(b * b for b in v2) ** 0.5
         if mag1 == 0.0 or mag2 == 0.0:
             return 0.0
         return float(dot / (mag1 * mag2))
@@ -33,54 +76,62 @@ def cosine_similarity_py(emb1_str: str, emb2_json_str: str) -> float:
 
 
 class SQLiteStore(Store):
-    """SQLite-based asynchronous storage for beliefs."""
+    """SQLite-based asynchronous storage for beliefs.
+
+    Uses a single persistent connection, binary float32 embedding storage,
+    WAL mode for crash resilience, and turn-based optimistic concurrency.
+    """
 
     def __init__(self, db_path: str = ":memory:"):
         self.db_path = db_path
         self._conn: Optional[Any] = None
 
     async def open(self) -> None:
-        """Explicitly open and initialize the database connection."""
-        if self._conn is None:
-            if not aiosqlite:
-                raise RuntimeError(
-                    "aiosqlite is not installed. Run `pip install aiosqlite`"
-                )
-            import os
-
-            if self.db_path != ":memory:":
-                parent = os.path.dirname(self.db_path)
-                if parent:
-                    os.makedirs(parent, exist_ok=True)
-            self._conn = await aiosqlite.connect(self.db_path)
-            self._conn.row_factory = aiosqlite.Row
-
-            # Enable WAL mode for robustness against abrupt shutdowns
-            # WAL (Write-Ahead Log) survives crashes and allows concurrent reads during writes
-            if self.db_path != ":memory:":
-                await self._conn.execute("PRAGMA journal_mode=WAL")
-                await self._conn.execute("PRAGMA synchronous=NORMAL")
-                await self._conn.execute("PRAGMA foreign_keys=ON")
-                await self._conn.commit()
-
-            await self._conn.create_function(
-                "cosine_similarity", 2, cosine_similarity_py
+        """Open and initialize the database connection (called once)."""
+        if self._conn is not None:
+            return
+        if not aiosqlite:
+            raise RuntimeError(
+                "aiosqlite is not installed. Run `pip install aiosqlite`"
             )
-            await self._init_db()
+        import os
+
+        if self.db_path != ":memory:":
+            parent = os.path.dirname(self.db_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+
+        self._conn = await aiosqlite.connect(self.db_path)
+        self._conn.row_factory = aiosqlite.Row
+
+        if self.db_path != ":memory:":
+            await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA synchronous=NORMAL")
+            await self._conn.execute("PRAGMA busy_timeout=5000")
+            await self._conn.execute("PRAGMA foreign_keys=ON")
+            await self._conn.commit()
+
+        # Register cosine similarity for JSON fallback
+        await self._conn.create_function("cosine_similarity", 2, cosine_similarity_py)
+
+        # Register binary cosine similarity
+        await self._conn.create_function(
+            "cosine_similarity_bin", 2, cosine_similarity_binary
+        )
+
+        await self._init_db()
 
     async def close(self) -> None:
-        """Explicitly close the database connection."""
+        """Close the database connection."""
         if self._conn:
             await self._conn.close()
             self._conn = None
 
     async def __aenter__(self) -> "SQLiteStore":
-        """Async context manager entry."""
         await self.open()
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Async context manager exit."""
         await self.close()
 
     async def _get_connection(self) -> Any:
@@ -98,12 +149,10 @@ class SQLiteStore(Store):
         if conn is None:
             return
 
-        # Check if table exists and what columns it has
         async with conn.execute("PRAGMA table_info(beliefs)") as cursor:
             existing_columns = await cursor.fetchall()
 
         if not existing_columns:
-            # Table doesn't exist, create fresh
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS beliefs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,27 +164,29 @@ class SQLiteStore(Store):
                     confidence REAL NOT NULL,
                     turn INTEGER NOT NULL,
                     source TEXT NOT NULL,
-                    embedding TEXT,
-                    embedding_model TEXT DEFAULT '',
-                    embedding_dim INTEGER DEFAULT 0,
+                    source_quote TEXT NOT NULL DEFAULT '',
+                    category TEXT NOT NULL DEFAULT '',
                     belief_type TEXT DEFAULT 'assertion',
                     is_hypothetical INTEGER DEFAULT 0,
+                    embedding BLOB,
+                    embedding_model TEXT DEFAULT '',
+                    embedding_dim INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_referenced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(session_id, conversation_id, subject, predicate)
                 )
             """)
         else:
-            # Table exists, migrate schema if needed
             existing_column_names = {row[1] for row in existing_columns}
 
-            # ALTER TABLE can't add DEFAULT CURRENT_TIMESTAMP, so use NULL instead
             columns_to_add = [
                 ("conversation_id", "TEXT NOT NULL DEFAULT ''"),
                 ("embedding_dim", "INTEGER DEFAULT 0"),
                 ("belief_type", "TEXT DEFAULT 'assertion'"),
                 ("is_hypothetical", "INTEGER DEFAULT 0"),
                 ("last_referenced_at", "TIMESTAMP"),
+                ("source_quote", "TEXT NOT NULL DEFAULT ''"),
+                ("category", "TEXT NOT NULL DEFAULT ''"),
             ]
 
             for col_name, col_def in columns_to_add:
@@ -158,29 +209,90 @@ class SQLiteStore(Store):
             "CREATE INDEX IF NOT EXISTS idx_session_conversation ON beliefs(session_id, conversation_id)"
         )
         await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_session_subject ON beliefs(session_id, subject, predicate)"
+        )
+        await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_created_at ON beliefs(created_at)"
         )
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_last_referenced ON beliefs(last_referenced_at)"
         )
+
+        # Audit table for belief mutation history
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS beliefs_audit (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  TEXT NOT NULL,
+                subject     TEXT NOT NULL,
+                predicate   TEXT NOT NULL,
+                old_value   TEXT,
+                new_value   TEXT NOT NULL,
+                operation   TEXT NOT NULL,
+                source_quote TEXT,
+                confidence  REAL,
+                turn        INTEGER,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+
         await conn.commit()
+
+    async def _audit(
+        self,
+        belief: Belief,
+        operation: str,
+        old_value: Optional[str] = None,
+    ) -> None:
+        """Write an immutable audit record for a belief mutation."""
+        conn = await self._get_connection()
+        await conn.execute(
+            """INSERT INTO beliefs_audit
+               (session_id, subject, predicate, old_value, new_value,
+                operation, source_quote, confidence, turn)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                belief.session_id or "",
+                belief.subject,
+                belief.predicate,
+                old_value,
+                belief.value,
+                operation,
+                getattr(belief, "source_quote", ""),
+                belief.confidence,
+                belief.turn,
+            ),
+        )
 
     async def add_belief(self, session_id: str, belief: Belief) -> None:
         conn = await self._get_connection()
-        embedding_json = json.dumps(belief.embedding) if belief.embedding else "[]"
-
-        # Use empty string as default conversation_id for backwards compatibility
+        embedding_blob = pack_embedding(belief.embedding) if belief.embedding else b""
         conversation_id = belief.conversation_id or ""
+
+        # Check for existing belief for audit trail
+        old_value = None
+        try:
+            existing = await self.get_by_key(
+                belief.subject.lower(),
+                belief.predicate.lower(),
+                session_id,
+                conversation_id,
+            )
+            if existing:
+                old_value = existing.value
+        except Exception as e:
+            logger.debug(f"Audit lookup failed (non-critical): {e}")
 
         await conn.execute(
             """
-            INSERT INTO beliefs (session_id, conversation_id, subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO beliefs (session_id, conversation_id, subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id, conversation_id, subject, predicate) DO UPDATE SET
                 value=excluded.value,
                 confidence=excluded.confidence,
                 turn=excluded.turn,
                 source=excluded.source,
+                source_quote=excluded.source_quote,
+                category=excluded.category,
                 embedding=excluded.embedding,
                 embedding_model=excluded.embedding_model,
                 embedding_dim=excluded.embedding_dim,
@@ -198,7 +310,9 @@ class SQLiteStore(Store):
                 belief.confidence,
                 belief.turn,
                 belief.source,
-                embedding_json,
+                getattr(belief, "source_quote", ""),
+                getattr(belief, "category", ""),
+                embedding_blob,
                 belief.embedding_model,
                 belief.embedding_dim,
                 belief.belief_type,
@@ -211,58 +325,77 @@ class SQLiteStore(Store):
         )
         await conn.commit()
 
+        # Audit: create or update
+        if old_value is not None and old_value != belief.value:
+            await self._audit(belief, "contradiction_update", old_value)
+            await conn.commit()
+        elif old_value is None:
+            await self._audit(belief, "create")
+            await conn.commit()
+
     async def get_beliefs(
         self, session_id: str, conversation_id: Optional[str] = None
     ) -> List[Belief]:
         conn = await self._get_connection()
 
         if conversation_id:
-            # Get beliefs for specific conversation
             async with conn.execute(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
                 FROM beliefs WHERE session_id = ? AND conversation_id = ?
             """,
                 (session_id, conversation_id),
             ) as cursor:
                 rows = await cursor.fetchall()
         else:
-            # Get beliefs for session (all conversations)
             async with conn.execute(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
                 FROM beliefs WHERE session_id = ?
             """,
                 (session_id,),
             ) as cursor:
                 rows = await cursor.fetchall()
 
-        beliefs = []
-        for r in rows:
-            beliefs.append(
-                Belief(
-                    subject=r["subject"],
-                    predicate=r["predicate"],
-                    value=r["value"],
-                    confidence=r["confidence"],
-                    turn=r["turn"],
-                    source=r["source"],
-                    embedding=json.loads(r["embedding"]) if r["embedding"] else [],
-                    embedding_model=r["embedding_model"] or "",
-                    embedding_dim=r["embedding_dim"] or 0,
-                    belief_type=r["belief_type"] or "assertion",
-                    is_hypothetical=bool(r["is_hypothetical"]),
-                    created_at=datetime.fromisoformat(r["created_at"])
-                    if r["created_at"]
-                    else datetime.now(timezone.utc),
-                    last_referenced_at=datetime.fromisoformat(r["last_referenced_at"])
-                    if r["last_referenced_at"]
-                    else datetime.now(timezone.utc),
-                    session_id=r["session_id"],
-                    conversation_id=r["conversation_id"],
-                )
-            )
-        return beliefs
+        return [self._row_to_belief(r) for r in rows]
+
+    def _row_to_belief(self, r: Any) -> Belief:
+        """Convert a database row to a Belief object."""
+        embedding_data = r["embedding"]
+        if embedding_data:
+            if isinstance(embedding_data, (bytes, bytearray)):
+                emb = unpack_embedding(embedding_data)
+            else:
+                try:
+                    emb = json.loads(embedding_data)
+                except (json.JSONDecodeError, TypeError):
+                    emb = []
+        else:
+            emb = []
+
+        return Belief(
+            subject=r["subject"],
+            predicate=r["predicate"],
+            value=r["value"],
+            confidence=r["confidence"],
+            turn=r["turn"],
+            source=r["source"],
+            source_quote=r["source_quote"] or "",
+            category=r["category"] or "",
+            embedding=emb,
+            embedding_model=r["embedding_model"] or "",
+            embedding_dim=r["embedding_dim"] or 0,
+            belief_type=r["belief_type"] or "assertion",
+            is_hypothetical=bool(r["is_hypothetical"]),
+            created_at=datetime.fromisoformat(r["created_at"])
+            if r["created_at"]
+            else datetime.now(timezone.utc),
+            last_referenced_at=datetime.fromisoformat(r["last_referenced_at"])
+            if r["last_referenced_at"]
+            else datetime.now(timezone.utc),
+            session_id=r["session_id"],
+            conversation_id=r["conversation_id"],
+        )
 
     async def search_beliefs(
         self,
@@ -273,71 +406,77 @@ class SQLiteStore(Store):
         conversation_id: Optional[str] = None,
     ) -> List[Belief]:
         conn = await self._get_connection()
-        embedding_json = json.dumps(embedding)
+        embedding_blob = pack_embedding(embedding) if embedding else b""
 
         if conversation_id:
-            # Search within specific conversation
             async with conn.execute(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
-                       cosine_similarity(?, embedding) as similarity
-                FROM beliefs 
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
+                       cosine_similarity_bin(?, embedding) as similarity
+                FROM beliefs
                 WHERE session_id = ? AND conversation_id = ? AND similarity >= ?
                 ORDER BY similarity DESC
                 LIMIT ?
              """,
-                (embedding_json, session_id, conversation_id, threshold, limit),
+                (embedding_blob, session_id, conversation_id, threshold, limit),
             ) as cursor:
                 rows = await cursor.fetchall()
         else:
-            # Search across all conversations in session
             async with conn.execute(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
-                       cosine_similarity(?, embedding) as similarity
-                FROM beliefs 
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
+                       cosine_similarity_bin(?, embedding) as similarity
+                FROM beliefs
                 WHERE session_id = ? AND similarity >= ?
                 ORDER BY similarity DESC
                 LIMIT ?
              """,
-                (embedding_json, session_id, threshold, limit),
+                (embedding_blob, session_id, threshold, limit),
             ) as cursor:
                 rows = await cursor.fetchall()
 
-        beliefs = []
-        for r in rows:
-            beliefs.append(
-                Belief(
-                    subject=r["subject"],
-                    predicate=r["predicate"],
-                    value=r["value"],
-                    confidence=r["confidence"],
-                    turn=r["turn"],
-                    source=r["source"],
-                    embedding=json.loads(r["embedding"]) if r["embedding"] else [],
-                    embedding_model=r["embedding_model"] or "",
-                    embedding_dim=r["embedding_dim"] or 0,
-                    belief_type=r["belief_type"] or "assertion",
-                    is_hypothetical=bool(r["is_hypothetical"]),
-                    created_at=datetime.fromisoformat(r["created_at"])
-                    if r["created_at"]
-                    else datetime.now(timezone.utc),
-                    last_referenced_at=datetime.fromisoformat(r["last_referenced_at"])
-                    if r["last_referenced_at"]
-                    else datetime.now(timezone.utc),
-                    session_id=r["session_id"],
-                    conversation_id=r["conversation_id"],
-                )
-            )
-        return beliefs
+        return [self._row_to_belief(r) for r in rows]
+
+    async def get_by_key(
+        self,
+        subject: str,
+        predicate: str,
+        session_id: str,
+        conversation_id: Optional[str] = None,
+    ) -> Optional[Belief]:
+        """Retrieve a single belief by its composite key."""
+        conn = await self._get_connection()
+        cid = conversation_id or ""
+
+        async with conn.execute(
+            """
+            SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+            FROM beliefs
+            WHERE session_id = ? AND conversation_id = ? AND subject = ? AND predicate = ?
+            LIMIT 1
+        """,
+            (session_id, cid, subject, predicate),
+        ) as cursor:
+            row = await cursor.fetchone()
+
+        if row is None:
+            return None
+        return self._row_to_belief(row)
 
     async def remove_belief(
         self, session_id: str, subject: str, predicate: str
     ) -> None:
         conn = await self._get_connection()
+
+        # Audit before delete
+        existing = await self.get_by_key(subject, predicate, session_id)
+        if existing:
+            await self._audit(existing, "delete")
+            await conn.commit()
+
         await conn.execute(
             """
-            DELETE FROM beliefs 
+            DELETE FROM beliefs
             WHERE session_id = ? AND subject = ? AND predicate = ?
         """,
             (session_id, subject, predicate),
@@ -353,7 +492,6 @@ class SQLiteStore(Store):
         await conn.commit()
 
     async def belief_count(self, session_id: str) -> int:
-        """Return belief count using efficient SELECT COUNT(*) — no deserialization."""
         conn = await self._get_connection()
         async with conn.execute(
             "SELECT COUNT(*) FROM beliefs WHERE session_id = ?", (session_id,)
@@ -361,8 +499,23 @@ class SQLiteStore(Store):
             row = await cursor.fetchone()
         return int(row[0]) if row else 0
 
+    async def upsert(self, belief: Belief) -> bool:
+        """Insert or update a belief with turn-based optimistic concurrency.
+
+        Returns True if the belief was written, False if discarded (stale write).
+        """
+        existing = await self.get_by_key(
+            (belief.subject or "").lower(),
+            (belief.predicate or "").lower(),
+            belief.session_id or "",
+            belief.conversation_id or "",
+        )
+        if existing and existing.turn > belief.turn:
+            return False
+        await self.add_belief(belief.session_id or "", belief)
+        return True
+
     async def health_check(self) -> bool:
-        """Verify SQLite connection is functional."""
         try:
             conn = await self._get_connection()
             async with conn.execute("SELECT 1") as cursor:
@@ -374,19 +527,8 @@ class SQLiteStore(Store):
     async def prune_expired_beliefs(
         self, max_age_seconds: int, session_id: Optional[str] = None
     ) -> int:
-        """Remove beliefs older than max_age_seconds.
+        from datetime import timedelta
 
-        Args:
-            max_age_seconds: Age threshold in seconds
-            session_id: Optional - prune only for specific session, None = all sessions
-
-        Returns:
-            Number of beliefs deleted
-        """
-        import logging
-        from datetime import timedelta, timezone
-
-        logger = logging.getLogger(__name__)
         conn = await self._get_connection()
         cutoff_time = (
             datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
@@ -411,15 +553,10 @@ class SQLiteStore(Store):
         return int(deleted_count)
 
     async def get_session_belief_age_stats(self, session_id: str) -> dict[str, Any]:
-        """Get age statistics for beliefs in a session.
-
-        Returns:
-            Dict with: oldest_belief_age_seconds, newest_belief_age_seconds, avg_age_seconds
-        """
         conn = await self._get_connection()
         async with conn.execute(
             """
-            SELECT 
+            SELECT
                 MIN(CAST((julianday('now') - julianday(created_at)) * 86400 AS INTEGER)) as oldest_age,
                 MAX(CAST((julianday('now') - julianday(created_at)) * 86400 AS INTEGER)) as newest_age,
                 AVG(CAST((julianday('now') - julianday(created_at)) * 86400 AS INTEGER)) as avg_age
@@ -441,3 +578,34 @@ class SQLiteStore(Store):
             "newest_belief_age_seconds": row["newest_age"] or 0,
             "avg_age_seconds": row["avg_age"] or 0,
         }
+
+    async def get_audit_history(
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+    ) -> List[dict]:
+        """Return audit trail for a specific belief."""
+        conn = await self._get_connection()
+        async with conn.execute(
+            """
+            SELECT turn, old_value, new_value, operation, confidence, created_at
+            FROM beliefs_audit
+            WHERE session_id = ? AND subject = ? AND predicate = ?
+            ORDER BY id ASC
+        """,
+            (session_id, subject, predicate),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        return [
+            {
+                "turn": r["turn"],
+                "old_value": r["old_value"],
+                "new_value": r["new_value"],
+                "operation": r["operation"],
+                "confidence": r["confidence"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]

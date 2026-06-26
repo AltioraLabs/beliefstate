@@ -104,6 +104,8 @@ class PostgreSQLStore(Store):
                     confidence REAL NOT NULL,
                     turn INTEGER NOT NULL,
                     source VARCHAR(50) NOT NULL,
+                    source_quote TEXT DEFAULT '',
+                    category VARCHAR(50) DEFAULT '',
                     embedding DOUBLE PRECISION[],
                     embedding_model VARCHAR(255) DEFAULT '',
                     embedding_dim INTEGER DEFAULT 0,
@@ -112,6 +114,23 @@ class PostgreSQLStore(Store):
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     last_referenced_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(session_id, conversation_id, subject, predicate)
+                );
+            """)
+
+            # 3. Audit table for belief mutation history
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS beliefs_audit (
+                    id          SERIAL PRIMARY KEY,
+                    session_id  VARCHAR(255) NOT NULL,
+                    subject     VARCHAR(255) NOT NULL,
+                    predicate   VARCHAR(255) NOT NULL,
+                    old_value   TEXT,
+                    new_value   TEXT NOT NULL,
+                    operation   VARCHAR(50) NOT NULL,
+                    source_quote TEXT DEFAULT '',
+                    confidence  REAL,
+                    turn        INTEGER,
+                    created_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
             """)
 
@@ -131,6 +150,12 @@ class PostgreSQLStore(Store):
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_pg_last_ref ON beliefs(last_referenced_at);"
             )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pg_session_subject ON beliefs(session_id, subject, predicate);"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pg_audit_session ON beliefs_audit(session_id, subject, predicate);"
+            )
 
     async def add_belief(self, session_id: str, belief: Belief) -> None:
         pool = await self._get_pool()
@@ -144,18 +169,32 @@ class PostgreSQLStore(Store):
         if last_referenced_at.tzinfo is None:
             last_referenced_at = last_referenced_at.replace(tzinfo=timezone.utc)
 
+        # Check for existing belief for audit trail
+        old_value = None
+        try:
+            existing = await self.get_by_key(
+                belief.subject, belief.predicate, session_id, conversation_id
+            )
+            if existing:
+                old_value = existing.value
+        except Exception as e:
+            logger.debug(f"Audit lookup failed (non-critical): {e}")
+
         async with pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO beliefs (
-                    session_id, conversation_id, subject, predicate, value, confidence, turn, source, 
-                    embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                    session_id, conversation_id, subject, predicate, value, confidence, turn, source,
+                    source_quote, category, embedding, embedding_model, embedding_dim, belief_type,
+                    is_hypothetical, created_at, last_referenced_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                 ON CONFLICT(session_id, conversation_id, subject, predicate) DO UPDATE SET
                     value = EXCLUDED.value,
                     confidence = EXCLUDED.confidence,
                     turn = EXCLUDED.turn,
                     source = EXCLUDED.source,
+                    source_quote = EXCLUDED.source_quote,
+                    category = EXCLUDED.category,
                     embedding = EXCLUDED.embedding,
                     embedding_model = EXCLUDED.embedding_model,
                     embedding_dim = EXCLUDED.embedding_dim,
@@ -172,6 +211,8 @@ class PostgreSQLStore(Store):
                 belief.confidence,
                 belief.turn,
                 belief.source,
+                getattr(belief, "source_quote", ""),
+                getattr(belief, "category", ""),
                 belief.embedding,
                 belief.embedding_model,
                 belief.embedding_dim,
@@ -181,6 +222,12 @@ class PostgreSQLStore(Store):
                 last_referenced_at,
             )
 
+            # Audit: create or update
+            if old_value is not None and old_value != belief.value:
+                await self._audit(conn, belief, "contradiction_update", old_value)
+            elif old_value is None:
+                await self._audit(conn, belief, "create")
+
     async def get_beliefs(
         self, session_id: str, conversation_id: Optional[str] = None
     ) -> List[Belief]:
@@ -189,7 +236,7 @@ class PostgreSQLStore(Store):
             if conversation_id:
                 rows = await conn.fetch(
                     """
-                    SELECT subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
                     FROM beliefs WHERE session_id = $1 AND conversation_id = $2
                 """,
                     session_id,
@@ -198,7 +245,7 @@ class PostgreSQLStore(Store):
             else:
                 rows = await conn.fetch(
                     """
-                    SELECT subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
                     FROM beliefs WHERE session_id = $1
                 """,
                     session_id,
@@ -222,6 +269,8 @@ class PostgreSQLStore(Store):
                     confidence=r["confidence"],
                     turn=r["turn"],
                     source=r["source"],
+                    source_quote=r.get("source_quote") or "",
+                    category=r.get("category") or "",
                     embedding=r["embedding"] or [],
                     embedding_model=r["embedding_model"] or "",
                     embedding_dim=r["embedding_dim"] or 0,
@@ -248,7 +297,7 @@ class PostgreSQLStore(Store):
             if conversation_id:
                 rows = await conn.fetch(
                     """
-                    SELECT subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
+                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
                            cosine_similarity($1, embedding) as similarity
                     FROM beliefs 
                     WHERE session_id = $2 AND conversation_id = $3 AND cosine_similarity($1, embedding) >= $4
@@ -264,7 +313,7 @@ class PostgreSQLStore(Store):
             else:
                 rows = await conn.fetch(
                     """
-                    SELECT subject, predicate, value, confidence, turn, source, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
+                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
                            cosine_similarity($1, embedding) as similarity
                     FROM beliefs 
                     WHERE session_id = $2 AND cosine_similarity($1, embedding) >= $3
@@ -294,6 +343,8 @@ class PostgreSQLStore(Store):
                     confidence=r["confidence"],
                     turn=r["turn"],
                     source=r["source"],
+                    source_quote=r.get("source_quote") or "",
+                    category=r.get("category") or "",
                     embedding=r["embedding"] or [],
                     embedding_model=r["embedding_model"] or "",
                     embedding_dim=r["embedding_dim"] or 0,
@@ -306,6 +357,124 @@ class PostgreSQLStore(Store):
                 )
             )
         return beliefs
+
+    async def _audit(
+        self,
+        conn: Any,
+        belief: Belief,
+        operation: str,
+        old_value: Optional[str] = None,
+    ) -> None:
+        """Write an immutable audit record for a belief mutation."""
+        await conn.execute(
+            """INSERT INTO beliefs_audit
+               (session_id, subject, predicate, old_value, new_value,
+                operation, source_quote, confidence, turn)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
+            belief.session_id or "",
+            belief.subject,
+            belief.predicate,
+            old_value,
+            belief.value,
+            operation,
+            getattr(belief, "source_quote", ""),
+            belief.confidence,
+            belief.turn,
+        )
+
+    async def upsert(self, belief: Belief) -> bool:
+        """Insert or update a belief with turn-based optimistic concurrency.
+
+        Returns True if the belief was written, False if discarded (stale write).
+        """
+        existing = await self.get_by_key(
+            belief.subject,
+            belief.predicate,
+            belief.session_id or "",
+            belief.conversation_id or "",
+        )
+        if existing and existing.turn > belief.turn:
+            return False
+        await self.add_belief(belief.session_id or "", belief)
+        return True
+
+    async def get_by_key(
+        self,
+        subject: str,
+        predicate: str,
+        session_id: str,
+        conversation_id: Optional[str] = None,
+    ) -> Optional[Belief]:
+        """Retrieve a single belief by its composite key."""
+        pool = await self._get_pool()
+        cid = conversation_id or ""
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                FROM beliefs
+                WHERE session_id = $1 AND conversation_id = $2 AND subject = $3 AND predicate = $4
+                LIMIT 1
+            """,
+                session_id,
+                cid,
+                subject,
+                predicate,
+            )
+
+        if row is None:
+            return None
+
+        c_at = row["created_at"]
+        if c_at and c_at.tzinfo is None:
+            c_at = c_at.replace(tzinfo=timezone.utc)
+        l_ref = row["last_referenced_at"]
+        if l_ref and l_ref.tzinfo is None:
+            l_ref = l_ref.replace(tzinfo=timezone.utc)
+
+        return Belief(
+            subject=row["subject"],
+            predicate=row["predicate"],
+            value=row["value"],
+            confidence=row["confidence"],
+            turn=row["turn"],
+            source=row["source"],
+            source_quote=row.get("source_quote") or "",
+            category=row.get("category") or "",
+            embedding=row["embedding"] or [],
+            embedding_model=row["embedding_model"] or "",
+            embedding_dim=row["embedding_dim"] or 0,
+            belief_type=row["belief_type"] or "assertion",
+            is_hypothetical=bool(row["is_hypothetical"]),
+            created_at=c_at or datetime.now(timezone.utc),
+            last_referenced_at=l_ref or datetime.now(timezone.utc),
+            session_id=row["session_id"],
+            conversation_id=row["conversation_id"],
+        )
+
+    async def get_audit_history(
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+    ) -> List[dict]:
+        """Return audit trail for a specific belief."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT session_id, subject, predicate, old_value, new_value,
+                       operation, source_quote, confidence, turn, created_at
+                FROM beliefs_audit
+                WHERE session_id = $1 AND subject = $2 AND predicate = $3
+                ORDER BY created_at ASC
+            """,
+                session_id,
+                subject,
+                predicate,
+            )
+
+        return [dict(r) for r in rows]
 
     async def remove_belief(
         self, session_id: str, subject: str, predicate: str

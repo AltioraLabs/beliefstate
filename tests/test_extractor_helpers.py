@@ -8,7 +8,7 @@ from beliefstate.extractor import (
     normalize_currency,
     normalize_dates,
     normalize_percentages,
-    normalize_value,
+    normalize_value_format,
     classify_response_type,
     chunk_response_by_paragraphs,
     recover_json_from_response,
@@ -112,20 +112,20 @@ class TestNormalizePercentages:
         assert normalize_percentages("hello") == "hello"
 
 
-# ── Combined normalize_value ─────────────────────────────────────────────
+# ── Combined normalize_value_format ────────────────────────────────────────
 
 
 class TestNormalizeValue:
     def test_empty_string(self):
-        assert normalize_value("") == ""
+        assert normalize_value_format("") == ""
 
     def test_combined_number_and_currency(self):
-        result = normalize_value("$1,000")
+        result = normalize_value_format("$1,000")
         assert "USD" in result
         assert "1000" in result
 
     def test_plain_text_unchanged(self):
-        assert normalize_value("Python") == "Python"
+        assert normalize_value_format("Python") == "Python"
 
 
 # ── Response Type Classification ─────────────────────────────────────────

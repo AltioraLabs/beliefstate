@@ -14,94 +14,62 @@ class InMemoryBeliefStore(Store):
     - Simple in-memory dictionary-based storage
     - Per-session belief storage
     - Global size limit (max_bytes) with LRU eviction
-    - Useful for: testing, single-process deployments, development
+    - Turn-based optimistic concurrency on upsert
 
     NOT suitable for: production, multi-process, persistent data needs.
     """
 
-    def __init__(self, max_bytes: int = 100 * 1024 * 1024):  # 100MB default
-        """Initialize in-memory store.
-
-        Args:
-            max_bytes: Maximum total size in bytes. When exceeded, evicts least-recently-used beliefs.
-        """
+    def __init__(self, max_bytes: int = 100 * 1024 * 1024):
         self.max_bytes = max_bytes
         self.current_bytes = 0
-        # Store: session_id -> OrderedDict of (subject::predicate -> Belief)
-        # OrderedDict maintains insertion/access order for LRU
         self._beliefs: Dict[str, OrderedDict[str, Belief]] = {}
 
     def _estimate_belief_size(self, belief: Belief) -> int:
-        """Estimate memory size of a belief in bytes."""
-        # Rough estimate: model_dump_json() length
         return len(belief.model_dump_json().encode("utf-8"))
 
     def _evict_lru_belief(self) -> None:
-        """Evict the least-recently-used belief from the oldest session."""
         if not self._beliefs:
             return
-
-        # Find the session with the oldest access pattern
         for session_id, beliefs_dict in self._beliefs.items():
             if beliefs_dict:
-                # Get the first (oldest) belief in the OrderedDict
                 field, belief = next(iter(beliefs_dict.items()))
                 belief_size = self._estimate_belief_size(belief)
-
-                # Remove it
                 del beliefs_dict[field]
                 self.current_bytes -= belief_size
-                logger.debug(
-                    f"LRU eviction: removed {field} from session {session_id} (freed {belief_size} bytes)"
-                )
-
-                # Clean up empty sessions
+                logger.debug(f"LRU eviction: removed {field} from session {session_id}")
                 if not beliefs_dict:
                     del self._beliefs[session_id]
-
                 return
 
     async def add_belief(self, session_id: str, belief: Belief) -> None:
-        """Add or update a belief."""
         if session_id not in self._beliefs:
             self._beliefs[session_id] = OrderedDict()
 
         field = f"{belief.subject}::{belief.predicate}"
         belief_size = self._estimate_belief_size(belief)
 
-        # Check if belief already exists (for replacement)
         if field in self._beliefs[session_id]:
             old_size = self._estimate_belief_size(self._beliefs[session_id][field])
             self.current_bytes -= old_size
 
-        # Add new belief (moves to end in OrderedDict = most recently used)
         self._beliefs[session_id][field] = belief
         self.current_bytes += belief_size
 
-        # Evict if necessary
         while self.current_bytes > self.max_bytes:
             self._evict_lru_belief()
-
-        logger.debug(
-            f"Added belief: {field} (session {session_id}, size {belief_size}, total {self.current_bytes}/{self.max_bytes})"
-        )
 
     async def get_beliefs(
         self, session_id: str, conversation_id: Optional[str] = None
     ) -> List[Belief]:
-        """Get all beliefs for a session."""
         if session_id not in self._beliefs:
             return []
 
-        # Return as list, preserving order
         beliefs = list(self._beliefs[session_id].values())
 
         if conversation_id:
             beliefs = [b for b in beliefs if b.conversation_id == conversation_id]
 
-        # Update access order for LRU (move all to end = most recently used)
         for field in list(self._beliefs[session_id].keys()):
-            # Access and re-add to update order
             self._beliefs[session_id].move_to_end(field)
 
         return beliefs
@@ -112,8 +80,8 @@ class InMemoryBeliefStore(Store):
         embedding: List[float],
         threshold: float = 0.0,
         limit: int = 5,
+        conversation_id: Optional[str] = None,
     ) -> List[Belief]:
-        """Search beliefs by embedding similarity."""
         import math
 
         beliefs = await self.get_beliefs(session_id)
@@ -121,6 +89,8 @@ class InMemoryBeliefStore(Store):
 
         for b in beliefs:
             if not b.embedding or not embedding:
+                continue
+            if len(b.embedding) != len(embedding):
                 continue
             v1 = b.embedding
             v2 = embedding
@@ -134,10 +104,42 @@ class InMemoryBeliefStore(Store):
         scored_beliefs.sort(key=lambda x: x[1], reverse=True)
         return [sb[0] for sb in scored_beliefs[:limit]]
 
+    async def get_by_key(
+        self,
+        subject: str,
+        predicate: str,
+        session_id: str,
+        conversation_id: Optional[str] = None,
+    ) -> Optional[Belief]:
+        """Retrieve a single belief by its composite key."""
+        beliefs = await self.get_beliefs(session_id, conversation_id)
+        for b in beliefs:
+            if (
+                b.subject.lower() == subject.lower()
+                and b.predicate.lower() == predicate.lower()
+            ):
+                return b
+        return None
+
+    async def upsert(self, belief: Belief) -> bool:
+        """Insert or update a belief with turn-based optimistic concurrency.
+
+        Returns True if written, False if discarded (stale write).
+        """
+        existing = await self.get_by_key(
+            (belief.subject or "").lower(),
+            (belief.predicate or "").lower(),
+            belief.session_id or "",
+            belief.conversation_id or "",
+        )
+        if existing and existing.turn > belief.turn:
+            return False
+        await self.add_belief(belief.session_id or "", belief)
+        return True
+
     async def remove_belief(
         self, session_id: str, subject: str, predicate: str
     ) -> None:
-        """Remove a belief."""
         if session_id not in self._beliefs:
             return
 
@@ -148,18 +150,14 @@ class InMemoryBeliefStore(Store):
             del self._beliefs[session_id][field]
             self.current_bytes -= belief_size
 
-            # Clean up empty sessions
             if not self._beliefs[session_id]:
                 del self._beliefs[session_id]
 
     async def update_belief(self, session_id: str, belief: Belief) -> None:
-        """Update a belief (same as add)."""
         await self.add_belief(session_id, belief)
 
     async def clear(self, session_id: str) -> None:
-        """Clear all beliefs for a session."""
         if session_id in self._beliefs:
-            # Calculate total size freed
             total_size = sum(
                 self._estimate_belief_size(b)
                 for b in self._beliefs[session_id].values()
@@ -169,15 +167,21 @@ class InMemoryBeliefStore(Store):
             logger.debug(f"Cleared session {session_id} (freed {total_size} bytes)")
 
     async def belief_count(self, session_id: str) -> int:
-        """Return belief count — O(1) dict length check."""
         return len(self._beliefs.get(session_id, {}))
 
     async def health_check(self) -> bool:
-        """In-memory store is always healthy."""
         return True
 
+    async def get_audit_history(
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+    ) -> List[dict]:
+        """In-memory store does not persist audit history."""
+        return []
+
     def get_stats(self) -> Dict[str, Any]:
-        """Get statistics about the in-memory store."""
         total_beliefs = sum(len(beliefs) for beliefs in self._beliefs.values())
         total_sessions = len(self._beliefs)
 

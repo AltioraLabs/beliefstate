@@ -1,15 +1,19 @@
 import asyncio
 import logging
-from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar, Tuple
+import os
+import warnings
+from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar, Tuple, Set
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import wraps
 from contextvars import ContextVar
+from collections import deque
 
 from beliefstate.config import TrackerConfig
 from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.models import Belief, DeletionReceipt
-from beliefstate.store.base import Store
+from beliefstate.store.base import Store, summary_for_prompt
 from beliefstate.store.sqlite import SQLiteStore
 from beliefstate.extractor import BeliefExtractor
 from beliefstate.detector import ContradictionDetector
@@ -17,7 +21,6 @@ from beliefstate.resolver import BeliefResolver
 
 logger = logging.getLogger(__name__)
 
-# Context variable for session management
 session_context: ContextVar[str] = ContextVar("session_id", default="default")
 conversation_context: ContextVar[Optional[str]] = ContextVar(
     "conversation_id", default=None
@@ -29,29 +32,36 @@ T = TypeVar("T")
 _session_locks: Dict[str, asyncio.Lock] = {}
 
 
-def _ensure_aware(dt: datetime) -> datetime:
-    """Ensure a datetime is timezone-aware (UTC).
+class ConfigurationWarning(UserWarning):
+    pass
 
-    Existing beliefs stored before the utcnow→now(utc) migration may have
-    naive timestamps.  This helper normalises them so arithmetic works.
-    """
+
+def _validate_deployment_config(config: TrackerConfig) -> None:
+    """Warn if SQLite is used with multiple workers."""
+    worker_count = max(
+        int(os.environ.get("WEB_CONCURRENCY", 1)),
+        int(os.environ.get("GUNICORN_WORKERS", 1)),
+        int(os.environ.get("NUM_WORKERS", 1)),
+    )
+    if worker_count > 1 and config.store_type == "sqlite":
+        warnings.warn(
+            f"beliefstate: SQLite store detected with {worker_count} workers. "
+            "Each worker has its own belief store — beliefs are NOT shared "
+            "across workers and contradiction detection will not work correctly. "
+            "Set store_type='redis' for multi-worker deployments.",
+            ConfigurationWarning,
+            stacklevel=3,
+        )
+
+
+def _ensure_aware(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
 
 def calculate_staleness_score(belief: Any) -> float:
-    """Calculate staleness score for a belief.
-
-    Score = confidence / (days_since_referenced + 1)
-
-    This ensures:
-    - Recent beliefs (referenced today) have max score
-    - Older beliefs have linearly decreasing scores
-    - Score is capped by confidence value
-    """
     if not hasattr(belief, "last_referenced_at") or (belief.last_referenced_at is None):
-        # Fallback to created_at if last_referenced_at not set
         ref_time = (
             belief.created_at
             if hasattr(belief, "created_at")
@@ -59,48 +69,25 @@ def calculate_staleness_score(belief: Any) -> float:
         )
     else:
         ref_time = belief.last_referenced_at
-
     ref_time = _ensure_aware(ref_time)
     days_since_referenced = (datetime.now(timezone.utc) - ref_time).days
     confidence = getattr(belief, "confidence", 1.0)
-
     return confidence / (days_since_referenced + 1)
 
 
 def estimate_tokens(text: str) -> int:
-    """Estimate token count for text.
-
-    Uses simple heuristic: approximately 1 token per 4 characters.
-    This is approximate but works well for quick estimates.
-    """
     if not text:
         return 0
     return len(text) // 4
 
 
 def _detect_adapter(result: Any) -> ProviderAdapter:
-    """Auto-detect the appropriate adapter from an LLM response object.
-
-    Checks the type of the response object to determine which provider was used.
-    Falls back to generic adapter if type cannot be determined.
-
-    Args:
-        result: The native SDK response object
-
-    Returns:
-        Appropriate ProviderAdapter instance
-
-    Raises:
-        RuntimeError: If adapter cannot be determined and SDK is not installed
-    """
     type_name = type(result).__module__ + "." + type(result).__name__
 
-    # Check for OpenAI
     if "openai" in type_name.lower():
         try:
             from beliefstate.adapters.openai import OpenAIAdapter
 
-            logger.debug("Detected OpenAI response type")
             return OpenAIAdapter()
         except ImportError:
             raise RuntimeError(
@@ -108,12 +95,10 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
                 "Install with: pip install openai"
             )
 
-    # Check for Anthropic
     if "anthropic" in type_name.lower():
         try:
             from beliefstate.adapters.anthropic import AnthropicAdapter
 
-            logger.debug("Detected Anthropic response type")
             return AnthropicAdapter()
         except ImportError:
             raise RuntimeError(
@@ -121,12 +106,10 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
                 "Install with: pip install anthropic"
             )
 
-    # Check for Google Gemini
     if "google" in type_name.lower() or "genai" in type_name.lower():
         try:
             from beliefstate.adapters.gemini import GeminiAdapter
 
-            logger.debug("Detected Google Gemini response type")
             return GeminiAdapter()
         except ImportError:
             raise RuntimeError(
@@ -134,12 +117,10 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
                 "Install with: pip install google-generativeai"
             )
 
-    # Check for Ollama
     if "ollama" in type_name.lower():
         try:
             from beliefstate.adapters.ollama import OllamaAdapter
 
-            logger.debug("Detected Ollama response type")
             return OllamaAdapter()
         except ImportError:
             raise RuntimeError(
@@ -147,16 +128,11 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
                 "Install with: pip install ollama"
             )
 
-    # Fallback: try to extract text generically
     logger.warning(
-        f"Could not auto-detect adapter from type: {type_name}. "
-        "Using generic adapter. Consider specifying adapter explicitly."
+        f"Could not auto-detect adapter from type: {type_name}. Using generic adapter."
     )
 
-    # Create a generic adapter that tries common patterns
     class GenericAdapter(ProviderAdapter):
-        """Fallback adapter that tries common response patterns."""
-
         def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
             messages = kwargs.get("messages", [])
             if not messages and len(args) > 0 and isinstance(args[0], list):
@@ -164,7 +140,6 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
             return LLMCall(messages=messages, kwargs=kwargs)
 
         def to_llm_response(self, response: Any) -> LLMResponse:
-            # Try common text extraction patterns
             text = ""
             if hasattr(response, "content"):
                 text = response.content
@@ -178,27 +153,18 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
                     text = choice.text
             elif isinstance(response, dict):
                 text = response.get("content") or response.get("text", "")
-
             return LLMResponse(text=text, raw_response=response)
 
         async def generate(
             self, call: LLMCall, response_format: Optional[Any] = None
         ) -> LLMResponse:
-            raise NotImplementedError(
-                "Generic adapter cannot generate. Please specify adapter explicitly."
-            )
+            raise NotImplementedError("Generic adapter cannot generate.")
 
         async def get_embedding(self, text: str) -> list[float]:
-            raise NotImplementedError(
-                "Generic adapter cannot generate embeddings. "
-                "Please specify adapter explicitly."
-            )
+            raise NotImplementedError("Generic adapter cannot generate embeddings.")
 
         async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
-            raise NotImplementedError(
-                "Generic adapter cannot generate embeddings. "
-                "Please specify adapter explicitly."
-            )
+            raise NotImplementedError("Generic adapter cannot generate embeddings.")
 
         async def health_check(self) -> bool:
             return False
@@ -207,27 +173,43 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
 
 
 def _get_session_lock(session_id: str) -> asyncio.Lock:
-    """Get or create an async lock for a session.
-
-    Used to coordinate concurrent writes to the belief store from multiple
-    LLM calls happening in parallel for the same session.
-
-    Args:
-        session_id: The session ID
-
-    Returns:
-        An asyncio.Lock instance unique to this session
-    """
     if session_id not in _session_locks:
         _session_locks[session_id] = asyncio.Lock()
     return _session_locks[session_id]
 
 
-class AsyncStreamWrapper:
-    """Wraps an async generator LLM response stream to accumulate text on-the-fly
-    without blocking downstream clients, and dispatches tracking upon exhaustion.
-    """
+# --- Stats tracking ---
 
+
+@dataclass
+class TrackerStats:
+    total_turns_processed: int = 0
+    total_beliefs_extracted: int = 0
+    total_contradictions_detected: int = 0
+    total_duplicates_skipped: int = 0
+    extraction_errors: int = 0
+    last_error: str = ""
+    last_successful_extraction: Optional[datetime] = None
+    _recent_outcomes: deque = field(default_factory=lambda: deque(maxlen=100))
+
+    @property
+    def extraction_success_rate(self) -> float:
+        if not self._recent_outcomes:
+            return 1.0
+        return sum(self._recent_outcomes) / len(self._recent_outcomes)
+
+    def record_success(self) -> None:
+        self._recent_outcomes.append(1)
+        self.last_successful_extraction = datetime.now(timezone.utc)
+        self.total_turns_processed += 1
+
+    def record_error(self, error: str) -> None:
+        self._recent_outcomes.append(0)
+        self.extraction_errors += 1
+        self.last_error = error
+
+
+class AsyncStreamWrapper:
     def __init__(
         self,
         stream_gen: Any,
@@ -253,16 +235,10 @@ class AsyncStreamWrapper:
         try:
             chunk = await self.stream_gen.__anext__()
         except StopAsyncIteration:
-            # Stream exhausted. Dispatch tracking asynchronously
             await self._finalize_tracking()
             raise StopAsyncIteration
-        except Exception as e:
-            raise e
-
         if self.first_chunk is None:
             self.first_chunk = chunk
-
-        # Extract chunk text
         chunk_text = ""
         if hasattr(chunk, "choices") and chunk.choices:
             if hasattr(chunk.choices[0], "delta") and hasattr(
@@ -278,13 +254,11 @@ class AsyncStreamWrapper:
             chunk_text = chunk.content or ""
         elif hasattr(chunk, "text"):
             chunk_text = chunk.text or ""
-
         self.accumulated_text += chunk_text
         return chunk
 
     async def _finalize_tracking(self) -> None:
         try:
-            # Reconstruct response payload
             if self.first_chunk is not None and hasattr(self.first_chunk, "choices"):
                 reconstructed = {
                     "id": getattr(self.first_chunk, "id", "stream-accumulated"),
@@ -308,11 +282,8 @@ class AsyncStreamWrapper:
                     "text": self.accumulated_text,
                 }
 
-            # Auto-detect adapter if not set
             if self.tracker._auto_detect_adapter and self.tracker.app_adapter is None:
-                logger.info("Auto-detecting adapter from streaming response chunk...")
                 self.tracker.app_adapter = _detect_adapter(reconstructed)
-
                 from beliefstate.resilience import ResilientAdapterWrapper
 
                 self.tracker.internal_adapter = ResilientAdapterWrapper(
@@ -322,30 +293,12 @@ class AsyncStreamWrapper:
 
             llm_call = self.tracker.app_adapter.to_llm_call(*self.args, **self.kwargs)
             llm_response = self.tracker.app_adapter.to_llm_response(reconstructed)
-
             self.tracker._ensure_initialized()
-
-            provider_name = self.tracker.app_adapter.__class__.__name__
-            if self.session_id in self.tracker._session_providers:
-                if self.tracker._session_providers[self.session_id] != provider_name:
-                    logger.warning(
-                        f"Mid-session provider change for session "
-                        f"{self.session_id}: switched from "
-                        f"{self.tracker._session_providers[self.session_id]} to "
-                        f"{provider_name}. This may cause "
-                        f"embedding/extraction inconsistencies."
-                    )
-            else:
-                self.tracker._session_providers[self.session_id] = provider_name
-
-            if self.tracker.config.enable_background_tasks:
-                self.tracker.dispatcher.dispatch(
-                    self.tracker, llm_call, llm_response, self.session_id, self.turn
-                )
-            else:
-                await self.tracker._track_background(
+            self.tracker._dispatch(
+                self.tracker._track_background(
                     llm_call, llm_response, self.session_id, self.turn
                 )
+            )
         except Exception as e:
             logger.error(f"Tracker stream accumulation error: {e}", exc_info=True)
 
@@ -360,9 +313,9 @@ class BeliefTracker:
         dispatcher: Optional[Any] = None,
         judge: Optional[Any] = None,
     ):
+        _validate_deployment_config(config)
         self.config = config
 
-        # Use provided adapter or will be set during first wrap call
         self._auto_detect_adapter = adapter is None
         if adapter is not None:
             self.app_adapter = adapter
@@ -371,7 +324,6 @@ class BeliefTracker:
 
         from beliefstate.resilience import ResilientAdapterWrapper
 
-        # Internal adapter defaults to app_adapter if not provided
         if internal_adapter is not None:
             raw_internal = internal_adapter
         elif adapter is not None:
@@ -385,7 +337,6 @@ class BeliefTracker:
             else None
         )
 
-        # Initialize store based on config if not provided
         self.store: Store
         if store is None:
             stype = self.config.store_type.lower()
@@ -412,17 +363,11 @@ class BeliefTracker:
         self.detector: Optional[ContradictionDetector] = None
         self.resolver = BeliefResolver(store=self.store, strategy="overwrite")
         self._session_turn_counters: Dict[str, int] = {}
-
-        # Track latest processed turn per session for optimistic concurrency
-        # control. This helps detect out-of-order completions
-        # (turn N+1 finishing before turn N)
         self._session_turn_states: Dict[str, int] = {}
-
-        # Track provider history for each session to detect mid-session
-        # provider changes
         self._session_providers: Dict[str, str] = {}
+        self._stats = TrackerStats()
+        self._pending_tasks: Set[asyncio.Task] = set()
 
-        # Resolve dispatcher
         if dispatcher is not None:
             self.dispatcher = dispatcher
         else:
@@ -448,45 +393,53 @@ class BeliefTracker:
 
     @property
     def turn_counter(self) -> int:
-        """Backward-compatible turn counter.
-
-        Returns the maximum turn number across all sessions.
-        For per-session turn tracking, use ``get_session_turn(session_id)``.
-        """
         if not self._session_turn_counters:
             return 0
         return max(self._session_turn_counters.values())
 
     @turn_counter.setter
     def turn_counter(self, value: int) -> None:
-        """Backward-compatible setter (sets for 'default' session)."""
-        self._session_turn_counters["default"] = value
+        sid = session_context.get()
+        self._session_turn_counters[sid] = value
 
     def get_session_turn(self, session_id: Optional[str] = None) -> int:
-        """Get the current turn number for a specific session.
-
-        Args:
-            session_id: Session ID (defaults to current context)
-
-        Returns:
-            Current turn number for the session (0 if no turns yet)
-        """
         sid = session_id or session_context.get()
         return self._session_turn_counters.get(sid, 0)
 
+    def get_stats(self) -> TrackerStats:
+        return self._stats
+
+    def _dispatch(self, coro: Any) -> None:
+        """Dispatch a coroutine as a tracked background task."""
+        task = asyncio.create_task(coro)
+        self._pending_tasks.add(task)
+        task.add_done_callback(self._pending_tasks.discard)
+
+    async def shutdown(self, grace_seconds: float = 5.0) -> None:
+        """Gracefully drain pending background tasks.
+
+        Call this in FastAPI lifespan on_shutdown or signal handler.
+        """
+        if not self._pending_tasks:
+            return
+        logger.info(
+            f"beliefstate_shutdown: draining {len(self._pending_tasks)} pending tasks"
+        )
+        await asyncio.wait(self._pending_tasks, timeout=grace_seconds)
+        for task in list(self._pending_tasks):
+            if not task.done():
+                task.cancel()
+
     async def __aenter__(self) -> "BeliefTracker":
-        """Async context manager entry — opens the store connection."""
         if hasattr(self.store, "open"):
             await self.store.open()
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Async context manager exit — closes the store connection."""
         if hasattr(self.store, "close"):
             await self.store.close()
 
     def _ensure_initialized(self) -> None:
-        """Ensure extractor and detector are initialized (lazy init for auto-detect)."""
         if self.internal_adapter is not None:
             raw_adapter = getattr(
                 self.internal_adapter, "adapter", self.internal_adapter
@@ -494,7 +447,7 @@ class BeliefTracker:
             if raw_adapter.__class__.__name__ == "GenericAdapter":
                 raise ValueError(
                     "Auto-detected LLM provider adapter does not support belief extraction/generation. "
-                    "Please explicitly configure a generation-capable 'internal_provider' (e.g. OpenAIAdapter, LiteLLMAdapter) "
+                    "Please explicitly configure a generation-capable 'internal_provider' "
                     "or pass an adapter explicitly to TrackerConfig."
                 )
 
@@ -522,42 +475,17 @@ class BeliefTracker:
             )
 
     def set_session(self, session_id: str) -> None:
-        """Set the session ID for the current execution context."""
         session_context.set(session_id)
 
     def get_pending_conflicts(self, session_id: Optional[str] = None) -> list[str]:
-        """Get any pending belief conflicts for the session."""
         sid = session_id or session_context.get()
         return self.resolver.pop_pending_conflicts(sid)
 
     async def clear_session(
         self, session_id: Optional[str] = None
     ) -> "DeletionReceipt":
-        """Clear all tracking data for a session (beliefs, conflicts, history).
-
-        Implements GDPR-compliant data deletion with in-flight task draining:
-        1. Drains any in-flight belief extraction tasks (AsyncioDispatcher only)
-        2. Deletes all beliefs from the store
-        3. Clears resolver conflict tracking
-        4. Returns auditable DeletionReceipt with timestamp and counts
-
-        Args:
-            session_id: Session ID (defaults to current context)
-
-        Returns:
-            DeletionReceipt with session_id, beliefs_deleted, deleted_at,
-            in_flight_tasks_drained
-
-        Example:
-            receipt = await tracker.clear_session("user-123")
-            print(f"Deleted {receipt.beliefs_deleted} beliefs")
-            print(f"Drained {receipt.in_flight_tasks_drained} in-flight tasks")
-        """
-        from beliefstate.models import DeletionReceipt
-
         sid = session_id or session_context.get()
 
-        # 1. Drain in-flight tasks if using AsyncioDispatcher
         drained_count = 0
         if hasattr(self.dispatcher, "drain_session"):
             try:
@@ -568,23 +496,19 @@ class BeliefTracker:
             except Exception as e:
                 logger.warning(f"Error draining tasks for session {sid}: {e}")
 
-        # 2. Delete all beliefs from the store
         beliefs = await self.store.get_beliefs(sid)
         beliefs_deleted = len(beliefs)
         await self.store.clear(sid)
         logger.info(f"Deleted {beliefs_deleted} beliefs for session {sid}")
 
-        # 3. Clear resolver conflict tracking
         self.resolver.clear_session(sid)
         logger.info(f"Cleared conflict history for session {sid}")
 
-        # 4. Clean up session-scoped state to prevent memory leaks
         self._session_turn_counters.pop(sid, None)
         self._session_turn_states.pop(sid, None)
         self._session_providers.pop(sid, None)
         _session_locks.pop(sid, None)
 
-        # 5. Return auditable receipt
         receipt = DeletionReceipt(
             session_id=sid,
             beliefs_deleted=beliefs_deleted,
@@ -595,45 +519,12 @@ class BeliefTracker:
         return receipt
 
     async def get_beliefs(self, session_id: Optional[str] = None) -> List[Any]:
-        """Retrieve all beliefs for a session.
-
-        Args:
-            session_id: Session ID (defaults to current context)
-
-        Returns:
-            List of Belief objects for the session
-
-        Example:
-            beliefs = await tracker.get_beliefs("user-123")
-            for b in beliefs:
-                confidence = b.confidence
-                print(f"{b.subject} {b.predicate} {b.value} "
-                      f"(confidence: {confidence})")
-        """
         sid = session_id or session_context.get()
         return await self.store.get_beliefs(sid)
 
-    async def get_stats(self, session_id: Optional[str] = None) -> Dict[str, Any]:
-        """Get statistics about beliefs for a session.
-
-        Args:
-            session_id: Session ID (defaults to current context)
-
-        Returns:
-            Dictionary with stats:
-            - total_beliefs: Total number of beliefs
-            - by_subject: Count of beliefs per subject
-            - by_source: Count of beliefs from "user" vs "assistant"
-            - avg_confidence: Average confidence score
-            - contradictions_detected: Number of contradictions found
-
-        Example:
-            stats = await tracker.get_stats("user-123")
-            print(f"Total beliefs: {stats['total_beliefs']}")
-        """
+    async def get_stats_dict(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         sid = session_id or session_context.get()
         beliefs = await self.store.get_beliefs(sid)
-
         if not beliefs:
             return {
                 "total_beliefs": 0,
@@ -644,23 +535,14 @@ class BeliefTracker:
                     sid, {}
                 ).__len__(),
             }
-
-        # Count by subject
         by_subject: Dict[str, int] = {}
         for b in beliefs:
             by_subject[b.subject] = by_subject.get(b.subject, 0) + 1
-
-        # Count by source
         by_source: Dict[str, int] = {}
         for b in beliefs:
             by_source[b.source] = by_source.get(b.source, 0) + 1
-
-        # Average confidence
         avg_confidence = sum(b.confidence for b in beliefs) / len(beliefs)
-
-        # Contradiction count
         contradictions_count = len(self.resolver.conflict_history.get(sid, {}))
-
         return {
             "total_beliefs": len(beliefs),
             "by_subject": by_subject,
@@ -675,106 +557,26 @@ class BeliefTracker:
         max_beliefs: Optional[int] = None,
         format_template: Optional[str] = None,
     ) -> str:
-        """Get a formatted summary of beliefs for display or prompt injection.
-
-        Respects max_beliefs config (default 50) but can be overridden per call.
-        Sorts by confidence + recency strategy.
-
-        Args:
-            session_id: Session ID (defaults to current context)
-            max_beliefs: Override max_beliefs config for this call
-            format_template: Custom template (default: "Known user facts &
-                preferences:\\n{facts}")
-
-        Returns:
-            Formatted string ready for display or prompt injection
-
-        Example:
-            summary = await tracker.get_summary("user-123", max_beliefs=10)
-            print(summary)
-            # Output:
-            # Known user facts & preferences:
-            # - USER likes Python
-            # - USER works in Tokyo
-            # - USER prefers dark mode
-        """
-        # Use provided max_beliefs or fall back to config
         max_b = max_beliefs or self.config.max_beliefs
-
         sid = session_id or session_context.get()
         beliefs = await self.store.get_beliefs(sid)
-
         if not beliefs:
             return ""
-
-        # Sort beliefs by strategy (same as get_context_prompt)
-        strategy = self.config.belief_sort_strategy
-        if strategy == "confidence_recency":
-            sorted_beliefs = sorted(
-                beliefs, key=lambda b: (b.confidence, b.turn), reverse=True
-            )
-        elif strategy == "recency":
-            sorted_beliefs = sorted(beliefs, key=lambda b: b.turn, reverse=True)
-        elif strategy == "confidence":
-            sorted_beliefs = sorted(beliefs, key=lambda b: b.confidence, reverse=True)
-        else:
-            sorted_beliefs = sorted(
-                beliefs, key=lambda b: (b.confidence, b.turn), reverse=True
-            )
-
-        # Cap at max_beliefs
-        capped_beliefs = sorted_beliefs[:max_b]
-
-        facts_list = [f"- {b.subject} {b.predicate} {b.value}" for b in capped_beliefs]
-        facts_str = "\n".join(facts_list)
-
-        template = format_template or "Known user facts & preferences:\n{facts}"
-        return template.format(facts=facts_str)
+        return summary_for_prompt(beliefs, max_beliefs=max_b)
 
     async def clear_beliefs(self, session_id: Optional[str] = None) -> None:
-        """Clear all beliefs for a session (but keep conflict history).
-
-        Args:
-            session_id: Session ID (defaults to current context)
-
-        Example:
-            await tracker.clear_beliefs("user-123")
-        """
         sid = session_id or session_context.get()
         await self.store.clear(sid)
 
     async def remove_belief(
         self, session_id: Optional[str], subject: str, predicate: str
     ) -> None:
-        """Remove a specific belief from the store.
-
-        Args:
-            session_id: Session ID (defaults to current context)
-            subject: Subject of the belief (e.g., "USER", "ASSISTANT")
-            predicate: Predicate of the belief (e.g., "likes", "works in")
-
-        Example:
-            await tracker.remove_belief("user-123", "USER", "likes")
-            # Removes all beliefs where subject=USER and predicate=likes
-        """
         sid = session_id or session_context.get()
         await self.store.remove_belief(sid, subject, predicate)
 
     async def set_session_ttl(
         self, session_id: Optional[str], ttl_seconds: int
     ) -> None:
-        """Set time-to-live (expiration) for all beliefs in a session.
-
-        For Redis: Uses native Redis EXPIRE. For SQLite: Not supported
-        (use prune_expired_beliefs instead).
-
-        Args:
-            session_id: Session ID (defaults to current context)
-            ttl_seconds: Time in seconds before beliefs expire
-
-        Example:
-            await tracker.set_session_ttl("user-123", 86400)  # 24 hours
-        """
         sid = session_id or session_context.get()
         if hasattr(self.store, "set_session_ttl"):
             await self.store.set_session_ttl(sid, ttl_seconds)
@@ -787,29 +589,11 @@ class BeliefTracker:
     async def prune_expired_beliefs(
         self, session_id: Optional[str] = None, max_age_seconds: Optional[int] = None
     ) -> int:
-        """Prune beliefs older than specified age (SQLite only).
-
-        For Redis: Use set_session_ttl() for native expiration.
-        For SQLite: Manually prune old beliefs.
-
-        Args:
-            session_id: Session ID (defaults to all sessions if None)
-            max_age_seconds: Age threshold (defaults to config.belief_max_age_seconds)
-
-        Returns:
-            Number of beliefs deleted
-
-        Example:
-            deleted = await tracker.prune_expired_beliefs("user-123", 86400)
-        """
         if not hasattr(self.store, "prune_expired_beliefs"):
             logger.warning("Store does not support belief pruning")
             return 0
-
         max_age = max_age_seconds or self.config.belief_max_age_seconds
         sid = session_id or session_context.get()
-
-        # If session_id provided, prune only that session; else prune all
         if session_id:
             return int(await self.store.prune_expired_beliefs(max_age, sid))
         else:
@@ -818,48 +602,17 @@ class BeliefTracker:
     async def update_belief_reference(
         self, session_id: Optional[str], subject: str, predicate: str
     ) -> None:
-        """Update last_referenced_at timestamp for a belief.
-
-        Should be called when a belief is actively used/injected into a prompt.
-        Helps with staleness scoring for session resumption.
-
-        Args:
-            session_id: Session ID (defaults to current context)
-            subject: Belief subject
-            predicate: Belief predicate
-        """
         sid = session_id or session_context.get()
         beliefs = await self.store.get_beliefs(sid)
         for b in beliefs:
             if b.subject == subject and b.predicate == predicate:
                 b.last_referenced_at = datetime.now(timezone.utc)
                 await self.store.update_belief(sid, b)
-                logger.debug(
-                    f"Updated reference time for belief: {subject} {predicate}"
-                )
                 break
 
     async def export_beliefs(
         self, session_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Export all beliefs for a session as JSON-serializable dicts.
-
-        Useful for:
-        - Migrating between stores (SQLite → Redis)
-        - Debugging production belief state
-        - Creating backups / snapshots
-
-        Args:
-            session_id: Session ID (defaults to current context)
-
-        Returns:
-            List of belief dicts (from Pydantic model_dump)
-
-        Example:
-            data = await tracker.export_beliefs("user-123")
-            with open("backup.json", "w") as f:
-                json.dump(data, f, default=str)
-        """
         sid = session_id or session_context.get()
         beliefs = await self.store.get_beliefs(sid)
         return [b.model_dump(mode="json") for b in beliefs]
@@ -869,30 +622,10 @@ class BeliefTracker:
         session_id: Optional[str] = None,
         beliefs_data: Optional[List[Dict[str, Any]]] = None,
     ) -> int:
-        """Import beliefs from a list of dicts into the store.
-
-        Validates each belief via Pydantic before adding.
-        Skips invalid entries with a warning.
-
-        Args:
-            session_id: Session ID (defaults to current context)
-            beliefs_data: List of belief dicts (as exported by export_beliefs)
-
-        Returns:
-            Number of beliefs successfully imported
-
-        Example:
-            with open("backup.json") as f:
-                data = json.load(f)
-            count = await tracker.import_beliefs("user-123", data)
-            print(f"Imported {count} beliefs")
-        """
         if not beliefs_data:
             return 0
-
         sid = session_id or session_context.get()
         imported = 0
-
         for item in beliefs_data:
             try:
                 belief = Belief.model_validate(item)
@@ -900,40 +633,21 @@ class BeliefTracker:
                 imported += 1
             except Exception as e:
                 logger.warning(f"Skipping invalid belief during import: {e}")
-
         logger.info(
             f"Imported {imported}/{len(beliefs_data)} beliefs for session {sid}"
         )
         return imported
 
     async def health_check(self) -> Dict[str, bool]:
-        """Check health of all tracker components.
-
-        Returns a dict with component health status.
-        Useful for startup validation and readiness probes.
-
-        Returns:
-            Dict with keys: 'store', 'adapter' and bool values
-
-        Example:
-            health = await tracker.health_check()
-            if not health["store"]:
-                raise RuntimeError("Store is unhealthy!")
-        """
         result: Dict[str, bool] = {"store": False, "adapter": False}
-
-        # Check store health
         try:
             if hasattr(self.store, "health_check"):
                 result["store"] = await self.store.health_check()
             else:
-                # Fallback: try a simple get_beliefs call
                 await self.store.get_beliefs("__health_check__")
                 result["store"] = True
         except Exception as e:
             logger.warning(f"Store health check failed: {e}")
-
-        # Check adapter health
         try:
             if self.internal_adapter and hasattr(self.internal_adapter, "health_check"):
                 result["adapter"] = await self.internal_adapter.health_check()
@@ -941,8 +655,16 @@ class BeliefTracker:
                 result["adapter"] = await self.app_adapter.health_check()
         except Exception as e:
             logger.warning(f"Adapter health check failed: {e}")
-
         return result
+
+    async def get_belief_history(
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+    ) -> List[dict]:
+        """Return audit trail for a specific belief."""
+        return await self.store.get_audit_history(session_id, subject, predicate)
 
     async def get_context_prompt(
         self,
@@ -951,29 +673,12 @@ class BeliefTracker:
         format_template: Optional[str] = None,
         current_user_message: Optional[str] = None,
     ) -> str:
-        """
-        Retrieve active, non-contradictory beliefs for the session and
-        format them into a structured text block for the system prompt.
-
-        If conversation_id is provided, returns beliefs only from that
-        conversation thread. Otherwise returns beliefs from all conversations
-        in the session.
-
-        If token-aware injection enabled and belief summary exceeds budget,
-        uses cosine similarity to select only the most relevant beliefs based
-        on the current user message.
-
-        Enforces max_beliefs limit and sorts by confidence + recency.
-        Applies staleness scoring if enabled: only includes beliefs with
-        staleness_score >= staleness_threshold.
-        """
         sid = session_id or session_context.get()
         cid = conversation_id or conversation_context.get()
         beliefs = await self.store.get_beliefs(sid, cid)
         if not beliefs:
             return ""
 
-        # Apply staleness filter if enabled
         if self.config.enable_staleness_scoring:
             filtered_beliefs = [
                 b
@@ -981,50 +686,37 @@ class BeliefTracker:
                 if calculate_staleness_score(b) >= self.config.staleness_threshold
             ]
             if not filtered_beliefs:
-                # If all beliefs are too stale, include at least the most
-                # confident recent ones
                 filtered_beliefs = sorted(
                     beliefs, key=lambda b: (b.confidence, b.turn), reverse=True
                 )[:5]
         else:
             filtered_beliefs = beliefs
 
-        # Filter out hypothetical beliefs (not suitable for injection)
         filtered_beliefs = [
             b for b in filtered_beliefs if not getattr(b, "is_hypothetical", False)
         ]
         if not filtered_beliefs and beliefs:
-            # If all beliefs are hypothetical, don't filter
-            # (use at least something)
             filtered_beliefs = beliefs
 
-        # Sort beliefs by strategy
         strategy = self.config.belief_sort_strategy
         if strategy == "confidence_recency":
-            # Primary: confidence (descending), Secondary: turn (descending)
             sorted_beliefs = sorted(
                 filtered_beliefs, key=lambda b: (b.confidence, b.turn), reverse=True
             )
         elif strategy == "recency":
-            # Sort by turn only (most recent first)
             sorted_beliefs = sorted(
                 filtered_beliefs, key=lambda b: b.turn, reverse=True
             )
         elif strategy == "confidence":
-            # Sort by confidence only (highest first)
             sorted_beliefs = sorted(
                 filtered_beliefs, key=lambda b: b.confidence, reverse=True
             )
         else:
-            # Default to confidence_recency
             sorted_beliefs = sorted(
                 filtered_beliefs, key=lambda b: (b.confidence, b.turn), reverse=True
             )
 
-        # Token-aware filtering: if belief summary would be too large,
-        # use relevance-based selection
         if self.config.enable_token_aware_injection and current_user_message:
-            # Generate a sample summary and check token count
             sample_facts = [
                 f"- {b.subject} {b.predicate} {b.value}"
                 for b in sorted_beliefs[: self.config.max_beliefs]
@@ -1033,20 +725,11 @@ class BeliefTracker:
             estimated_tokens = estimate_tokens(sample_summary)
 
             if estimated_tokens > self.config.belief_budget_tokens:
-                logger.debug(
-                    f"Belief summary ({estimated_tokens} tokens) exceeds "
-                    f"budget ({self.config.belief_budget_tokens}). "
-                    f"Using relevance-based filtering."
-                )
-                # Embed current user message and rank beliefs by relevance
                 try:
                     if self.extractor and hasattr(self.extractor, "adapter"):
                         user_msg_embedding = await self.extractor.adapter.get_embedding(
                             current_user_message
                         )
-
-                        # Score beliefs by relevance
-                        # (cosine similarity with user message)
                         from beliefstate.detector import cosine_similarity
 
                         scored_beliefs = []
@@ -1056,36 +739,25 @@ class BeliefTracker:
                                     user_msg_embedding, b.embedding
                                 )
                                 scored_beliefs.append((b, similarity))
-
-                        # Sort by relevance and select top-K to fit budget
                         scored_beliefs.sort(key=lambda x: x[1], reverse=True)
-
-                        # Estimate how many beliefs fit in the budget
                         beliefs_per_token = len(sample_facts) / max(estimated_tokens, 1)
                         max_beliefs_in_budget = max(
                             1, int(beliefs_per_token * self.config.belief_budget_tokens)
                         )
-
                         sorted_beliefs = [
                             b for b, _ in scored_beliefs[:max_beliefs_in_budget]
                         ]
-                        logger.debug(
-                            f"Selected {len(sorted_beliefs)} most relevant "
-                            f"beliefs to fit token budget"
-                        )
                 except Exception as e:
                     logger.warning(
                         f"Token-aware injection fallback: {e}. Using default selection."
                     )
 
-        # Enforce max_beliefs limit
         capped_beliefs = sorted_beliefs[: self.config.max_beliefs]
-
         facts_list = [f"- {b.subject} {b.predicate} {b.value}" for b in capped_beliefs]
         facts_str = "\n".join(facts_list)
-
-        template = format_template or "Known user facts & preferences:\n{facts}"
-        return template.format(facts=facts_str)
+        if format_template:
+            return format_template.format(facts=facts_str)
+        return summary_for_prompt(capped_beliefs, max_beliefs=self.config.max_beliefs)
 
     async def inject_context(
         self,
@@ -1095,18 +767,6 @@ class BeliefTracker:
         format_template: Optional[str] = None,
         current_user_message: Optional[str] = None,
     ) -> list[Dict[str, Any]]:
-        """
-        Inject the current session belief state context into a list of messages.
-        If a system message is already present, appends the belief context to it.
-        Otherwise, prepends a new system message containing the belief context.
-
-        Args:
-            messages: List of message dicts ({"role": ..., "content": ...})
-            session_id: Session ID (defaults to current context)
-            conversation_id: Conversation ID for multi-thread filtering
-            format_template: Custom template for belief formatting
-            current_user_message: Current user message for relevance-based filtering
-        """
         context_prompt = await self.get_context_prompt(
             session_id=session_id,
             conversation_id=conversation_id,
@@ -1115,16 +775,12 @@ class BeliefTracker:
         )
         if not context_prompt:
             return messages
-
         new_messages = [m.copy() for m in messages]
-
-        # Look for existing system message
         system_idx = -1
         for idx, m in enumerate(new_messages):
             if isinstance(m, dict) and m.get("role") == "system":
                 system_idx = idx
                 break
-
         if system_idx != -1:
             orig_content = new_messages[system_idx].get("content", "")
             if orig_content:
@@ -1135,7 +791,6 @@ class BeliefTracker:
                 new_messages[system_idx]["content"] = context_prompt
         else:
             new_messages.insert(0, {"role": "system", "content": context_prompt})
-
         return new_messages
 
     def _generic_inject_context(
@@ -1144,8 +799,6 @@ class BeliefTracker:
         *args: Any,
         **kwargs: Any,
     ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-        """Fallback context injector that supports messages/contents/system arguments generically."""
-        # 1. Try "messages" in kwargs
         if "messages" in kwargs:
             messages = kwargs["messages"]
             if isinstance(messages, list):
@@ -1154,8 +807,6 @@ class BeliefTracker:
                     messages, context_prompt
                 )
                 return args, new_kwargs
-
-        # 2. Try "contents" in kwargs (Gemini style)
         if "contents" in kwargs:
             new_kwargs = kwargs.copy()
             if "config" in new_kwargs:
@@ -1165,22 +816,17 @@ class BeliefTracker:
             else:
                 new_kwargs["config"] = {"system_instruction": context_prompt}
             return args, new_kwargs
-
-        # 3. Try "system" in kwargs (Anthropic/LiteLLM style)
         if "system" in kwargs or any(k.lower() == "system" for k in kwargs):
             key = next(k for k in kwargs if k.lower() == "system")
             new_kwargs = kwargs.copy()
             orig = new_kwargs.get(key, "")
             new_kwargs[key] = f"{orig}\n\n{context_prompt}" if orig else context_prompt
             return args, new_kwargs
-
-        # 4. Try positional args
         new_args = list(args)
         for idx, arg in enumerate(new_args[:2]):
             if isinstance(arg, list):
                 new_args[idx] = self._fallback_inject_messages(arg, context_prompt)
                 return tuple(new_args), kwargs
-
         return args, kwargs
 
     def _fallback_inject_messages(
@@ -1195,7 +841,6 @@ class BeliefTracker:
             elif hasattr(m, "role") and m.role == "system":
                 system_idx = idx
                 break
-
         if system_idx != -1:
             m = new_messages[system_idx]
             if isinstance(m, dict):
@@ -1214,7 +859,6 @@ class BeliefTracker:
                 )
         else:
             new_messages.insert(0, {"role": "system", "content": context_prompt})
-
         return new_messages
 
     def _fallback_inject_config(self, config: Any, context_prompt: str) -> Any:
@@ -1243,90 +887,68 @@ class BeliefTracker:
     ) -> None:
         """The background pipeline for extracting, detecting, and resolving beliefs.
 
-        Uses per-session async lock to coordinate writes when multiple LLM calls happen
-        in parallel for the same session. This prevents race conditions in:
-        - Contradiction resolution (updating/removing beliefs)
-        - Adding new beliefs to the store
-
-        Implements optimistic concurrency control for out-of-order completions:
-        - Tracks the latest processed turn per session
-        - Warns if turns complete out of order (turn N+1 before turn N)
-        - Proceeds anyway (beliefs are still added, but order may be jumbled)
+        Uses per-session async lock to coordinate writes.
         """
         try:
-            # Ensure components are initialized
             self._ensure_initialized()
 
-            new_beliefs: list[Belief] = []
-
-            # 1a. Extract from the user's latest message
+            # Extract from BOTH user message and assistant response
             last_user_msg = ""
             for m in reversed(call.messages):
                 if m.get("role") == "user":
                     last_user_msg = m.get("content", "")
                     break
 
-            if last_user_msg:
-                assert self.extractor is not None
-                user_beliefs = await self.extractor.extract(
-                    last_user_msg, turn=turn, source="user"
-                )
-                new_beliefs.extend(user_beliefs)
-
-            # 1b. Extract from the assistant's response
-            assert self.extractor is not None
-            assistant_beliefs = await self.extractor.extract(
-                response.text, turn=turn, source="assistant"
+            new_beliefs = await self.extractor.process_turn(
+                last_user_msg,
+                response.text,
+                session_id,
+                turn,
             )
-            new_beliefs.extend(assistant_beliefs)
+
+            self._stats.total_beliefs_extracted += len(new_beliefs)
 
             if not new_beliefs:
+                self._stats.record_success()
                 return
 
-            # 2. Detect contradictions and deduplicate entailed beliefs
             assert self.detector is not None
             contradictions, duplicates = await self.detector.detect_with_deduplication(
                 session_id, new_beliefs
             )
 
-            # 3-4. Write phase: use per-session lock to coordinate concurrent writes
-            session_lock = _get_session_lock(session_id)
-            async with session_lock:
-                # Check for out-of-order turn completion
-                # (optimistic concurrency control)
+            self._stats.total_contradictions_detected += len(contradictions)
+            self._stats.total_duplicates_skipped += len(duplicates)
+
+            # Write phase is serialised per session
+            async with _get_session_lock(session_id):
                 last_processed_turn = self._session_turn_states.get(session_id, -1)
                 if turn > last_processed_turn + 1:
                     logger.warning(
                         f"Out-of-order turn completion for session "
                         f"{session_id}: turn {turn} completed before turn "
-                        f"{last_processed_turn + 1}. This can happen with "
-                        f"parallel requests. Belief order may be jumbled."
+                        f"{last_processed_turn + 1}."
                     )
                 elif turn <= last_processed_turn:
                     logger.warning(
                         f"Retransmitted or replayed turn for session "
                         f"{session_id}: turn {turn} completed after turn "
-                        f"{last_processed_turn}. Skipping to avoid "
-                        f"duplicates."
+                        f"{last_processed_turn}. Skipping."
                     )
                     return
 
-                # Update turn state
                 self._session_turn_states[session_id] = turn
-
-                # 3. Resolve (updates the store for contradictory beliefs
-                # based on strategy)
                 await self.resolver.resolve(session_id, contradictions)
 
-                # 4. Save non-contradictory, non-duplicate beliefs
                 contradicting_new_beliefs = [c[1] for c in contradictions]
-
                 for b in new_beliefs:
                     if b not in contradicting_new_beliefs and b not in duplicates:
                         await self.store.add_belief(session_id, b)
 
+            self._stats.record_success()
+
         except Exception as e:
-            # Prevent tracker exceptions from bubbling up in background tasks
+            self._stats.record_error(str(e))
             logger.error(f"Background tracking error: {e}", exc_info=True)
 
     async def track_async(
@@ -1336,7 +958,6 @@ class BeliefTracker:
         session_id: str,
         turn: int,
     ) -> None:
-        """Asynchronously process a tracking payload (useful for background workers)."""
         call = LLMCall.model_validate(call_dict)
         response = LLMResponse.model_validate(response_dict)
         await self._track_background(call, response, session_id, turn)
@@ -1348,7 +969,6 @@ class BeliefTracker:
         session_id: str,
         turn: int,
     ) -> None:
-        """Synchronously process a tracking payload (blocking)."""
         try:
             loop = asyncio.get_running_loop()
             if loop.is_running():
@@ -1367,35 +987,6 @@ class BeliefTracker:
         stream: bool = False,
         auto_inject: bool = True,
     ) -> Any:
-        """Decorator to wrap an async LLM function and track beliefs.
-
-        If adapter was not provided during initialization, auto-detects from first call.
-
-        Args:
-            func: Async function that calls an LLM
-            stream: If True, expects func to return an async generator
-                   (streaming response). Accumulates chunks and runs
-                   extraction after stream is exhausted.
-            auto_inject: If True, automatically injects a summary of
-                         established beliefs into the system prompt
-                         before calling the wrapped function.
-
-        Example:
-            # Non-streaming (default)
-            @tracker.wrap
-            async def call_llm():
-                return await client.chat.completions.create(...)
-
-            # Streaming
-            @tracker.wrap(stream=True)
-            async def call_llm_streaming():
-                return client.chat.completions.create(stream=True)  # yields chunks
-
-            # Usage - same API
-            response = await call_llm()
-            response = await call_llm_streaming()  # Automatically accumulates stream
-        """
-
         def decorator(
             f: Callable[..., Coroutine[Any, Any, Any]],
         ) -> Callable[..., Coroutine[Any, Any, Any]]:
@@ -1408,7 +999,6 @@ class BeliefTracker:
                 current_turn = self._session_turn_counters[session_id]
 
                 if auto_inject:
-                    # Extract last user message to use for relevance filtering
                     last_user_msg = ""
                     messages_list = None
                     if "messages" in kwargs and isinstance(kwargs["messages"], list):
@@ -1420,7 +1010,6 @@ class BeliefTracker:
                             if isinstance(arg, list):
                                 messages_list = arg
                                 break
-
                     if messages_list:
                         for m in reversed(messages_list):
                             if isinstance(m, dict) and m.get("role") == "user":
@@ -1452,18 +1041,17 @@ class BeliefTracker:
                                 if isinstance(res, tuple) and len(res) == 2:
                                     args, kwargs = res
                                     injected = True
-                            except Exception:
-                                pass
-
+                            except Exception as e:
+                                logger.debug(
+                                    f"inject_context failed, using fallback: {e}"
+                                )
                         if not injected:
                             args, kwargs = self._generic_inject_context(
                                 context_prompt, *args, **kwargs
                             )
 
-                # 1. Execute the user's actual LLM call (blocks until finished)
                 native_response = await f(*args, **kwargs)
 
-                # Handle streaming: accumulate chunks into full response
                 if stream:
                     return AsyncStreamWrapper(
                         native_response,
@@ -1474,12 +1062,8 @@ class BeliefTracker:
                         current_turn,
                     )
 
-                # 2. Auto-detect adapter on first call if needed
                 if self._auto_detect_adapter and self.app_adapter is None:
-                    logger.info("Auto-detecting adapter from response type...")
                     self.app_adapter = _detect_adapter(native_response)
-
-                    # Initialize internal adapter and wrapped components
                     from beliefstate.resilience import ResilientAdapterWrapper
 
                     self.internal_adapter = ResilientAdapterWrapper(
@@ -1487,56 +1071,34 @@ class BeliefTracker:
                     )
                     self._ensure_initialized()
 
-                # 3. Normalize inputs and outputs for the background tracker
                 try:
                     llm_call = self.app_adapter.to_llm_call(*args, **kwargs)
                     llm_response = self.app_adapter.to_llm_response(native_response)
-
-                    # Ensure extractor and detector are initialized
                     self._ensure_initialized()
 
-                    # Track provider info for this session
                     provider_name = self.app_adapter.__class__.__name__
                     if session_id in self._session_providers:
-                        # Check for mid-session provider change
                         if self._session_providers[session_id] != provider_name:
                             logger.warning(
                                 f"Mid-session provider change for session "
                                 f"{session_id}: switched from "
                                 f"{self._session_providers[session_id]} to "
-                                f"{provider_name}. This may cause "
-                                f"embedding/extraction inconsistencies."
+                                f"{provider_name}."
                             )
                     else:
-                        # First call in this session
                         self._session_providers[session_id] = provider_name
 
-                    # Warn if internal_adapter not set with premium models
-                    premium_models = ["gpt-4", "gpt-4-turbo", "claude-3", "gemini-pro"]
-                    if not self.internal_adapter and any(
-                        model_hint in provider_name.lower()
-                        for model_hint in premium_models
-                    ):
-                        logger.warning(
-                            f"No internal_adapter configured for premium "
-                            f"provider {provider_name}. Belief extraction will "
-                            f"use the same premium provider, increasing costs. "
-                            f"Consider setting internal_adapter to a cheaper "
-                            f"model (e.g., GPT-3.5, Claude Instant)."
-                        )
-
-                    # 4. Dispatch background tracking
                     if self.config.enable_background_tasks:
-                        self.dispatcher.dispatch(
-                            self, llm_call, llm_response, session_id, current_turn
+                        self._dispatch(
+                            self._track_background(
+                                llm_call, llm_response, session_id, current_turn
+                            )
                         )
                     else:
-                        # Run synchronously (useful for testing)
                         await self._track_background(
                             llm_call, llm_response, session_id, current_turn
                         )
                 except Exception as e:
-                    # Never fail the user's main application due to tracker parsing errors
                     logger.error(f"Tracker wrapper error: {e}", exc_info=True)
 
                 return native_response
@@ -1546,84 +1108,3 @@ class BeliefTracker:
         if func is None:
             return decorator
         return decorator(func)
-
-    async def _accumulate_stream(self, stream_generator: Any) -> Any:
-        """Accumulate chunks from a streaming response into a complete response object.
-
-        Handles different streaming formats:
-        - OpenAI streaming (yields ChatCompletionChunk objects)
-        - Generic async generator (yields dicts or objects with text/content)
-
-        Args:
-            stream_generator: Async generator yielding response chunks
-
-        Returns:
-            Accumulated response object (dict or native SDK response)
-        """
-        accumulated_text = ""
-        first_chunk = None
-
-        # Iterate through stream chunks
-        async for chunk in stream_generator:
-            if first_chunk is None:
-                first_chunk = chunk
-
-            # Extract text from chunk
-            chunk_text = ""
-
-            # OpenAI format: chunk.choices[0].delta.content
-            if hasattr(chunk, "choices") and chunk.choices:
-                if hasattr(chunk.choices[0], "delta") and hasattr(
-                    chunk.choices[0].delta, "content"
-                ):
-                    chunk_text = chunk.choices[0].delta.content or ""
-
-            # Dict format
-            elif isinstance(chunk, dict):
-                if "choices" in chunk and chunk["choices"]:
-                    choice = chunk["choices"][0]
-                    if "delta" in choice and "content" in choice["delta"]:
-                        chunk_text = choice["delta"]["content"] or ""
-
-            # Generic object with content/text
-            elif hasattr(chunk, "content"):
-                chunk_text = chunk.content or ""
-            elif hasattr(chunk, "text"):
-                chunk_text = chunk.text or ""
-
-            accumulated_text += chunk_text
-            logger.debug(
-                f"Accumulated chunk: {len(chunk_text)} chars "
-                f"(total: {len(accumulated_text)})"
-            )
-
-        # Construct accumulated response
-        if first_chunk is None:
-            # Empty stream - return empty response
-            return {"choices": [{"message": {"content": "", "role": "assistant"}}]}
-
-        # OpenAI format - reconstruct as complete response
-        if hasattr(first_chunk, "choices"):
-            # Create a dict-like response object
-            return {
-                "id": getattr(first_chunk, "id", "stream-accumulated"),
-                "object": "chat.completion",
-                "created": getattr(first_chunk, "created", 0),
-                "model": getattr(first_chunk, "model", "unknown"),
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {
-                            "role": "assistant",
-                            "content": accumulated_text,
-                        },
-                        "finish_reason": "stop",
-                    }
-                ],
-            }
-
-        # Generic fallback
-        return {
-            "content": accumulated_text,
-            "text": accumulated_text,
-        }

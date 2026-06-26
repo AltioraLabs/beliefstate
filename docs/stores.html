@@ -1174,8 +1174,12 @@
     <div class="mobile-menu-group-title">Stores Sections</div>
     <div class="mobile-sidebar-sections">
       <a href="#stores">Overview</a>
+      <a href="#store-protocol">Store Protocol</a>
+      <a href="#turn-concurrency">Concurrency</a>
+      <a href="#audit-trail">Audit Trail</a>
       <a href="#sqlite-store">SQLite</a>
       <a href="#redis-store">Redis</a>
+      <a href="#postgres-store">PostgreSQL</a>
       <a href="#memory-store">In-Memory</a>
     </div>
   </div>
@@ -1211,8 +1215,12 @@
     <div class="sidebar-group">
       <div class="sidebar-group-title">Stores</div>
       <a href="stores.html#stores" class="sidebar-link active">Overview</a>
+      <a href="stores.html#store-protocol" class="sidebar-link">Store Protocol</a>
+      <a href="stores.html#turn-concurrency" class="sidebar-link">Concurrency</a>
+      <a href="stores.html#audit-trail" class="sidebar-link">Audit Trail</a>
       <a href="stores.html#sqlite-store" class="sidebar-link">SQLite</a>
       <a href="stores.html#redis-store" class="sidebar-link">Redis</a>
+      <a href="stores.html#postgres-store" class="sidebar-link">PostgreSQL</a>
       <a href="stores.html#memory-store" class="sidebar-link">In-Memory</a>
     </div>
 
@@ -1305,6 +1313,123 @@
               The tracking store backend is configured by passing the <code>store_type</code> and <code>store_kwargs</code> properties within your <code>TrackerConfig</code>.
             </p>
           </div>
+
+          <h3 id="store-protocol">Store Protocol</h3>
+          <p>
+            All store backends implement the <code>Store</code> protocol, which defines the public interface for belief persistence. Any custom backend must implement these methods:
+          </p>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Method</th>
+                  <th>Signature</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>upsert</code></td>
+                  <td><code>async upsert(belief, session_id, conversation_id, turn)</code></td>
+                  <td>Insert or update a belief with turn-based optimistic concurrency.</td>
+                </tr>
+                <tr>
+                  <td><code>get_beliefs</code></td>
+                  <td><code>async get_beliefs(session_id, conversation_id=None, category=None, belief_type=None)</code></td>
+                  <td>Query beliefs with optional filters.</td>
+                </tr>
+                <tr>
+                  <td><code>get_by_key</code></td>
+                  <td><code>async get_by_key(subject, predicate, session_id)</code></td>
+                  <td>O(1) exact lookup by belief triple key.</td>
+                </tr>
+                <tr>
+                  <td><code>search_beliefs</code></td>
+                  <td><code>async search_beliefs(session_id, embedding, threshold, limit, conversation_id=None)</code></td>
+                  <td>Semantic search via cosine similarity on stored embeddings.</td>
+                </tr>
+                <tr>
+                  <td><code>get_audit_history</code></td>
+                  <td><code>async get_audit_history(subject, predicate, session_id, limit=10)</code></td>
+                  <td>Retrieve version history for a belief from the audit trail.</td>
+                </tr>
+                <tr>
+                  <td><code>clear_session</code></td>
+                  <td><code>async clear_session(session_id)</code></td>
+                  <td>GDPR deletion — removes all beliefs for a session.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="turn-concurrency">Turn-Based Optimistic Concurrency</h3>
+          <p>
+            All store backends enforce turn-based optimistic concurrency on <code>upsert()</code>. Each write includes a <code>turn</code> parameter — the store compares it against the stored belief's turn and only overwrites if the incoming turn is newer or equal. This prevents stale background writes from overwriting fresh data when concurrent tasks race.
+          </p>
+          <div class="callout tip">
+            <div class="callout-label">Tip</div>
+            <p>
+              Turn-based concurrency is a lightweight guard. For coordinated writes within a single session, the tracker also applies per-session async write locks to serialize concurrent background tasks.
+            </p>
+          </div>
+
+          <h3 id="audit-trail">Audit Trail</h3>
+          <p>
+            SQLite and PostgreSQL backends maintain a <code>beliefs_audit</code> table that logs every belief mutation. Each row records the full belief state at the time of change, enabling version history queries via <code>get_audit_history()</code>.
+          </p>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Column</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>id</code></td>
+                  <td><code>INTEGER</code></td>
+                  <td>Auto-incrementing audit record ID.</td>
+                </tr>
+                <tr>
+                  <td><code>session_id</code></td>
+                  <td><code>TEXT</code></td>
+                  <td>Session that owns this belief.</td>
+                </tr>
+                <tr>
+                  <td><code>subject</code></td>
+                  <td><code>TEXT</code></td>
+                  <td>Belief subject.</td>
+                </tr>
+                <tr>
+                  <td><code>predicate</code></td>
+                  <td><code>TEXT</code></td>
+                  <td>Belief predicate.</td>
+                </tr>
+                <tr>
+                  <td><code>value</code></td>
+                  <td><code>TEXT</code></td>
+                  <td>Belief value at mutation time.</td>
+                </tr>
+                <tr>
+                  <td><code>confidence</code></td>
+                  <td><code>REAL</code></td>
+                  <td>Confidence score at mutation time.</td>
+                </tr>
+                <tr>
+                  <td><code>turn</code></td>
+                  <td><code>INTEGER</code></td>
+                  <td>Turn number when the mutation occurred.</td>
+                </tr>
+                <tr>
+                  <td><code>changed_at</code></td>
+                  <td><code>TEXT</code></td>
+                  <td>ISO 8601 timestamp of the mutation.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <!-- SECTION 2: SQLITE STORE -->
@@ -1388,11 +1513,10 @@ PRAGMA foreign_keys=ON</div>
               <span class="code-filename">sqlite_context.py</span>
               <button class="btn-icon copy-btn">copy</button>
             </div>
-            <div class="code-inner"><span class="c-kw">from</span> beliefstate.stores <span class="c-kw">import</span> <span class="c-fn">SQLiteBeliefStore</span>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate.store.sqlite <span class="c-kw">import</span> <span class="c-fn">SQLiteStore</span>
 
-<span class="c-kw">async with</span> <span class="c-fn">SQLiteBeliefStore</span>(db_path=<span class="c-str">"beliefs.db"</span>) <span class="c-kw">as</span> store:
-    <span class="c-kw">await</span> store.<span class="c-fn">open</span>()
-    <span class="c-cm"># Perform storage queries</span></div>
+<span class="c-kw">async with</span> <span class="c-fn">SQLiteStore</span>(db_path=<span class="c-str">"beliefs.db"</span>) <span class="c-kw">as</span> store:
+    <span class="c-cm"># Storage queries</span></div>
           </div>
 
           <h3 id="schema">Schema</h3>
@@ -1539,10 +1663,11 @@ config = <span class="c-fn">TrackerConfig</span>(
           </div>
 
           <h3 id="key-structure">Key Structure</h3>
-          <p>The store maps belief triples to redis keys using this structured namespaces prefix pattern:</p>
+          <p>The store maps belief triples to redis keys using a hash-based structure. All beliefs for a session are stored in a single Redis hash keyed by session ID:</p>
           <div class="code-block" style="margin: 12px 0;">
-            <div class="code-inner">beliefstate:{session_id}:{conversation_id}:{subject}:{predicate}</div>
+            <div class="code-inner">beliefstate:session:{session_id}</div>
           </div>
+          <p>Each hash field is <code>{conversation_id}:{subject}:{predicate}</code> and the value is a JSON-serialized Belief object.</p>
           <p>Example keys generated by the store backend:</p>
           <div class="code-block">
             <div class="code-topbar">
@@ -1552,8 +1677,9 @@ config = <span class="c-fn">TrackerConfig</span>(
               <span class="code-filename">redis_keys.txt</span>
               <button class="btn-icon copy-btn">copy</button>
             </div>
-            <div class="code-inner">beliefstate:user_123:conv_889:USER:likes
-beliefstate:user_123:conv_889:USER:budget</div>
+            <div class="code-inner">beliefstate:session:user_123
+  field: :USER:likes        → {"subject":"USER","predicate":"likes",...}
+  field: :USER:budget       → {"subject":"USER","predicate":"budget",...}</div>
           </div>
 
           <h3 id="embedding-storage">Embedding Storage</h3>
@@ -1607,7 +1733,82 @@ beliefstate:user_123:conv_889:USER:budget</div>
           </div>
         </section>
 
-        <!-- SECTION 4: IN-MEMORY STORE -->
+        <!-- SECTION 4: POSTGRESQL STORE -->
+        <section class="doc-section" id="postgres-store">
+          <h2>PostgreSQL Store</h2>
+          <p>
+            The PostgreSQL backend provides full production-grade persistence with concurrent connection support, audit trails, and turn-based optimistic concurrency.
+          </p>
+
+          <div class="code-block">
+            <div class="code-topbar">
+              <div class="code-dot" style="background:#EF4444"></div>
+              <div class="code-dot" style="background:#F59E0B"></div>
+              <div class="code-dot" style="background:#22C55E"></div>
+              <span class="code-filename">postgres_config.py</span>
+              <button class="btn-icon copy-btn">copy</button>
+            </div>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate <span class="c-kw">import</span> <span class="c-fn">TrackerConfig</span>
+
+config = <span class="c-fn">TrackerConfig</span>(
+    store_type=<span class="c-str">"postgres"</span>,
+    store_kwargs={
+        <span class="c-str">"dsn"</span>: <span class="c-str">"postgresql://user:pass@localhost:5432/beliefs"</span>
+    }
+)</div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>dsn</code></td>
+                  <td><span class="type-label">str</span></td>
+                  <td><span class="default-label required">required</span></td>
+                  <td>PostgreSQL connection string (DSN).</td>
+                </tr>
+                <tr>
+                  <td><code>min_pool_size</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">2</span></td>
+                  <td>Minimum number of connections in the pool.</td>
+                </tr>
+                <tr>
+                  <td><code>max_pool_size</code></td>
+                  <td><span class="type-label">int</span></td>
+                  <td><span class="default-label">10</span></td>
+                  <td>Maximum number of connections in the pool.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="postgres-features">Features</h3>
+          <ul>
+            <li><strong>Turn-based upsert</strong> — uses <code>ON CONFLICT ... DO UPDATE</code> with turn comparison for optimistic concurrency.</li>
+            <li><strong>Audit trail</strong> — every mutation is logged to a <code>beliefs_audit</code> table for version history.</li>
+            <li><strong>Binary embeddings</strong> — embeddings stored as binary BLOBs using <code>struct.pack</code> for precision and space efficiency.</li>
+            <li><strong>Connection pooling</strong> — async connection pool with configurable min/max sizes.</li>
+            <li><strong>Semantic search</strong> — computes cosine similarity in Python over fetched embeddings (consider pgvector extension for large datasets).</li>
+          </ul>
+
+          <div class="callout warning">
+            <div class="callout-label">Note</div>
+            <p>
+              Requires the <code>asyncpg</code> package: <code>pip install asyncpg</code>.
+            </p>
+          </div>
+        </section>
+
+        <!-- SECTION 5: IN-MEMORY STORE -->
         <section class="doc-section" id="memory-store">
           <h2>In-Memory Store</h2>
           <p>
@@ -1638,7 +1839,7 @@ tracker = <span class="c-fn">BeliefTracker</span>(config=<span class="c-fn">Trac
 
           <h3 id="lru-eviction">LRU Eviction</h3>
           <p>
-            To prevent memory leaks during long-running processes, the store maintains an OrderedDict and evicts older, least-recently-used beliefs once the total reaches `max_total_beliefs`.
+            To prevent memory leaks during long-running processes, the store maintains an OrderedDict and evicts older, least-recently-used beliefs once memory usage exceeds <code>max_bytes</code> (default 100 MB).
           </p>
           <div class="code-block">
             <div class="code-topbar">
@@ -1648,10 +1849,10 @@ tracker = <span class="c-fn">BeliefTracker</span>(config=<span class="c-fn">Trac
               <span class="code-filename">lru_setup.py</span>
               <button class="btn-icon copy-btn">copy</button>
             </div>
-            <div class="code-inner"><span class="c-kw">from</span> beliefstate.stores <span class="c-kw">import</span> <span class="c-fn">InMemoryBeliefStore</span>
+            <div class="code-inner"><span class="c-kw">from</span> beliefstate.store.memory <span class="c-kw">import</span> <span class="c-fn">InMemoryBeliefStore</span>
 
-# Cap the local storage to 100,000 beliefs total
-store = <span class="c-fn">InMemoryBeliefStore</span>(max_total=<span class="c-str">100000</span>)</div>
+<span class="c-cm"># Cap memory usage to 50 MB</span>
+store = <span class="c-fn">InMemoryBeliefStore</span>(max_bytes=<span class="c-num">50 * 1024 * 1024</span>)</div>
           </div>
 
           <h3 id="thread-safety">Thread Safety</h3>
@@ -1685,6 +1886,9 @@ store = <span class="c-fn">InMemoryBeliefStore</span>(max_total=<span class="c-s
         <div class="otp-title">On this page</div>
         <ul class="otp-links">
           <li><a href="#stores" class="otp-link">Overview</a></li>
+          <li><a href="#store-protocol" class="otp-link indent">→ Store Protocol</a></li>
+          <li><a href="#turn-concurrency" class="otp-link indent">→ Concurrency</a></li>
+          <li><a href="#audit-trail" class="otp-link indent">→ Audit Trail</a></li>
           <li><a href="#sqlite-store" class="otp-link">SQLite Store</a></li>
           <li><a href="#wal-mode" class="otp-link indent">→ WAL Mode</a></li>
           <li><a href="#connection-management" class="otp-link indent">→ Connection Management</a></li>
@@ -1693,6 +1897,7 @@ store = <span class="c-fn">InMemoryBeliefStore</span>(max_total=<span class="c-s
           <li><a href="#key-structure" class="otp-link indent">→ Key Structure</a></li>
           <li><a href="#embedding-storage" class="otp-link indent">→ Embedding Storage</a></li>
           <li><a href="#ttl-support" class="otp-link indent">→ TTL Support</a></li>
+          <li><a href="#postgres-store" class="otp-link">PostgreSQL Store</a></li>
           <li><a href="#memory-store" class="otp-link">In-Memory Store</a></li>
         </ul>
       </aside>

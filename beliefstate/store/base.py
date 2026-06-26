@@ -2,6 +2,16 @@ from typing import List, Optional, Protocol, runtime_checkable
 from beliefstate.models import Belief
 
 
+CATEGORY_LABELS = {
+    "identity": "Identity",
+    "technical": "Technical Decisions",
+    "planning": "Tasks & Planning",
+    "constraint": "Constraints & Requirements",
+    "state": "Current State",
+    "general": "Established Facts",
+}
+
+
 @runtime_checkable
 class Store(Protocol):
     """Protocol for a Belief Storage backend."""
@@ -22,6 +32,7 @@ class Store(Protocol):
         embedding: List[float],
         threshold: float = 0.0,
         limit: int = 5,
+        conversation_id: Optional[str] = None,
     ) -> List[Belief]:
         """Search the store for beliefs semantically similar to the target embedding."""
         ...
@@ -47,3 +58,65 @@ class Store(Protocol):
     async def health_check(self) -> bool:
         """Verify the store backend is reachable and functional."""
         ...
+
+    async def upsert(self, belief: Belief) -> bool:
+        """Insert or update a belief with turn-based optimistic concurrency.
+
+        Returns True if the belief was written, False if discarded (stale write).
+        """
+        ...
+
+    async def get_by_key(
+        self,
+        subject: str,
+        predicate: str,
+        session_id: str,
+        conversation_id: Optional[str] = None,
+    ) -> Optional[Belief]:
+        """Retrieve a single belief by its composite key."""
+        ...
+
+    async def get_audit_history(
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+    ) -> List[dict]:
+        """Return audit trail for a specific belief."""
+        ...
+
+
+def summary_for_prompt(
+    beliefs: List[Belief],
+    max_beliefs: int = 50,
+    max_speculative_beliefs: int = 5,
+) -> str:
+    """Format beliefs into a structured, category-grouped summary for prompt injection.
+
+    Groups beliefs by category, excludes hypotheticals from main injection,
+    and appends speculative beliefs in a separate section.
+    """
+    real = [b for b in beliefs if not getattr(b, "is_hypothetical", False)]
+    speculative = [b for b in beliefs if getattr(b, "is_hypothetical", False)]
+
+    real.sort(key=lambda b: (b.confidence, b.turn), reverse=True)
+    real = real[:max_beliefs]
+
+    categories: dict[str, list[Belief]] = {}
+    for b in real:
+        cat = b.category or "general"
+        categories.setdefault(cat, []).append(b)
+
+    lines = ["Established facts from this conversation:\n"]
+    for cat, cat_beliefs in categories.items():
+        lines.append(f"[{CATEGORY_LABELS.get(cat, cat)}]")
+        for b in cat_beliefs:
+            lines.append(f"- {b.subject} {b.predicate} {b.value}")
+        lines.append("")
+
+    if speculative:
+        lines.append("[Speculative / Under Consideration]")
+        for b in speculative[:max_speculative_beliefs]:
+            lines.append(f"- {b.subject} {b.predicate} {b.value} (not committed)")
+
+    return "\n".join(lines)

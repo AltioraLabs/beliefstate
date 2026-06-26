@@ -27,7 +27,11 @@ async def test_sqlite_store():
     assert len(retrieved) == 1
     assert retrieved[0].subject == "user_name"
     assert retrieved[0].value == "Alice"
-    assert retrieved[0].embedding == [0.5, -0.5, 0.1]
+    # Float32 binary packing may introduce small precision differences
+    assert len(retrieved[0].embedding) == 3
+    assert abs(retrieved[0].embedding[0] - 0.5) < 1e-5
+    assert abs(retrieved[0].embedding[1] - (-0.5)) < 1e-5
+    assert abs(retrieved[0].embedding[2] - 0.1) < 1e-5
 
     # Overwrite on conflict
     b2 = Belief(

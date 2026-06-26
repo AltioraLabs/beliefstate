@@ -1338,7 +1338,7 @@
         <div class="how-step-num">04</div>
         <div class="icon-square">🔍</div>
         <h3>Extract</h3>
-        <p>beliefstate extracts factual claims in the background as subject–predicate–value triples.</p>
+        <p>beliefstate extracts factual claims from both user and assistant messages as subject–predicate–value triples.</p>
       </div>
 
       <!-- Step 05 -->
@@ -1481,11 +1481,11 @@ tracker.<span class="c-fn">set_session</span>(<span class="c-str">"user_123"</sp
         <p>Utilizes vector embeddings and natural language inference rather than exact string matching.</p>
       </div>
 
-      <!-- Card 3 (Dual-adapter) -->
+      <!-- Card 3 (Dual-source extraction) -->
       <div class="feature-card">
-        <div class="feature-icon-square" style="background:var(--blue-lo); border:1px solid rgba(96,165,250,0.2); color:var(--blue);">💰</div>
-        <h3>Dual-adapter cost saving</h3>
-        <p>Runs expensive user models alongside lightweight local models (like Ollama) for tracking.</p>
+        <div class="feature-icon-square" style="background:var(--green-lo); border:1px solid rgba(52,211,235,0.2); color:var(--green);">🔄</div>
+        <h3>Dual-source extraction</h3>
+        <p>Extracts beliefs from both user messages and assistant responses every turn, with per-source confidence caps.</p>
       </div>
 
       <!-- Card 4 (Circuit breaker) -->

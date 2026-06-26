@@ -1,4 +1,5 @@
 import json
+import asyncio
 import logging
 from typing import Tuple, Protocol, runtime_checkable, Optional, Any
 from beliefstate.models import Belief
@@ -49,8 +50,9 @@ class LLMJudge(ContradictionJudge):
             reason: str = Field(description="Explanation of the relationship decision")
 
         try:
-            llm_resp = await self.adapter.generate(
-                call, response_format=ContradictionResolution
+            llm_resp = await asyncio.wait_for(
+                self.adapter.generate(call, response_format=ContradictionResolution),
+                timeout=self.config.judge_timeout,
             )
             raw_text = llm_resp.text.strip()
             data = None
@@ -63,8 +65,8 @@ class LLMJudge(ContradictionJudge):
                 if match_obj:
                     try:
                         data = json.loads(match_obj.group(0))
-                    except Exception:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.debug(f"Judge JSON parse failed: {e}")
 
             if data is None:
                 return False, 0.0, "Failed to parse judge response"

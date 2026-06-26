@@ -134,7 +134,7 @@ async def test_tracker_context_injection():
 
     # 1. Test get_context_prompt
     context = await tracker.get_context_prompt("session_999")
-    assert "Known user facts & preferences:" in context
+    assert "Established facts from this conversation:" in context
     assert "- USER likes python" in context
     assert "- USER lives in Paris" in context
 
@@ -143,7 +143,7 @@ async def test_tracker_context_injection():
     injected_new = await tracker.inject_context(messages, "session_999")
     assert len(injected_new) == 2
     assert injected_new[0]["role"] == "system"
-    assert "Known user facts & preferences:" in injected_new[0]["content"]
+    assert "Established facts from this conversation:" in injected_new[0]["content"]
     assert injected_new[1]["content"] == "Hello!"
 
     # 3. Test inject_context appending to existing system message
@@ -155,4 +155,4 @@ async def test_tracker_context_injection():
     assert len(injected_exist) == 2
     assert injected_exist[0]["role"] == "system"
     assert "You are a helpful assistant." in injected_exist[0]["content"]
-    assert "Known user facts & preferences:" in injected_exist[0]["content"]
+    assert "Established facts from this conversation:" in injected_exist[0]["content"]

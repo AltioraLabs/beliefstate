@@ -171,7 +171,7 @@ class TestTrackerQueryMethods:
         mock_adapter = MagicMock()
         tracker = BeliefTracker(config=config, adapter=mock_adapter)
 
-        stats = await tracker.get_stats("empty_session")
+        stats = await tracker.get_stats_dict("empty_session")
         assert stats["total_beliefs"] == 0
         assert stats["avg_confidence"] == 0.0
 
@@ -200,7 +200,7 @@ class TestTrackerQueryMethods:
         await tracker.store.add_belief("s1", b1)
         await tracker.store.add_belief("s1", b2)
 
-        stats = await tracker.get_stats("s1")
+        stats = await tracker.get_stats_dict("s1")
         assert stats["total_beliefs"] == 2
         assert stats["avg_confidence"] == pytest.approx(0.9, abs=0.01)
         assert stats["by_subject"]["USER"] == 2

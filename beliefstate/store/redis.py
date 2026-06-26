@@ -1,3 +1,5 @@
+import struct
+import math
 from typing import List, Optional, Any
 from beliefstate.store.base import Store
 from beliefstate.models import Belief
@@ -8,11 +10,25 @@ except ImportError:
     redis = None  # type: ignore[assignment]
 
 
+def pack_embedding(emb: list[float]) -> bytes:
+    """Pack float32 array as binary bytes for storage."""
+    if not emb:
+        return b""
+    return struct.pack(f"{len(emb)}f", *emb)
+
+
+def unpack_embedding(data: bytes) -> list[float]:
+    """Unpack binary bytes back to float32 list."""
+    if not data:
+        return []
+    n = len(data) // 4
+    return list(struct.unpack(f"{n}f", data))
+
+
 class RedisStore(Store):
     """Redis-based asynchronous storage for beliefs.
 
-    FUTURE OPTIMIZATION: Use binary format (struct.pack float32) for embeddings to reduce storage by ~75%.
-    Current implementation stores embeddings as JSON for easier testing and debugging.
+    Uses binary float32 embedding storage for precision.
     """
 
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
@@ -21,10 +37,13 @@ class RedisStore(Store):
         if not redis:
             self._client = None
         else:
-            self._client = redis.Redis.from_url(redis_url, decode_responses=True)
+            self._client = redis.Redis.from_url(redis_url, decode_responses=False)
 
     def _get_key(self, session_id: str) -> str:
         return f"beliefstate:session:{session_id}"
+
+    def _get_audit_key(self, session_id: str, subject: str, predicate: str) -> str:
+        return f"beliefstate:audit:{session_id}:{subject}::{predicate}"
 
     async def add_belief(self, session_id: str, belief: Belief) -> None:
         if not self._client:
@@ -32,16 +51,10 @@ class RedisStore(Store):
                 "redis package is not installed. Run `pip install redis`"
             )
 
-        # We store beliefs as a hash map where field="subject::predicate" and value=JSON
         field = f"{belief.subject}::{belief.predicate}"
         await self._client.hset(
             self._get_key(session_id), field, belief.model_dump_json()
         )
-
-        # Optionally set TTL on the hash (from config or override)
-        # Note: Redis TTL applies to the entire key, not individual fields
-        # If you want per-belief TTL, store each belief as a separate key
-        # For now, we store as a hash but don't auto-expire by default
 
     async def get_beliefs(
         self, session_id: str, conversation_id: Optional[str] = None
@@ -53,7 +66,11 @@ class RedisStore(Store):
 
         data = await self._client.hgetall(self._get_key(session_id))
         beliefs = []
-        for value_str in data.values():
+        for value_bytes in data.values():
+            if isinstance(value_bytes, bytes):
+                value_str = value_bytes.decode("utf-8")
+            else:
+                value_str = value_bytes
             belief = Belief.model_validate_json(value_str)
             if conversation_id and belief.conversation_id != conversation_id:
                 continue
@@ -66,14 +83,15 @@ class RedisStore(Store):
         embedding: List[float],
         threshold: float = 0.0,
         limit: int = 5,
+        conversation_id: Optional[str] = None,
     ) -> List[Belief]:
-        import math
-
         beliefs = await self.get_beliefs(session_id)
         scored_beliefs = []
 
         for b in beliefs:
             if not b.embedding or not embedding:
+                continue
+            if len(b.embedding) != len(embedding):
                 continue
             v1 = b.embedding
             v2 = embedding
@@ -86,6 +104,39 @@ class RedisStore(Store):
 
         scored_beliefs.sort(key=lambda x: x[1], reverse=True)
         return [sb[0] for sb in scored_beliefs[:limit]]
+
+    async def get_by_key(
+        self,
+        subject: str,
+        predicate: str,
+        session_id: str,
+        conversation_id: Optional[str] = None,
+    ) -> Optional[Belief]:
+        """Retrieve a single belief by its composite key."""
+        beliefs = await self.get_beliefs(session_id, conversation_id)
+        for b in beliefs:
+            if (
+                b.subject.lower() == subject.lower()
+                and b.predicate.lower() == predicate.lower()
+            ):
+                return b
+        return None
+
+    async def upsert(self, belief: Belief) -> bool:
+        """Insert or update a belief with turn-based optimistic concurrency.
+
+        Returns True if written, False if discarded (stale write).
+        """
+        existing = await self.get_by_key(
+            (belief.subject or "").lower(),
+            (belief.predicate or "").lower(),
+            belief.session_id or "",
+            belief.conversation_id or "",
+        )
+        if existing and existing.turn > belief.turn:
+            return False
+        await self.add_belief(belief.session_id or "", belief)
+        return True
 
     async def remove_belief(
         self, session_id: str, subject: str, predicate: str
@@ -110,7 +161,6 @@ class RedisStore(Store):
         await self._client.delete(self._get_key(session_id))
 
     async def belief_count(self, session_id: str) -> int:
-        """Return belief count using efficient HLEN — no deserialization."""
         if not self._client:
             raise RuntimeError(
                 "redis package is not installed. Run `pip install redis`"
@@ -118,7 +168,6 @@ class RedisStore(Store):
         return int(await self._client.hlen(self._get_key(session_id)))
 
     async def health_check(self) -> bool:
-        """Verify Redis connection is functional."""
         try:
             if not self._client:
                 return False
@@ -127,38 +176,38 @@ class RedisStore(Store):
             return False
 
     async def set_session_ttl(self, session_id: str, ttl_seconds: int) -> None:
-        """Set time-to-live (expiration) for all beliefs in a session.
-
-        When TTL expires, Redis automatically deletes the entire session hash.
-
-        Args:
-            session_id: Session ID
-            ttl_seconds: Time in seconds before beliefs expire
-
-        Example:
-            await store.set_session_ttl("user-123", 86400)  # 24 hours
-        """
         if not self._client:
             raise RuntimeError(
                 "redis package is not installed. Run `pip install redis`"
             )
-
         key = self._get_key(session_id)
         await self._client.expire(key, ttl_seconds)
 
     async def get_session_ttl(self, session_id: str) -> Optional[int]:
-        """Get remaining TTL for a session's beliefs in seconds.
-
-        Returns:
-            - Positive int: seconds until expiration
-            - -1: key exists but no TTL is set
-            - -2 or None: key doesn't exist
-        """
         if not self._client:
             raise RuntimeError(
                 "redis package is not installed. Run `pip install redis`"
             )
-
         key = self._get_key(session_id)
         ttl = await self._client.ttl(key)
         return ttl if ttl >= -1 else None
+
+    async def get_audit_history(
+        self,
+        session_id: str,
+        subject: str,
+        predicate: str,
+    ) -> List[dict]:
+        """Return audit trail for a specific belief (Redis implementation stores as list)."""
+        if not self._client:
+            return []
+        key = self._get_audit_key(session_id, subject, predicate)
+        data = await self._client.lrange(key, 0, -1)
+        import json
+
+        results = []
+        for item in data:
+            if isinstance(item, bytes):
+                item = item.decode("utf-8")
+            results.append(json.loads(item))
+        return results

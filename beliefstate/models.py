@@ -57,3 +57,11 @@ class Belief(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp when this belief was last referenced/used in a session.",
     )
+    category: str = Field(
+        default="",
+        description="Category of belief: 'identity', 'technical', 'planning', 'constraint', 'state', or '' (empty for backwards compatibility).",
+    )
+    source_quote: str = Field(
+        default="",
+        description="Verbatim excerpt from original text, max 100 chars. Audit only — never injected into prompts.",
+    )

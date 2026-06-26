@@ -73,11 +73,7 @@ def is_transient_error(error: Exception) -> bool:
         "transient",
     ]
 
-    # OpenAI-specific
-    if "APIConnectionError" in error_type or "APITimeoutError" in error_type:
-        return True
-
-    # Anthropic-specific
+    # OpenAI / Anthropic connection errors
     if "APIConnectionError" in error_type or "APITimeoutError" in error_type:
         return True
 

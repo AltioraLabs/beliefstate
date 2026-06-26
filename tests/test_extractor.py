@@ -87,28 +87,21 @@ async def test_belief_extractor_prompt_routing():
     await extractor.extract("I like Python", turn=1, source="user")
 
     called_prompt = mock_adapter.generate.call_args[0][0].messages[0]["content"]
-    assert (
-        'First-person pronouns (I, me, my, mine, we, us) MUST be mapped to "USER".'
-        in called_prompt
-    )
+    # Universal prompt handles all domains — check for key universal content
+    assert "precise fact extraction engine" in called_prompt
+    assert "I like Python" in called_prompt
 
     mock_adapter.generate.reset_mock()
 
-    # 2. Test assistant routing
+    # 2. Test assistant routing (universal prompt is same for both)
     await extractor.extract("I run on servers in Paris", turn=1, source="assistant")
     called_prompt_ast = mock_adapter.generate.call_args[0][0].messages[0]["content"]
-    assert (
-        'First-person pronouns (I, me, my, mine, we, us) referring to the AI MUST be mapped to "ASSISTANT".'
-        in called_prompt_ast
-    )
-    assert (
-        'Second-person pronouns (you, your, yours) referring to the user MUST be mapped to "USER".'
-        in called_prompt_ast
-    )
+    assert "precise fact extraction engine" in called_prompt_ast
+    assert "I run on servers in Paris" in called_prompt_ast
 
     mock_adapter.generate.reset_mock()
 
-    # 3. Test legacy override
+    # 3. Test legacy override with {response} template
     custom_config = TrackerConfig(extract_prompt_template="CUSTOM PROMPT {response}")
     extractor_custom = BeliefExtractor(adapter=mock_adapter, config=custom_config)
     await extractor_custom.extract("I like Python", turn=1, source="user")
@@ -119,7 +112,12 @@ async def test_belief_extractor_prompt_routing():
 
     mock_adapter.generate.reset_mock()
 
-    await extractor_custom.extract("I run on servers", turn=1, source="assistant")
+    # 4. Test legacy override with {conversation} template
+    custom_config2 = TrackerConfig(
+        extract_prompt_template="CUSTOM PROMPT {conversation}"
+    )
+    extractor_custom2 = BeliefExtractor(adapter=mock_adapter, config=custom_config2)
+    await extractor_custom2.extract("I run on servers", turn=1, source="assistant")
     called_prompt_custom_ast = mock_adapter.generate.call_args[0][0].messages[0][
         "content"
     ]

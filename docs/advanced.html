@@ -877,6 +877,9 @@
       <a href="#resilience">Resilience</a>
       <a href="#observability">Observability</a>
       <a href="#gdpr">GDPR &amp; Privacy</a>
+      <a href="#shutdown">Graceful Shutdown</a>
+      <a href="#concurrency">Concurrency</a>
+      <a href="#hedging-dedup">Hedging &amp; Dedup</a>
     </div>
   </div>
 </div>
@@ -923,6 +926,9 @@
       <a href="advanced.html#resilience" class="sidebar-link">Resilience</a>
       <a href="advanced.html#observability" class="sidebar-link">Observability</a>
       <a href="advanced.html#gdpr" class="sidebar-link">GDPR &amp; Privacy</a>
+      <a href="advanced.html#shutdown" class="sidebar-link">Graceful Shutdown</a>
+      <a href="advanced.html#concurrency" class="sidebar-link">Concurrency</a>
+      <a href="advanced.html#hedging-dedup" class="sidebar-link">Hedging &amp; Dedup</a>
     </div>
 
     <div class="sidebar-group">
@@ -1132,6 +1138,7 @@ if not is_healthy:
           <tr><td><code>turn</code></td><td><code>int</code></td><td>The conversation turn number that triggered this event.</td></tr>
           <tr><td><code>latency_ms</code></td><td><code>float</code></td><td>Execution time in milliseconds for this operation.</td></tr>
           <tr><td><code>detail</code></td><td><code>str</code></td><td>Human-readable description of what happened (e.g., <code>"Extracted 3 beliefs"</code>, <code>"Found 1 contradiction"</code>).</td></tr>
+          <tr><td><code>extra</code></td><td><code>Optional[dict]</code></td><td>Arbitrary key-value metadata attached to the event (e.g., <code>{"belief_count": 3, "contradiction_id": "..."}</code>).</td></tr>
         </tbody>
       </table>
       </div>
@@ -1204,6 +1211,90 @@ receipt = <span class="kw">await</span> tracker.<span class="fn">clear_session</
       </ul>
     </section>
 
+    <!-- Graceful Shutdown -->
+    <section class="doc-section" id="shutdown">
+      <h2>Graceful Shutdown</h2>
+      <p>BeliefTracker tracks all in-flight background tasks and provides a <code>shutdown()</code> method to drain them before process exit. This ensures no beliefs are lost during deployment restarts.</p>
+
+      <pre><code><span class="cm"># Drain all pending background tasks before exit</span>
+<span class="kw">await</span> tracker.<span class="fn">shutdown</span>(grace_seconds=<span class="nu">10.0</span>)
+
+<span class="cm"># Or use as a context manager</span>
+<span class="kw">async with</span> tracker:
+    <span class="kw">await</span> tracker.<span class="fn">track</span>(...)</code></pre>
+
+      <h3>Shutdown Workflow</h3>
+      <ol>
+        <li><strong>Stop accepting new tasks:</strong> The tracker stops dispatching new background tasks.</li>
+        <li><strong>Drain in-flight tasks:</strong> Waits up to <code>grace_seconds</code> for all pending tasks to complete.</li>
+        <li><strong>Cancel remaining:</strong> Any tasks still running after the grace period are cancelled.</li>
+        <li><strong>Close store:</strong> The store connection is closed (SQLite file handle, PostgreSQL pool, etc.).</li>
+      </ol>
+
+      <div class="callout warning">
+        <p><strong>Production deployments:</strong> Always call <code>await tracker.shutdown()</code> in your application's shutdown handler (e.g., FastAPI's <code>shutdown</code> event, or <code>atexit</code> for sync apps). Skipping this may result in lost beliefs from in-flight background tasks.</p>
+      </div>
+    </section>
+
+    <!-- Concurrency Model -->
+    <section class="doc-section" id="concurrency">
+      <h2>Concurrency Model</h2>
+      <p>BeliefState uses a multi-layered concurrency model to coordinate background writes safely.</p>
+
+      <h3>Per-Session Async Locks</h3>
+      <p>Each session gets a dedicated <code>asyncio.Lock</code> that serializes background belief writes within that session. This prevents two concurrent extraction tasks from racing on the same belief triple.</p>
+      <pre><code><span class="cm"># Internal: per-session lock ensures ordered writes</span>
+<span class="cm"># Task A and Task B for the same session_id will execute sequentially</span>
+<span class="cm"># Task C for a different session_id runs concurrently</span></code></pre>
+
+      <h3>Turn-Based Optimistic Concurrency</h3>
+      <p>Every <code>upsert()</code> call includes the current turn number. The store compares it against the stored belief's turn and only overwrites if the incoming turn is newer or equal. This is a lightweight guard against stale writes from background tasks that complete out of order.</p>
+
+      <h3>Task Dispatchers</h3>
+      <p>Background tasks are dispatched via a pluggable dispatcher. The default <code>AsyncioDispatcher</code> wraps each task in an <code>asyncio.Task</code> and tracks it for shutdown draining. The tracker's <code>_dispatch()</code> method adds each task to a tracked set and removes it on completion.</p>
+
+      <div class="callout tip">
+        <p><strong>Dispatcher choice matters:</strong> For single-process apps, <code>asyncio</code> is fine. For multi-worker production deployments, use <code>celery</code> or <code>rq</code> — each worker process maintains its own belief store, so choose Redis or PostgreSQL for shared state.</p>
+      </div>
+    </section>
+
+    <!-- Hedging & Deduplication -->
+    <section class="doc-section" id="hedging-dedup">
+      <h2>Hedging &amp; Deduplication</h2>
+      <p>BeliefState applies two layers of filtering before storing new beliefs: hedging-based confidence calibration and exact duplicate detection.</p>
+
+      <h3>Hedging Pattern Calibration</h3>
+      <p>After extraction, <code>calibrate_confidence()</code> scans the source quote for hedging language and caps the confidence score:</p>
+      <div class="table-wrapper">
+      <table class="param-table">
+        <thead><tr><th>Pattern</th><th>Confidence Ceiling</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>"not sure", "unsure", "maybe"</code></td><td>0.50</td><td><code>is_hypothetical = True</code></td></tr>
+          <tr><td><code>"might", "may", "could", "perhaps"</code></td><td>0.60</td><td><code>is_hypothetical = True</code></td></tr>
+          <tr><td><code>"think", "believe", "probably"</code></td><td>0.70</td><td>Confidence capped</td></tr>
+          <tr><td><code>"want to", "planning to"</code></td><td>0.75</td><td>Confidence capped</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>Hypothetical beliefs (<code>is_hypothetical=True</code>) are excluded from prompt injection to avoid polluting the LLM context with unconfirmed claims.</p>
+
+      <h3>Exact Duplicate Check</h3>
+      <p>Before running the expensive embedding similarity pipeline, the detector performs an O(1) exact duplicate check via <code>store.get_by_key()</code>. If a belief with the same subject, predicate, and session already exists and the normalized values match, the new belief is silently skipped — no embedding, no NLI, no LLM call.</p>
+      <pre><code><span class="cm"># Step 0: O(1) exact check — zero LLM/embedding cost</span>
+existing = <span class="kw">await</span> store.<span class="fn">get_by_key</span>(subject, predicate, session_id)
+<span class="kw">if</span> existing <span class="kw">and</span> <span class="fn">normalize_value</span>(existing.value) == <span class="fn">normalize_value</span>(new_belief.value):
+    <span class="kw">return</span>  <span class="cm"># skip — exact duplicate</span></code></pre>
+
+      <h3>Deduplication Pipeline</h3>
+      <p>The full <code>detect_with_deduplication()</code> pipeline runs these steps for each new belief:</p>
+      <ol>
+        <li><strong>Exact duplicate check</strong> — O(1) key lookup, NFKC value comparison.</li>
+        <li><strong>Embedding dimension guard</strong> — Skips vector comparison if old and new embeddings have different dimensions (model upgrade scenario).</li>
+        <li><strong>Cosine similarity gate</strong> — Fast approximate check against stored embeddings.</li>
+        <li><strong>NLI judgment</strong> — Full natural language inference on cosine-similar candidates to classify as entailment, contradiction, or neutral.</li>
+      </ol>
+    </section>
+
         <!-- PREV / NEXT NAVIGATION -->
         <nav class="prev-next-nav">
           <a href="integrations.html" class="prev-next-link prev">
@@ -1225,6 +1316,9 @@ receipt = <span class="kw">await</span> tracker.<span class="fn">clear_session</
           <li><a href="#resilience" class="otp-link">Resilience</a></li>
           <li><a href="#observability" class="otp-link">Observability</a></li>
           <li><a href="#gdpr" class="otp-link">GDPR &amp; Privacy</a></li>
+          <li><a href="#shutdown" class="otp-link">Graceful Shutdown</a></li>
+          <li><a href="#concurrency" class="otp-link">Concurrency</a></li>
+          <li><a href="#hedging-dedup" class="otp-link">Hedging &amp; Dedup</a></li>
         </ul>
       </aside>
     </div>

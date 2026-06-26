@@ -11,35 +11,24 @@ logger = logging.getLogger(__name__)
 
 
 def normalize_numbers(text: str) -> str:
-    """Normalize numbers: remove commas/spaces, keep digits only."""
-    # Replace comma-separated numbers with compact form: 5,000 -> 5000
     text = re.sub(r"(\d),(\d)", r"\1\2", text)
     return text
 
 
 def normalize_currency(text: str) -> str:
-    """Normalize currency to ISO code format: USD 5000 instead of $5,000."""
-    # Common currency patterns
     patterns = [
         (r"\$\s*(\d+(?:,\d{3})*(?:\.\d{2})?)", r"USD \1"),
         (r"€\s*(\d+(?:,\d{3})*(?:\.\d{2})?)", r"EUR \1"),
         (r"£\s*(\d+(?:,\d{3})*(?:\.\d{2})?)", r"GBP \1"),
         (r"¥\s*(\d+(?:,\d{3})*(?:\.\d{2})?)", r"JPY \1"),
     ]
-
     for pattern, replacement in patterns:
         text = re.sub(pattern, replacement, text)
-
-    # Handle currency: "five thousand dollars" normalized to digits
-    # Best handled by LLM prompt, but add fallback
     text = re.sub(r"(USD|EUR|GBP|JPY)\s+(\d+),(\d+)", r"\1 \2\3", text)
-
     return text
 
 
 def normalize_dates(text: str) -> str:
-    """Normalize dates to ISO 8601 format (YYYY-MM-DD)."""
-    # Month name to number mapping
     months = {
         "january": "01",
         "february": "02",
@@ -66,7 +55,6 @@ def normalize_dates(text: str) -> str:
         "dec": "12",
     }
 
-    # Pattern: "March 15, 2024" -> 2024-03-15
     def replace_date_long(match: re.Match[str]) -> str:
         month_name = match.group(1).lower()
         day = match.group(2).zfill(2)
@@ -81,7 +69,6 @@ def normalize_dates(text: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # Pattern: "15 March 2024" -> 2024-03-15
     def replace_date_dmy(match: re.Match[str]) -> str:
         day = match.group(1).zfill(2)
         month_name = match.group(2).lower()
@@ -96,20 +83,15 @@ def normalize_dates(text: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # Pattern: MM/DD/YYYY (US standard)
     text = re.sub(
         r"(\d{1,2})/(\d{1,2})/(\d{4})",
         lambda m: f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}",
         text,
     )
-
     return text
 
 
 def normalize_percentages(text: str) -> str:
-    """Normalize percentages to decimal format: 0.15 instead of 15%."""
-
-    # Pattern: "15%" -> "0.15"
     def replace_percent(match: re.Match[str]) -> str:
         value = float(match.group(1)) / 100
         return f"{value:.2f}".rstrip("0").rstrip(".")
@@ -118,36 +100,20 @@ def normalize_percentages(text: str) -> str:
     return text
 
 
-def normalize_value(value: str) -> str:
-    """Apply all normalization rules to a belief value."""
+def normalize_value_format(value: str) -> str:
     if not value:
         return value
-
-    # Apply normalizations in order
     value = normalize_numbers(value)
     value = normalize_currency(value)
     value = normalize_dates(value)
     value = normalize_percentages(value)
-
     return value
 
 
 def classify_response_type(text: str) -> str:
-    """Classify the type of LLM response to determine extraction strategy.
-
-    Response types:
-    - "conversational": Natural language (extract beliefs)
-    - "code": Code block (skip extraction)
-    - "json": Pure JSON/structured data (skip extraction)
-    - "sql": SQL query or output (skip extraction)
-    - "markdown_heavy": Markdown with code (extract text only, skip code)
-    """
     if not text:
         return "conversational"
-
     text = text.strip()
-
-    # Check for JSON (array or object)
     if text.startswith("[") and text.endswith("]"):
         return "json"
     if text.startswith("{") and text.endswith("}"):
@@ -156,8 +122,6 @@ def classify_response_type(text: str) -> str:
             return "json"
         except json.JSONDecodeError:
             pass
-
-    # Check for SQL
     sql_keywords = [
         "SELECT",
         "INSERT",
@@ -175,53 +139,56 @@ def classify_response_type(text: str) -> str:
     text_upper = text.split("\n")[0].upper()
     if any(keyword in text_upper for keyword in sql_keywords):
         return "sql"
-
-    # Check for code blocks
     code_pattern = r"```[\w]*\n"
     if re.search(code_pattern, text):
-        # If mostly code blocks, classify as code
         code_blocks = re.findall(r"```[\w]*\n.*?\n```", text, re.DOTALL)
         total_code_chars = sum(len(block) for block in code_blocks)
-        if total_code_chars / len(text) > 0.5:  # More than 50% is code
+        if total_code_chars / len(text) > 0.5:
             return "code"
         else:
             return "markdown_heavy"
-
-    # Check for inline code (single backticks)
-    if text.count("`") > 4:  # Multiple code snippets
+    if text.count("`") > 4:
         return "markdown_heavy"
-
     return "conversational"
 
 
-def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> List[str]:
-    """Chunk a response into paragraphs for extraction.
+def _is_trivial_response(text: str) -> bool:
+    """Check if an assistant response is trivial and should be skipped for extraction."""
+    if not text or not text.strip():
+        return True
+    text = text.strip()
+    if len(text) < 20:
+        trivial_patterns = [
+            r"^(sure|ok|okay|got it|understood|great|see|thanks|thank you|yes|no|right|gotcha|will do|absolutely|definitely|of course|no problem|you're welcome|i see|noted|alright|fine|perfect|sounds good|will do|i'll do that|let me know|i understand|got it)\s*[!.]*$",
+        ]
+        text_lower = text.lower()
+        for pattern in trivial_patterns:
+            if re.match(pattern, text_lower):
+                return True
+    code_chars = set("{}()=;:|#|\\><")
+    if text:
+        code_count = sum(1 for c in text if c in code_chars)
+        if code_count / len(text) > 0.6:
+            return True
+    if text.startswith("{") or text.startswith("["):
+        return True
+    return False
 
-    For long responses (>2000 chars), splits at paragraph boundaries
-    (double newlines) to avoid token limits and improve extraction quality.
-    """
+
+def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> List[str]:
     if not text or len(text) <= max_chunk_length:
         return [text]
-
-    # Split by double newlines (paragraph boundaries)
     paragraphs = re.split(r"\n\s*\n", text)
-
     if not paragraphs:
         return [text]
-
-    # Group paragraphs into chunks respecting max_chunk_length
-    chunks = []
+    chunks: list[str] = []
     current_chunk: list[str] = []
     current_length = 0
-
     for para in paragraphs:
         para = para.strip()
         if not para:
             continue
-
-        para_length = len(para) + 2  # +2 for newlines
-
-        # If adding this paragraph would exceed max length, save current chunk
+        para_length = len(para) + 2
         if current_chunk and current_length + para_length > max_chunk_length:
             chunks.append("\n\n".join(current_chunk))
             current_chunk = [para]
@@ -229,35 +196,19 @@ def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> Lis
         else:
             current_chunk.append(para)
             current_length += para_length
-
-    # Add remaining chunk
     if current_chunk:
         chunks.append("\n\n".join(current_chunk))
-
     if not chunks:
         return [text]
-
     logger.debug(f"Chunked response into {len(chunks)} paragraphs for extraction")
     return chunks
 
 
 def recover_json_from_response(text: str) -> Optional[List[Any]]:
-    """Multi-layer JSON recovery for malformed LLM responses.
-
-    Implements progressive recovery strategies:
-    1. Direct JSON parse
-    2. Remove markdown code blocks
-    3. Extract JSON array from text
-    4. Handle escaped quotes and unicode
-    5. Attempt truncated JSON recovery (add closing ])
-    6. Try to recover from incomplete objects
-    """
     if not text or not isinstance(text, str):
         return None
-
     text = text.strip()
 
-    # Layer 1: Direct parse
     try:
         data = json.loads(text)
         if isinstance(data, list):
@@ -273,7 +224,6 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
     except json.JSONDecodeError:
         pass
 
-    # Layer 2: Remove markdown code blocks
     text_clean = re.sub(r"```(?:json)?\s*\n?", "", text)
     text_clean = re.sub(r"```\s*\n?", "", text_clean)
     text_clean = text_clean.strip()
@@ -288,12 +238,9 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
     except json.JSONDecodeError:
         pass
 
-    # Layer 3: Extract JSON array from surrounding text
     start_idx = text_clean.find("[")
     if start_idx == -1:
         return None
-
-    # Search for matching closing bracket
     bracket_count = 0
     end_idx = -1
     for i in range(start_idx, len(text_clean)):
@@ -304,13 +251,10 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
             if bracket_count == 0:
                 end_idx = i
                 break
-
     if end_idx == -1:
         end_idx = text_clean.rfind("]")
-
     if end_idx == -1:
         return None
-
     json_substr = text_clean[start_idx : end_idx + 1]
 
     try:
@@ -320,8 +264,7 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
     except json.JSONDecodeError:
         pass
 
-    # Layer 4: Handle escaped quotes and unicode
-    json_substr = json_substr.replace('"', '"').replace('"', '"')
+    json_substr = json_substr.replace("\u201c", '"').replace("\u201d", '"')
     json_substr = json_substr.replace("'", '"')
 
     try:
@@ -331,13 +274,11 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
     except json.JSONDecodeError:
         pass
 
-    # Layer 5: Attempt truncated JSON recovery
     if not json_substr.rstrip().endswith("]"):
         json_substr_recover = json_substr.rstrip()
         if json_substr_recover.endswith(","):
             json_substr_recover = json_substr_recover[:-1]
         json_substr_recover += "]"
-
         try:
             data = json.loads(json_substr_recover)
             if isinstance(data, list):
@@ -346,14 +287,12 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
         except json.JSONDecodeError:
             pass
 
-    # Layer 6: Try to recover from incomplete object
     if json_substr.count("{") > json_substr.count("}"):
         missing_braces = json_substr.count("{") - json_substr.count("}")
         json_substr_recover = json_substr.rstrip()
         if json_substr_recover.endswith(","):
             json_substr_recover = json_substr_recover[:-1]
         json_substr_recover += "}" * missing_braces + "]"
-
         try:
             data = json.loads(json_substr_recover)
             if isinstance(data, list):
@@ -368,6 +307,64 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
     return None
 
 
+# --- Confidence calibration ---
+
+HEDGING_PATTERNS = {
+    r"might|may|could|perhaps|possibly": 0.60,
+    r"think|believe|probably|likely": 0.70,
+    r"want to|planning to|considering": 0.75,
+    r"not sure|unsure|maybe": 0.50,
+}
+
+
+def calibrate_confidence(belief: Belief) -> Belief:
+    """Post-extraction calibration: lower confidence and set is_hypothetical when
+    the source_quote contains hedging patterns."""
+    quote = getattr(belief, "source_quote", "").lower()
+    if not quote:
+        return belief
+    for pattern, ceiling in HEDGING_PATTERNS.items():
+        if re.search(pattern, quote):
+            belief.confidence = min(belief.confidence, ceiling)
+            if ceiling <= 0.60:
+                belief.is_hypothetical = True
+            break
+    return belief
+
+
+# --- Pydantic schema for structured output ---
+
+
+class ExtractedBeliefSchema:
+    """Lazy schema builder for extraction."""
+
+    @staticmethod
+    def build():
+        from pydantic import BaseModel, Field, RootModel
+
+        class ExtractedBelief(BaseModel):
+            subject: str = Field(description="The entity or concept being described")
+            predicate: str = Field(description="The relationship or action")
+            value: str = Field(description="The target or property value")
+            confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+            belief_type: str = Field(
+                default="assertion", description="'assertion' or 'update'"
+            )
+            is_hypothetical: bool = Field(default=False)
+            category: str = Field(
+                default="", description="identity|technical|planning|constraint|state"
+            )
+            source: str = Field(default="user", description="user or assistant")
+            source_quote: str = Field(
+                default="", description="verbatim excerpt max 100 chars"
+            )
+
+        class BeliefListSchema(RootModel[List[ExtractedBelief]]):
+            pass
+
+        return BeliefListSchema
+
+
 class BeliefExtractor:
     def __init__(self, adapter: ProviderAdapter, config: TrackerConfig):
         self.adapter = adapter
@@ -376,7 +373,6 @@ class BeliefExtractor:
         self.embedding_adapter: ProviderAdapter = (
             provider if provider is not None else adapter
         )
-        # Try to extract model name and dimensionality from adapter/config
         self.embedding_model: str = (
             getattr(config, "embed_model", None)
             or getattr(self.embedding_adapter, "embed_model", "")
@@ -385,10 +381,7 @@ class BeliefExtractor:
         self.embedding_dim = self._get_embedding_dim()
 
     def _get_embedding_dim(self) -> int:
-        """Infer embedding dimensionality from model name."""
         model_name = (self.embedding_model or "").lower()
-
-        # Common embedding model dimensions
         dim_map = {
             "text-embedding-3-small": 1536,
             "text-embedding-3-large": 3072,
@@ -399,95 +392,69 @@ class BeliefExtractor:
             "all-mpnet-base-v2": 768,
             "sentence-transformers/all-mpnet-base-v2": 768,
         }
-
         for key, dim in dim_map.items():
             if key in model_name:
                 return dim
-
-        # Fallback: query adapter if it supports dimension discovery
         if self.embedding_adapter is not None and hasattr(
             self.embedding_adapter, "embedding_dim"
         ):
             return int(getattr(self.embedding_adapter, "embedding_dim"))
+        return 0
 
-        return 0  # Unknown dimensionality
+    def _is_trivial(self, text: str) -> bool:
+        """Check if assistant response is trivial (for pre-filter)."""
+        return _is_trivial_response(text)
 
-    async def extract(
-        self, response_text: str, turn: int, source: str = "assistant"
+    async def process_turn(
+        self,
+        user_message: str,
+        assistant_response: str,
+        session_id: str,
+        turn: int,
     ) -> List[Belief]:
-        """Extract factual claims from text using the LLM adapter.
+        """Extract beliefs from BOTH user message and assistant response.
 
-        Implements smart extraction with:
-        - Response type classification (skip code/JSON/SQL)
-        - Chunking for long responses (split at paragraph boundaries)
-        - Robust JSON recovery for malformed responses
+        Pre-filters trivial assistant responses but still extracts from user message.
+        Applies confidence ceiling by source after extraction.
         """
-        # Classify response type to skip non-conversational content
-        resp_type = classify_response_type(response_text)
+        is_trivial = self._is_trivial(assistant_response)
 
-        if resp_type in ["code", "json", "sql"]:
-            logger.debug(f"Skipping extraction for {resp_type} response type")
+        if is_trivial:
+            combined_text = user_message
+        else:
+            combined_text = f"User: {user_message}\nAssistant: {assistant_response}"
+
+        if not combined_text or not combined_text.strip():
             return []
 
-        # For markdown_heavy responses, strip code blocks
-        extraction_text = response_text
-        if resp_type == "markdown_heavy":
-            # Remove code blocks from extraction
-            extraction_text = re.sub(
-                r"```[\w]*\n.*?\n```", "", response_text, flags=re.DOTALL
-            )
-            extraction_text = extraction_text.strip()
-            if not extraction_text:
-                logger.debug("Skipping extraction: only code blocks in response")
-                return []
+        raw_beliefs = await self._call_extraction_llm(combined_text, turn)
 
-        # Chunk long responses at paragraph boundaries
-        chunks = chunk_response_by_paragraphs(extraction_text, max_chunk_length=2000)
+        for b in raw_beliefs:
+            if b.source == "assistant":
+                b.confidence = min(b.confidence, self.config.assistant_confidence_cap)
+            else:
+                b.confidence = min(b.confidence, self.config.user_confidence_cap)
+            b = calibrate_confidence(b)
+            if not b.session_id:
+                b.session_id = session_id
 
-        all_beliefs = []
-        for chunk_idx, chunk_text in enumerate(chunks):
-            if not chunk_text.strip():
-                continue
+        return raw_beliefs
 
-            if len(chunks) > 1:
-                logger.debug(
-                    f"Extracting beliefs from chunk {chunk_idx + 1}/{len(chunks)}"
-                )
+    async def _call_extraction_llm(self, text: str, turn: int) -> List[Belief]:
+        """Call the LLM to extract beliefs from text."""
+        prompt_template = self.config.extract_prompt_template
+        prompt = prompt_template.format(conversation=text)
 
-            chunk_beliefs = await self._extract_from_chunk(chunk_text, turn, source)
-            all_beliefs.extend(chunk_beliefs)
-
-        return all_beliefs
-
-    async def _extract_from_chunk(
-        self, chunk_text: str, turn: int, source: str
-    ) -> List[Belief]:
-        """Extract beliefs from a single chunk of text."""
-        if self.config.extract_prompt_template != DEFAULT_EXTRACT_PROMPT:
-            prompt_template = self.config.extract_prompt_template
-        elif source == "user":
-            prompt_template = self.config.extract_user_prompt_template
-        else:
-            prompt_template = self.config.extract_assistant_prompt_template
-
-        prompt = prompt_template.format(response=chunk_text)
-
-        # We make an internal LLM call to extract beliefs
         call = LLMCall(messages=[{"role": "user", "content": prompt}])
 
-        from pydantic import RootModel
-
-        class BeliefListSchema(RootModel[List[Belief]]):
-            pass
+        BeliefListSchema = ExtractedBeliefSchema.build()
 
         try:
             llm_resp = await self.adapter.generate(
                 call, response_format=BeliefListSchema
             )
-
-            # Parse JSON robustly using multi-layer recovery
-            text = llm_resp.text.strip()
-            data = recover_json_from_response(text)
+            raw_text = llm_resp.text.strip()
+            data = recover_json_from_response(raw_text)
 
             if data is None:
                 return []
@@ -498,41 +465,41 @@ class BeliefExtractor:
                     data = []
 
             beliefs = []
-            temp_beliefs = []
-            from pydantic import ValidationError
+            temp_beliefs: list[Belief] = []
 
             for item in data:
                 try:
                     subj = item.get("subject", "").strip()
                     subj_upper = subj.upper()
+                    source = item.get("source", "user")
 
-                    # Deterministic Post-Processing Fallback
-                    if source == "user":
-                        if subj_upper in ["I", "ME", "MY", "MINE", "MYSELF"]:
-                            subj = "USER"
-                        elif subj_upper in ["YOU", "YOUR", "YOURS", "YOURSELF"]:
-                            subj = "ASSISTANT"
-                    elif source == "assistant":
-                        if subj_upper in ["I", "ME", "MY", "MINE", "MYSELF"]:
-                            subj = "ASSISTANT"
-                        elif subj_upper in ["YOU", "YOUR", "YOURS", "YOURSELF"]:
-                            subj = "USER"
+                    if subj_upper in ["I", "ME", "MY", "MINE", "MYSELF"]:
+                        subj = "USER" if source == "user" else "ASSISTANT"
+                    elif subj_upper in ["YOU", "YOUR", "YOURS", "YOURSELF"]:
+                        subj = "ASSISTANT" if source == "user" else "USER"
+
+                    source_quote = item.get("source_quote", "")
+                    if source_quote and len(source_quote) > 100:
+                        source_quote = source_quote[:100]
 
                     b = Belief(
                         subject=subj,
                         predicate=item.get("predicate", ""),
-                        value=normalize_value(item.get("value", "")),
+                        value=normalize_value_format(item.get("value", "")),
                         confidence=float(item.get("confidence", 1.0)),
                         turn=turn,
                         source=source,
+                        source_quote=source_quote,
+                        category=item.get("category", ""),
+                        belief_type=item.get("belief_type", "assertion"),
+                        is_hypothetical=item.get("is_hypothetical", False),
                     )
                     temp_beliefs.append(b)
-                except ValidationError as ve:
+                except Exception as ve:
                     logger.warning(f"Skipping malformed belief: {ve}")
 
             if temp_beliefs:
                 try:
-                    # Request batch embeddings for all valid beliefs
                     texts_to_embed = [
                         f"{b.subject} {b.predicate} {b.value}" for b in temp_beliefs
                     ]
@@ -549,7 +516,6 @@ class BeliefExtractor:
                         f"Error enqueuing batch embeddings: {e}. "
                         f"Falling back to individual embedding generation."
                     )
-                    # Fallback to individual embedding requests
                     for b in temp_beliefs:
                         try:
                             text_to_embed = f"{b.subject} {b.predicate} {b.value}"
@@ -567,6 +533,153 @@ class BeliefExtractor:
 
             return beliefs
         except Exception as e:
-            # Silently fail or log for extraction errors so we don't crash
+            logger.error(f"Belief extraction error: {e}", exc_info=True)
+            return []
+
+    async def extract(
+        self, response_text: str, turn: int, source: str = "assistant"
+    ) -> List[Belief]:
+        """Legacy extract method — processes a single text block.
+
+        For new code, prefer process_turn() which handles both user and assistant.
+        """
+        resp_type = classify_response_type(response_text)
+
+        if resp_type in ["code", "json", "sql"]:
+            logger.debug(f"Skipping extraction for {resp_type} response type")
+            return []
+
+        extraction_text = response_text
+        if resp_type == "markdown_heavy":
+            extraction_text = re.sub(
+                r"```[\w]*\n.*?\n```", "", response_text, flags=re.DOTALL
+            )
+            extraction_text = extraction_text.strip()
+            if not extraction_text:
+                return []
+
+        chunks = chunk_response_by_paragraphs(extraction_text, max_chunk_length=2000)
+
+        all_beliefs = []
+        for chunk_idx, chunk_text in enumerate(chunks):
+            if not chunk_text.strip():
+                continue
+            if len(chunks) > 1:
+                logger.debug(
+                    f"Extracting beliefs from chunk {chunk_idx + 1}/{len(chunks)}"
+                )
+            chunk_beliefs = await self._extract_from_chunk(chunk_text, turn, source)
+            all_beliefs.extend(chunk_beliefs)
+
+        return all_beliefs
+
+    async def _extract_from_chunk(
+        self, chunk_text: str, turn: int, source: str
+    ) -> List[Belief]:
+        if self.config.extract_prompt_template != DEFAULT_EXTRACT_PROMPT:
+            prompt_template = self.config.extract_prompt_template
+        elif source == "user":
+            prompt_template = self.config.extract_user_prompt_template
+        else:
+            prompt_template = self.config.extract_assistant_prompt_template
+
+        # Support both {response} and {conversation} template variables
+        if "{conversation}" in prompt_template:
+            prompt = prompt_template.format(conversation=chunk_text)
+        else:
+            prompt = prompt_template.format(response=chunk_text)
+
+        call = LLMCall(messages=[{"role": "user", "content": prompt}])
+
+        BeliefListSchema = ExtractedBeliefSchema.build()
+
+        try:
+            llm_resp = await self.adapter.generate(
+                call, response_format=BeliefListSchema
+            )
+            text = llm_resp.text.strip()
+            data = recover_json_from_response(text)
+
+            if data is None:
+                return []
+
+            if isinstance(data, dict):
+                data = data.get("beliefs", data.get("root", []))
+                if not isinstance(data, list):
+                    data = []
+
+            beliefs = []
+            temp_beliefs = []
+
+            for item in data:
+                try:
+                    subj = item.get("subject", "").strip()
+                    subj_upper = subj.upper()
+                    if source == "user":
+                        if subj_upper in ["I", "ME", "MY", "MINE", "MYSELF"]:
+                            subj = "USER"
+                        elif subj_upper in ["YOU", "YOUR", "YOURS", "YOURSELF"]:
+                            subj = "ASSISTANT"
+                    elif source == "assistant":
+                        if subj_upper in ["I", "ME", "MY", "MINE", "MYSELF"]:
+                            subj = "ASSISTANT"
+                        elif subj_upper in ["YOU", "YOUR", "YOURS", "YOURSELF"]:
+                            subj = "USER"
+
+                    source_quote = item.get("source_quote", "")
+                    if source_quote and len(source_quote) > 100:
+                        source_quote = source_quote[:100]
+
+                    b = Belief(
+                        subject=subj,
+                        predicate=item.get("predicate", ""),
+                        value=normalize_value_format(item.get("value", "")),
+                        confidence=float(item.get("confidence", 1.0)),
+                        turn=turn,
+                        source=source,
+                        source_quote=source_quote,
+                        category=item.get("category", ""),
+                        belief_type=item.get("belief_type", "assertion"),
+                        is_hypothetical=item.get("is_hypothetical", False),
+                    )
+                    temp_beliefs.append(b)
+                except Exception as ve:
+                    logger.warning(f"Skipping malformed belief: {ve}")
+
+            if temp_beliefs:
+                try:
+                    texts_to_embed = [
+                        f"{b.subject} {b.predicate} {b.value}" for b in temp_beliefs
+                    ]
+                    embeddings = await self.embedding_adapter.get_embeddings(
+                        texts_to_embed
+                    )
+                    for b, emb in zip(temp_beliefs, embeddings):
+                        b.embedding = emb
+                        b.embedding_model = self.embedding_model
+                        b.embedding_dim = self.embedding_dim
+                        beliefs.append(b)
+                except Exception as e:
+                    logger.warning(
+                        f"Error enqueuing batch embeddings: {e}. "
+                        f"Falling back to individual embedding generation."
+                    )
+                    for b in temp_beliefs:
+                        try:
+                            text_to_embed = f"{b.subject} {b.predicate} {b.value}"
+                            b.embedding = await self.embedding_adapter.get_embedding(
+                                text_to_embed
+                            )
+                            b.embedding_model = self.embedding_model
+                            b.embedding_dim = self.embedding_dim
+                            beliefs.append(b)
+                        except Exception as ie:
+                            logger.error(
+                                f"Error embedding individual belief fallback: {ie}",
+                                exc_info=True,
+                            )
+
+            return beliefs
+        except Exception as e:
             logger.error(f"Belief extraction error: {e}", exc_info=True)
             return []

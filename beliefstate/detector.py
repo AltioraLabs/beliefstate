@@ -1,7 +1,10 @@
 import logging
 import math
 import re
+import unicodedata
+from enum import Enum
 from typing import Any, List, Optional, Tuple
+from dataclasses import dataclass
 from beliefstate.config import TrackerConfig
 from beliefstate.models import Belief
 from beliefstate.adapters.base import ProviderAdapter
@@ -9,8 +12,27 @@ from beliefstate.store.base import Store
 
 logger = logging.getLogger(__name__)
 
-# Negation tokens that indicate a belief should bypass cosine similarity gate
-# and go straight to LLM judge to prevent false positives
+
+# --- Outcome types ---
+
+
+class Outcome(str, Enum):
+    NEW = "new"
+    DUPLICATE = "duplicate"
+    CONTRADICTION = "contradiction"
+
+
+@dataclass
+class DetectionResult:
+    belief: Belief
+    outcome: Outcome
+    matched_belief: Optional[Belief] = None
+    score: float = 0.0
+    reason: str = ""
+
+
+# --- Negation detection ---
+
 NEGATION_TOKENS = {
     "not",
     "don't",
@@ -35,7 +57,6 @@ NEGATION_TOKENS = {
     "doesn't like",
     "stopped",
     "quit",
-    "quit",
     "unlike",
     "opposite of",
     "contrary to",
@@ -50,59 +71,43 @@ NEGATION_TOKENS = {
 
 
 def has_negation(text: str) -> bool:
-    """Check if text contains negation tokens.
-
-    Returns True if any negation token is found in the text (case-insensitive).
-    Helps force negated beliefs to LLM judge to prevent cosine similarity
-    false positives.
-    """
     if not text:
         return False
-
     text_lower = text.lower()
-
-    # Quick check for common negation patterns
     if "not " in text_lower or " not" in text_lower:
         return True
-
-    # Check for contractions like don't, doesn't, etc.
     if "n't" in text_lower:
         return True
-
-    # Check for negation tokens
-    # Use word boundaries to avoid matching "nothing" in "something"
     for token in NEGATION_TOKENS:
-        # Create pattern with word boundaries
         pattern = r"\b" + re.escape(token) + r"\b"
         if re.search(pattern, text_lower):
             return True
-
     return False
 
 
 def cosine_similarity(v1: List[float], v2: List[float]) -> float:
-    """Compute cosine similarity between two vectors.
-
-    Returns 0.0 if vectors have mismatched dimensions to prevent silent
-    corruption.
-    """
     if not v1 or not v2:
         return 0.0
-
-    # Guard against dimension mismatch
     if len(v1) != len(v2):
         logger.warning(
             f"Embedding dimension mismatch: {len(v1)} vs {len(v2)}. "
-            "This may indicate a model upgrade. Returning 0.0 similarity."
+            "Returning 0.0 similarity."
         )
         return 0.0
-
     dot = sum(a * b for a, b in zip(v1, v2))
     mag1 = math.sqrt(sum(a * a for a in v1))
     mag2 = math.sqrt(sum(b * b for b in v2))
     if mag1 == 0.0 or mag2 == 0.0:
         return 0.0
     return dot / (mag1 * mag2)
+
+
+def normalize_value(value: str) -> str:
+    """Normalise value for exact-match dedup comparison (NFKC, lowercase, strip punctuation)."""
+    v = unicodedata.normalize("NFKC", value.lower().strip())
+    v = re.sub(r"[^\w\s]", "", v)
+    v = re.sub(r"\s+", " ", v)
+    return v
 
 
 class ContradictionDetector:
@@ -126,18 +131,13 @@ class ContradictionDetector:
     async def detect(
         self, session_id: str, new_beliefs: List[Belief]
     ) -> List[Tuple[Belief, Belief, float, str]]:
-        """Detect contradictions between new beliefs and existing store.
-
-        Checks for embedding model consistency to prevent silent dimension
-        mismatch errors.
-        """
+        """Detect contradictions between new beliefs and existing store."""
         contradictions = []
 
         for new_b in new_beliefs:
             if not new_b.embedding:
                 continue
 
-            # Database-side vector search for top candidate beliefs
             matched_beliefs = await self.store.search_beliefs(
                 session_id=session_id,
                 embedding=new_b.embedding,
@@ -146,7 +146,6 @@ class ContradictionDetector:
             )
 
             for old_b in matched_beliefs:
-                # Guard against embedding model mismatch
                 if (
                     old_b.embedding_model
                     and new_b.embedding_model
@@ -171,21 +170,10 @@ class ContradictionDetector:
     ) -> Tuple[List[Tuple[Belief, Belief, float, str]], List[Belief]]:
         """Detect contradictions AND deduplicate entailed beliefs.
 
-        Returns:
-            - List of contradictions (old, new, score, reason)
-            - List of new beliefs entailed by existing beliefs (duplicates)
-
-        Entailment check: if judge returns relationship="entailment" with
-        score >= entailment_threshold, the new belief is semantically entailed
-        by the old belief and should be skipped (it's a duplicate).
-
-        Negation check: if belief contains negation tokens, bypasses cosine
-        similarity gate and goes straight to LLM judge to prevent false
-        positives (e.g., "likes X" vs "doesn't like X").
-
-        Guards against embedding dimension mismatch: if old and new beliefs
-        have different embedding dimensions, skips cosine similarity check
-        and goes straight to LLM judge to avoid silent corruption.
+        Step 0: Exact duplicate check (O(1), no LLM/embedding cost)
+        Step 1: Embedding dimension version guard
+        Step 2: Cosine similarity gate
+        Step 3: NLI judgment on candidates
         """
         contradictions = []
         duplicates_to_skip = []
@@ -194,11 +182,21 @@ class ContradictionDetector:
             if not new_b.embedding:
                 continue
 
-            # Check if the new belief contains negation - if so, bypass cosine
+            # Step 0: Exact duplicate check — O(1), no LLM/embedding cost
+            existing = await self.store.get_by_key(
+                (new_b.subject or "").lower(),
+                (new_b.predicate or "").lower(),
+                session_id,
+            )
+            if existing and normalize_value(existing.value) == normalize_value(
+                new_b.value
+            ):
+                duplicates_to_skip.append(new_b)
+                continue
+
             new_b_text = f"{new_b.predicate} {new_b.value}"
             has_new_negation = has_negation(new_b_text)
 
-            # Database-side vector search for top candidate beliefs
             matched_beliefs = await self.store.search_beliefs(
                 session_id=session_id,
                 embedding=new_b.embedding,
@@ -207,7 +205,7 @@ class ContradictionDetector:
             )
 
             for old_b in matched_beliefs:
-                # Guard against embedding model mismatch
+                # Step 1: Embedding model version guard
                 if (
                     old_b.embedding_model
                     and new_b.embedding_model
@@ -216,10 +214,8 @@ class ContradictionDetector:
                     logger.warning(
                         f"Embedding model mismatch: old='{old_b.embedding_model}' "
                         f"vs new='{new_b.embedding_model}'. "
-                        f"Belief may be from a different embedding version. "
                         f"Skipping vector comparison, using LLM judge instead."
                     )
-                    # Skip cosine gate entirely, go straight to LLM judge
                     is_contradiction, score, reason = await self.judge.check(
                         old_b, new_b
                     )
@@ -230,12 +226,6 @@ class ContradictionDetector:
                         and "entailment" in reason.lower()
                         and score >= self.config.entailment_threshold
                     ):
-                        logger.debug(
-                            f"Detected entailment (via model mismatch "
-                            f"fallback): '{new_b.value}' entailed by "
-                            f"'{old_b.value}' (score: {score:.2f}). "
-                            f"Skipping duplicate."
-                        )
                         duplicates_to_skip.append(new_b)
                     continue
 
@@ -249,10 +239,8 @@ class ContradictionDetector:
                         f"Embedding dimension mismatch for '{old_b.subject}': "
                         f"old={old_b.embedding_dim}D vs "
                         f"new={new_b.embedding_dim}D. "
-                        f"This likely indicates embedding model upgrade. "
                         f"Skipping vector comparison, using LLM judge instead."
                     )
-                    # Skip cosine gate entirely, go straight to LLM judge
                     is_contradiction, score, reason = await self.judge.check(
                         old_b, new_b
                     )
@@ -263,16 +251,10 @@ class ContradictionDetector:
                         and "entailment" in reason.lower()
                         and score >= self.config.entailment_threshold
                     ):
-                        logger.debug(
-                            f"Detected entailment (via dimension mismatch "
-                            f"fallback): '{new_b.value}' entailed by "
-                            f"'{old_b.value}' (score: {score:.2f}). "
-                            f"Skipping duplicate."
-                        )
                         duplicates_to_skip.append(new_b)
                     continue
 
-                # Check for negation in either belief - if found, bypass cosine
+                # Check for negation — bypass cosine gate if found
                 old_b_text = f"{old_b.predicate} {old_b.value}"
                 has_old_negation = has_negation(old_b_text)
 
@@ -282,26 +264,16 @@ class ContradictionDetector:
                         f"(new: {has_new_negation}, old: {has_old_negation}). "
                         f"Bypassing cosine similarity gate, using LLM judge."
                     )
-                    # Skip cosine gate, use LLM judge directly
                     is_contradiction, score, reason = await self.judge.check(
                         old_b, new_b
                     )
                     if is_contradiction:
                         contradictions.append((old_b, new_b, score, reason))
-                        logger.debug(
-                            f"Detected negation-related contradiction: "
-                            f"'{old_b.value}' vs '{new_b.value}'"
-                        )
                     elif (
                         reason
                         and "entailment" in reason.lower()
                         and score >= self.config.entailment_threshold
                     ):
-                        logger.debug(
-                            f"Detected entailment (negation path): "
-                            f"'{new_b.value}' entailed by '{old_b.value}' "
-                            f"(score: {score:.2f}). Skipping duplicate."
-                        )
                         duplicates_to_skip.append(new_b)
                     continue
 
@@ -310,23 +282,9 @@ class ContradictionDetector:
 
                 if is_contradiction:
                     contradictions.append((old_b, new_b, score, reason))
-                    logger.debug(
-                        f"Detected contradiction: '{old_b.value}' vs "
-                        f"'{new_b.value}' (score: {score:.2f})"
-                    )
 
-                # Check for entailment - new belief semantically entailed
-                # Judge returns types: "contradiction", "entailment", "neutral"
-                # If judge identified entailment, use that. Otherwise fall back
-                # to checking reason string.
                 elif score >= self.config.entailment_threshold:
-                    # Check if reason/judge response indicates entailment
                     if reason and "entailment" in reason.lower():
-                        logger.debug(
-                            f"Detected entailment: '{new_b.value}' "
-                            f"semantically entailed by '{old_b.value}' "
-                            f"(score: {score:.2f}). Skipping duplicate."
-                        )
                         duplicates_to_skip.append(new_b)
                         break
 

@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 from beliefstate.tracker import BeliefTracker, session_context
@@ -107,7 +106,7 @@ class BeliefTrackerLangchainCallback(AsyncCallbackHandler):
         current_turn = self.tracker.turn_counter
 
         if self.tracker.config.enable_background_tasks:
-            asyncio.create_task(
+            self.tracker._dispatch(
                 self.tracker._track_background(
                     call, llm_response, session_id, current_turn
                 )
