@@ -418,7 +418,7 @@ class PostgreSQLStore(Store):
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT session_id, subject, predicate, old_value, new_value,
+                SELECT session_id, conversation_id, subject, predicate, old_value, new_value,
                        operation, source_quote, confidence, turn, created_at
                 FROM beliefs_audit
                 WHERE session_id = $1 AND subject = $2 AND predicate = $3

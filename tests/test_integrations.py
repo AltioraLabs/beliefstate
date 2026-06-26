@@ -190,16 +190,17 @@ async def test_llamaindex_callback_handler():
 
     assert event_id not in callback.pending_calls
     assert mock_tracker._session_turn_counters.get("session-llama-789") == 1
-    mock_tracker.dispatcher.dispatch.assert_called_once()
+    mock_tracker._dispatch.assert_called_once()
 
-    # Extract args passed to dispatcher.dispatch
-    _, call_arg, response_arg, session_id_arg, turn_arg = (
-        mock_tracker.dispatcher.dispatch.call_args[0]
-    )
-    assert call_arg.messages[0]["content"] == "tell me a joke"
-    assert response_arg.text == "to get to the other side"
-    assert session_id_arg == "session-llama-789"
-    assert turn_arg == 1
+    # _dispatch receives a coroutine from _track_background
+    coro_arg = mock_tracker._dispatch.call_args[0][0]
+    # _track_background was called to produce that coroutine
+    mock_tracker._track_background.assert_called_once()
+    tb_args = mock_tracker._track_background.call_args[0]
+    assert tb_args[0].messages[0]["content"] == "tell me a joke"
+    assert tb_args[1].text == "to get to the other side"
+    assert tb_args[2] == "session-llama-789"
+    assert tb_args[3] == 1
 
     session_context.set("default")
 
@@ -309,15 +310,17 @@ async def test_observe_run_polling_and_dispatch():
     )
 
     assert mock_tracker._session_turn_counters.get("session-openai-999") == 1
-    mock_tracker.dispatcher.dispatch.assert_called_once()
+    mock_tracker._dispatch.assert_called_once()
 
-    _, call_arg, response_arg, session_id_arg, turn_arg = (
-        mock_tracker.dispatcher.dispatch.call_args[0]
-    )
-    assert call_arg.messages[0]["content"] == "User prompt"
-    assert response_arg.text == "Final assistant reply"
-    assert session_id_arg == "session-openai-999"
-    assert turn_arg == 1
+    # _dispatch receives a coroutine from _track_background
+    coro_arg = mock_tracker._dispatch.call_args[0][0]
+    # _track_background was called to produce that coroutine
+    mock_tracker._track_background.assert_called_once()
+    tb_args = mock_tracker._track_background.call_args[0]
+    assert tb_args[0].messages[0]["content"] == "User prompt"
+    assert tb_args[1].text == "Final assistant reply"
+    assert tb_args[2] == "session-openai-999"
+    assert tb_args[3] == 1
 
 
 # --- LangChain Callback Tests ---

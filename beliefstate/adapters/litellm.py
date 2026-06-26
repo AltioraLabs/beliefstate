@@ -51,6 +51,7 @@ class LiteLLMAdapter(ProviderAdapter):
         embed_kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 30.0,
         retry_config: Optional[RetryConfig] = None,
+        health_check_timeout: float = 5.0,
         **kwargs: Any,
     ):
         if not HAS_LITELLM:
@@ -62,6 +63,7 @@ class LiteLLMAdapter(ProviderAdapter):
         self.embed_kwargs = embed_kwargs or {}
         self.timeout = timeout
         self.retry_config = retry_config or RetryConfig()
+        self.health_check_timeout = health_check_timeout
         self.kwargs = kwargs
         self.log = StructuredLogger(__name__, "LiteLLM")
         self.log.info("Initialized", model=model, embed_model=embed_model)
@@ -351,7 +353,7 @@ class LiteLLMAdapter(ProviderAdapter):
                     messages=[{"role": "user", "content": "ok"}],
                     max_tokens=5,
                 ),
-                timeout_seconds=5.0,
+                timeout_seconds=self.health_check_timeout,
                 operation_name=f"LiteLLM health check via {self.model}",
             )
             self.log.debug("Health check passed")

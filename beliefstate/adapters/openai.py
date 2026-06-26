@@ -40,12 +40,14 @@ class OpenAIAdapter(ProviderAdapter):
         embed_kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 30.0,
         retry_config: Optional[RetryConfig] = None,
+        health_check_timeout: float = 5.0,
     ):
         self.model = model
         self.embed_model = embed_model
         self.embed_kwargs = embed_kwargs or {}
         self.timeout = timeout
         self.retry_config = retry_config or RetryConfig()
+        self.health_check_timeout = health_check_timeout
         self.log = StructuredLogger(__name__, "OpenAI")
 
         if client:
@@ -333,7 +335,7 @@ class OpenAIAdapter(ProviderAdapter):
             # Try to list models with a short timeout as a health check
             await with_timeout(
                 self.client.models.list(),
-                timeout_seconds=5.0,
+                timeout_seconds=self.health_check_timeout,
                 operation_name="OpenAI health check",
             )
             self.log.debug("Health check passed")

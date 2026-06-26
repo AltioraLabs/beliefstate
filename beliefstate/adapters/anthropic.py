@@ -44,12 +44,16 @@ class AnthropicAdapter(ProviderAdapter):
         embed_kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 30.0,
         retry_config: Optional[RetryConfig] = None,
+        health_check_timeout: float = 5.0,
+        default_max_tokens: int = 1024,
     ):
         self.model = model
         self.embed_model = embed_model
         self.embed_kwargs = embed_kwargs or {}
         self.timeout = timeout
         self.retry_config = retry_config or RetryConfig()
+        self.health_check_timeout = health_check_timeout
+        self.default_max_tokens = default_max_tokens
         self.log = StructuredLogger(__name__, "Anthropic")
 
         if client:
@@ -140,7 +144,9 @@ class AnthropicAdapter(ProviderAdapter):
         if "model" not in kwargs:
             kwargs["model"] = self.model
         if "max_tokens" not in kwargs:
-            kwargs["max_tokens"] = 1024  # Anthropic requires max_tokens
+            kwargs["max_tokens"] = (
+                self.default_max_tokens
+            )  # Anthropic requires max_tokens
 
         response = await self.client.messages.create(**kwargs)
         return self.to_llm_response(response)
@@ -253,7 +259,7 @@ class AnthropicAdapter(ProviderAdapter):
                     max_tokens=10,
                     messages=[{"role": "user", "content": "ok"}],
                 ),
-                timeout_seconds=5.0,
+                timeout_seconds=self.health_check_timeout,
                 operation_name="Anthropic health check",
             )
             self.log.debug("Health check passed")

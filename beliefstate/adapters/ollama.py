@@ -77,12 +77,14 @@ class OllamaAdapter(ProviderAdapter):
         port: Optional[int] = None,
         timeout: float = 30.0,
         retry_config: Optional[RetryConfig] = None,
+        health_check_timeout: float = 5.0,
     ):
         self.model = model
         self.embed_model = embed_model
         self.embed_kwargs = embed_kwargs or {}
         self.timeout = timeout
         self.retry_config = retry_config or RetryConfig()
+        self.health_check_timeout = health_check_timeout
         self.log = StructuredLogger(__name__, "Ollama")
 
         # Parse OLLAMA_HOST if available
@@ -454,7 +456,7 @@ class OllamaAdapter(ProviderAdapter):
             # Try to list models to verify server is running
             await with_timeout(
                 self.client.list(),
-                timeout_seconds=5.0,
+                timeout_seconds=self.health_check_timeout,
                 operation_name="Ollama health check",
             )
             self.log.debug("Health check passed")

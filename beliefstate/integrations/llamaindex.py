@@ -102,13 +102,15 @@ class LlamaIndexBeliefTrackerCallback(BaseCallbackHandler):  # type: ignore[misc
                 self.tracker._session_turn_counters[session_id] = current_turn
 
                 if self.tracker.config.enable_background_tasks:
-                    self.tracker.dispatcher.dispatch(
-                        self.tracker, call, llm_response, session_id, current_turn
+                    self.tracker._dispatch(
+                        self.tracker._track_background(
+                            call, llm_response, session_id, current_turn
+                        )
                     )
                 else:
                     try:
-                        loop = asyncio.get_running_loop()
-                        loop.create_task(
+                        asyncio.get_running_loop()
+                        self.tracker._dispatch(
                             self.tracker._track_background(
                                 call, llm_response, session_id, current_turn
                             )

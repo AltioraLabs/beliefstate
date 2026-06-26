@@ -46,6 +46,7 @@ class GeminiAdapter(ProviderAdapter):
         embed_kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 30.0,
         retry_config: Optional[RetryConfig] = None,
+        health_check_timeout: float = 5.0,
         safety_settings: Optional[List[Dict[str, str]]] = None,
     ):
         self.model = model
@@ -53,6 +54,7 @@ class GeminiAdapter(ProviderAdapter):
         self.embed_kwargs = embed_kwargs or {}
         self.timeout = timeout
         self.retry_config = retry_config or RetryConfig()
+        self.health_check_timeout = health_check_timeout
         self.safety_settings = safety_settings or []
         self.log = StructuredLogger(__name__, "Gemini")
 
@@ -375,7 +377,7 @@ class GeminiAdapter(ProviderAdapter):
                     model=self.model,
                     contents="ok",
                 ),
-                timeout_seconds=5.0,
+                timeout_seconds=self.health_check_timeout,
                 operation_name="Gemini health check",
             )
             self.log.debug("Health check passed")

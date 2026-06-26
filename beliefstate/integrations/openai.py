@@ -155,6 +155,6 @@ async def observe_run(
     tracker._session_turn_counters[sid] = current_turn
 
     if tracker.config.enable_background_tasks:
-        tracker.dispatcher.dispatch(tracker, call, response, sid, current_turn)
+        tracker._dispatch(tracker._track_background(call, response, sid, current_turn))
     else:
         await tracker._track_background(call, response, sid, current_turn)

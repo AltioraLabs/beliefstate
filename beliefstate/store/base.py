@@ -106,7 +106,7 @@ def summary_for_prompt(
     real.sort(key=lambda b: (b.confidence, b.turn), reverse=True)
     real = real[:max_beliefs]
 
-    categories: dict[str, list[Belief]] = {}
+    categories: Dict[str, List[Belief]] = {}
     for b in real:
         cat = b.category or "general"
         categories.setdefault(cat, []).append(b)
