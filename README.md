@@ -132,13 +132,11 @@ ruff check beliefstate/
 
 ## Contributing
 
-Contributions are welcome. Please open an issue first to discuss what you'd like to change.
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on the development setup, coding standards, and pull request process.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Make your changes
-4. Run tests (`pytest`) and linter (`ruff check`)
-5. Submit a pull request
+This project follows a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold it.
+
+For security vulnerabilities, please see our [Security Policy](SECURITY.md).
 
 ---
 

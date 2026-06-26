@@ -9,6 +9,9 @@ authors = [
     { name = "Abhay Tiwari" }
 ]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -28,6 +31,7 @@ Homepage = "https://github.com/abhay-2108/beliefstate"
 Repository = "https://github.com/abhay-2108/beliefstate"
 Documentation = "https://github.com/abhay-2108/beliefstate#readme"
 Issues = "https://github.com/abhay-2108/beliefstate/issues"
+Changelog = "https://github.com/abhay-2108/beliefstate/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 openai = [
