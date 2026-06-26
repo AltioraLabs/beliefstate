@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+.env
+.venv/
+env/
+venv/
+ENV/
+
+# SQLite databases & logs (local application stores)
+*.db
+*.db-shm
+*.db-wal
+
+# Unit test / coverage reports
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Streamlit config/secrets
+.streamlit/
+
+# OS/IDE specific files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
