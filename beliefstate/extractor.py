@@ -339,7 +339,7 @@ class ExtractedBeliefSchema:
     """Lazy schema builder for extraction."""
 
     @staticmethod
-    def build():
+    def build() -> type:
         from pydantic import BaseModel, Field, RootModel
 
         class ExtractedBelief(BaseModel):

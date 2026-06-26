@@ -1,6 +1,6 @@
 import struct
 import math
-from typing import List, Optional, Any
+from typing import Any, Dict, List, Optional
 from beliefstate.store.base import Store
 from beliefstate.models import Belief
 
@@ -197,7 +197,7 @@ class RedisStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[dict]:
+    ) -> List[Dict[str, Any]]:
         """Return audit trail for a specific belief (Redis implementation stores as list)."""
         if not self._client:
             return []

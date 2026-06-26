@@ -177,7 +177,7 @@ class InMemoryBeliefStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[dict]:
+    ) -> List[Dict[str, Any]]:
         """In-memory store does not persist audit history."""
         return []
 

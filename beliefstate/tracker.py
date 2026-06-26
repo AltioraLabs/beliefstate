@@ -190,13 +190,13 @@ class TrackerStats:
     extraction_errors: int = 0
     last_error: str = ""
     last_successful_extraction: Optional[datetime] = None
-    _recent_outcomes: deque = field(default_factory=lambda: deque(maxlen=100))
+    _recent_outcomes: deque[int] = field(default_factory=lambda: deque(maxlen=100))
 
     @property
     def extraction_success_rate(self) -> float:
         if not self._recent_outcomes:
             return 1.0
-        return sum(self._recent_outcomes) / len(self._recent_outcomes)
+        return float(sum(self._recent_outcomes)) / len(self._recent_outcomes)
 
     def record_success(self) -> None:
         self._recent_outcomes.append(1)
@@ -366,7 +366,7 @@ class BeliefTracker:
         self._session_turn_states: Dict[str, int] = {}
         self._session_providers: Dict[str, str] = {}
         self._stats = TrackerStats()
-        self._pending_tasks: Set[asyncio.Task] = set()
+        self._pending_tasks: Set[asyncio.Task[None]] = set()
 
         if dispatcher is not None:
             self.dispatcher = dispatcher
@@ -662,7 +662,7 @@ class BeliefTracker:
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[dict]:
+    ) -> List[Dict[str, Any]]:
         """Return audit trail for a specific belief."""
         return await self.store.get_audit_history(session_id, subject, predicate)
 
@@ -899,7 +899,7 @@ class BeliefTracker:
                     last_user_msg = m.get("content", "")
                     break
 
-            new_beliefs = await self.extractor.process_turn(
+            new_beliefs = await self.extractor.process_turn(  # type: ignore[union-attr]
                 last_user_msg,
                 response.text,
                 session_id,

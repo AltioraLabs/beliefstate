@@ -1,7 +1,7 @@
 import json
 import struct
 import logging
-from typing import List, Optional, Any
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 from beliefstate.store.base import Store
 from beliefstate.models import Belief
@@ -364,7 +364,7 @@ class SQLiteStore(Store):
         embedding_data = r["embedding"]
         if embedding_data:
             if isinstance(embedding_data, (bytes, bytearray)):
-                emb = unpack_embedding(embedding_data)
+                emb = unpack_embedding(bytes(embedding_data))
             else:
                 try:
                     emb = json.loads(embedding_data)
@@ -584,7 +584,7 @@ class SQLiteStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[dict]:
+    ) -> List[Dict[str, Any]]:
         """Return audit trail for a specific belief."""
         conn = await self._get_connection()
         async with conn.execute(

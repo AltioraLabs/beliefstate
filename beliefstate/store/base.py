@@ -1,4 +1,4 @@
-from typing import List, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from beliefstate.models import Belief
 
 
@@ -81,7 +81,7 @@ class Store(Protocol):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[dict]:
+    ) -> List[Dict[str, Any]]:
         """Return audit trail for a specific belief."""
         ...
 

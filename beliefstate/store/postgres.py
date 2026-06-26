@@ -457,7 +457,7 @@ class PostgreSQLStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[dict]:
+    ) -> List[Dict[str, Any]]:
         """Return audit trail for a specific belief."""
         pool = await self._get_pool()
         async with pool.acquire() as conn:
