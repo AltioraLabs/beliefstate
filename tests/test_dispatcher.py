@@ -50,7 +50,7 @@ async def test_asyncio_dispatcher():
     dispatcher.dispatch(mock_tracker, call, response, "session_123", 4)
 
     # Yield control to let asyncio loop run the task
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)
 
     mock_tracker.track_async.assert_called_once_with(
         call.model_dump(), response.model_dump(), "session_123", 4
@@ -70,7 +70,7 @@ async def test_sync_dispatcher():
     dispatcher.dispatch(mock_tracker, call, response, "session_123", 4)
 
     # Yield control to let the loop run the task
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.05)
 
     mock_tracker.track_async.assert_called_once_with(
         call.model_dump(), response.model_dump(), "session_123", 4

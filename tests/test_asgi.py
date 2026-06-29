@@ -17,7 +17,9 @@ async def test_asgi_middleware_non_http():
     scope = {"type": "lifespan"}
 
     await middleware(scope, None, None)
-    assert not hasattr(app, "session_id") or app.session_id == "default"
+    assert app.session_id == "default", (
+        "Lifespan scope should not alter session context"
+    )
 
 
 @pytest.mark.asyncio

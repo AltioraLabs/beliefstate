@@ -8,7 +8,7 @@ import pytest
 
 
 def test_core_imports():
-    """Test that core modules can be imported."""
+    """Test that core modules can be imported and are the correct types."""
     from beliefstate import (
         BeliefTracker,
         TrackerConfig,
@@ -26,24 +26,24 @@ def test_core_imports():
         LiteLLMAdapter,
     )
 
-    assert BeliefTracker is not None
-    assert TrackerConfig is not None
-    assert Belief is not None
-    assert BeliefExtractor is not None
-    assert ContradictionDetector is not None
-    assert BeliefResolver is not None
-    assert SQLiteStore is not None
-    assert RedisStore is not None
-    assert ProviderAdapter is not None
-    assert OpenAIAdapter is not None
-    assert AnthropicAdapter is not None
-    assert GeminiAdapter is not None
-    assert OllamaAdapter is not None
-    assert LiteLLMAdapter is not None
+    assert callable(BeliefTracker)
+    assert callable(TrackerConfig)
+    assert callable(Belief)
+    assert callable(BeliefExtractor)
+    assert callable(ContradictionDetector)
+    assert callable(BeliefResolver)
+    assert callable(SQLiteStore)
+    assert callable(RedisStore)
+    assert callable(ProviderAdapter)
+    assert callable(OpenAIAdapter)
+    assert callable(AnthropicAdapter)
+    assert callable(GeminiAdapter)
+    assert callable(OllamaAdapter)
+    assert callable(LiteLLMAdapter)
 
 
 def test_dispatcher_imports():
-    """Test that dispatcher modules can be imported."""
+    """Test that dispatcher modules can be imported and are the correct types."""
     from beliefstate import (
         AsyncioDispatcher,
         SyncDispatcher,
@@ -53,45 +53,46 @@ def test_dispatcher_imports():
         execute_tracking_task,
     )
 
-    assert AsyncioDispatcher is not None
-    assert SyncDispatcher is not None
-    assert CeleryDispatcher is not None
-    assert RQDispatcher is not None
-    assert register_global_tracker is not None
-    assert execute_tracking_task is not None
+    assert callable(AsyncioDispatcher)
+    assert callable(SyncDispatcher)
+    assert callable(CeleryDispatcher)
+    assert callable(RQDispatcher)
+    assert callable(register_global_tracker)
+    assert callable(execute_tracking_task)
 
 
 def test_judge_imports():
-    """Test that judge modules can be imported."""
+    """Test that judge modules can be imported and are the correct types."""
     from beliefstate import (
         ContradictionJudge,
         LLMJudge,
         LocalNLIJudge,
     )
 
-    assert ContradictionJudge is not None
-    assert LLMJudge is not None
-    assert LocalNLIJudge is not None
+    assert callable(ContradictionJudge)
+    assert callable(LLMJudge)
+    assert callable(LocalNLIJudge)
 
 
 def test_resilience_imports():
-    """Test that resilience modules can be imported."""
+    """Test that resilience modules can be imported and are the correct types."""
     from beliefstate import (
         ResilientAdapterWrapper,
         CircuitBreaker,
         CircuitBreakerOpenException,
     )
 
-    assert ResilientAdapterWrapper is not None
-    assert CircuitBreaker is not None
-    assert CircuitBreakerOpenException is not None
+    assert callable(ResilientAdapterWrapper)
+    assert callable(CircuitBreaker)
+    assert issubclass(CircuitBreakerOpenException, Exception)
 
 
 def test_session_context_import():
-    """Test that session context can be imported."""
+    """Test that session context can be imported and is functional."""
     from beliefstate import session_context
 
-    assert session_context is not None
+    assert hasattr(session_context, "set")
+    assert hasattr(session_context, "get")
     # Test basic functionality
     session_context.set("test-session-123")
     assert session_context.get() == "test-session-123"

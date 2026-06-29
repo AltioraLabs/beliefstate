@@ -12,7 +12,7 @@ mock_llama_index.core.callbacks = MagicMock()
 
 class MockCBEventType:
     LLM = "llm"
-    EMBEDDING = "llm"
+    EMBEDDING = "embedding"
 
 
 mock_llama_index.core.callbacks.CBEventType = MockCBEventType
