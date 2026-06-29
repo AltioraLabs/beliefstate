@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Belief } from './types';
+import { Select } from './Select';
 
 interface Props { sessionId: string; }
 
@@ -39,21 +40,19 @@ export function Timeline({ sessionId }: Props) {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h1 className="page-title">Belief Timeline</h1>
-        <p className="page-subtitle">Track how a specific belief evolved across turns</p>
-      </div>
-
       <div className="timeline-selector">
-        <select value={selectedSubject ? `${selectedSubject}|${selectedPredicate}` : ''} onChange={e => {
-          const [s, p] = e.target.value.split('|');
-          setSelectedSubject(s); setSelectedPredicate(p);
-        }} className="filter-select" style={{maxWidth:400}}>
-          <option value="">Select a belief to inspect...</option>
-          {pairs.map(({subject, predicate}) => (
-            <option key={`${subject}|${predicate}`} value={`${subject}|${predicate}`}>{subject} → {predicate}</option>
-          ))}
-        </select>
+        <Select value={selectedSubject ? `${selectedSubject}|${selectedPredicate}` : ''}
+          onChange={v => { const [s, p] = v.split('|'); setSelectedSubject(s); setSelectedPredicate(p); }}
+          options={[
+            {value:'',label:'Select a belief to inspect...'},
+            ...pairs.map(({subject, predicate}) => ({
+              value: `${subject}|${predicate}`,
+              label: `${subject} → ${predicate}`,
+            })),
+          ]}
+          placeholder="Select a belief to inspect..."
+          width={400}
+        />
       </div>
 
       {history.length > 0 && (

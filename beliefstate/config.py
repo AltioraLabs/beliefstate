@@ -316,6 +316,12 @@ class TrackerConfig(BaseModel):
         description="Timeout in seconds for LLM judge contradiction checks.",
     )
 
+    # Dashboard
+    enable_dashboard: bool = Field(
+        default=False,
+        description="Start the developer dashboard server when True (requires fastapi, uvicorn, sse_starlette).",
+    )
+
     # Confidence caps by source
     user_confidence_cap: float = Field(
         default=0.99,

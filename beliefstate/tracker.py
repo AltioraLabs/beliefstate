@@ -435,6 +435,7 @@ class BeliefTracker:
         self._stats = TrackerStats()
         self._pending_tasks: Set[asyncio.Task[None]] = set()
         self._pending_conflict_notes: Dict[str, List[str]] = {}
+        self._dashboard_callback: Optional[Callable[[Dict[str, Any]], Coroutine[Any, Any, None]]] = None
 
         if dispatcher is not None:
             self.dispatcher = dispatcher
@@ -459,6 +460,9 @@ class BeliefTracker:
             else:
                 self.dispatcher = AsyncioDispatcher()
 
+        if self.config.enable_dashboard:
+            self._start_dashboard()
+
     @property
     def turn_counter(self) -> int:
         """Return turn counter for the current session context.
@@ -478,12 +482,29 @@ class BeliefTracker:
         sid = session_context.get()
         self._session_turn_counters[sid] = value
 
+    def _start_dashboard(self) -> None:
+        try:
+            from dashboard.backend.runner import start_dashboard as _start_dash
+
+            _start_dash(self)
+        except Exception as e:
+            logger.warning(
+                f"Dashboard auto-start failed: {e}. "
+                "Install deps: pip install fastapi uvicorn sse-starlette"
+            )
+
     def get_session_turn(self, session_id: Optional[str] = None) -> int:
         sid = session_id or session_context.get()
         return self._session_turn_counters.get(sid, 0)
 
     def get_stats(self) -> TrackerStats:
         return self._stats
+
+    def register_dashboard_callback(
+        self, callback: Callable[[Dict[str, Any]], Coroutine[Any, Any, None]]
+    ) -> None:
+        """Register an async callback invoked after each pipeline stage."""
+        self._dashboard_callback = callback
 
     def _dispatch(self, coro: Any) -> None:
         """Dispatch a coroutine as a tracked background task."""
@@ -1036,6 +1057,18 @@ class BeliefTracker:
 
             self._stats.total_beliefs_extracted += len(new_beliefs)
 
+            if self._dashboard_callback:
+                await self._dashboard_callback({
+                    "type": "extraction",
+                    "session_id": session_id,
+                    "turn": turn,
+                    "count": len(new_beliefs),
+                    "beliefs": [
+                        {"subject": b.subject, "predicate": b.predicate, "value": b.value, "confidence": b.confidence}
+                        for b in new_beliefs
+                    ],
+                })
+
             if not new_beliefs:
                 self._stats.record_success()
                 return
@@ -1047,6 +1080,14 @@ class BeliefTracker:
 
             self._stats.total_contradictions_detected += len(contradictions)
             self._stats.total_duplicates_skipped += len(duplicates)
+
+            if self._dashboard_callback:
+                await self._dashboard_callback({
+                    "type": "contradiction",
+                    "session_id": session_id,
+                    "turn": turn,
+                    "count": len(contradictions),
+                })
 
             # Write phase is serialised per session
             async with _get_session_lock(session_id):
@@ -1086,7 +1127,17 @@ class BeliefTracker:
                         conflict_notes
                     )
 
+                if self._dashboard_callback and conflict_notes:
+                    await self._dashboard_callback({
+                        "type": "resolution",
+                        "session_id": session_id,
+                        "turn": turn,
+                        "count": len(conflict_notes),
+                        "notes": conflict_notes,
+                    })
+
                 contradicting_new_beliefs = [c[1] for c in contradictions]
+                stored_count = 0
                 for b in new_beliefs:
                     if b not in contradicting_new_beliefs and b not in duplicates:
                         # Enforce storage limit: evict lowest-confidence belief if full
@@ -1094,6 +1145,15 @@ class BeliefTracker:
                         if current_count >= self.config.max_beliefs:
                             await self._evict_lowest_confidence_belief(session_id)
                         await self.store.add_belief(session_id, b)
+                        stored_count += 1
+
+                if self._dashboard_callback and stored_count:
+                    await self._dashboard_callback({
+                        "type": "beliefs_stored",
+                        "session_id": session_id,
+                        "turn": turn,
+                        "count": stored_count,
+                    })
 
             self._stats.record_success()
 

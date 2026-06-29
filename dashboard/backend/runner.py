@@ -37,9 +37,10 @@ def start_dashboard(
         logger.warning("Dashboard already running")
         return f"http://{host}:{port}"
 
-    from dashboard.backend.server import set_tracker, app
+    from dashboard.backend.server import set_tracker, push_tracker_event, app
 
     set_tracker(tracker)
+    tracker.register_dashboard_callback(push_tracker_event)
 
     if auto_port:
         port = find_free_port(port)

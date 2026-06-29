@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityEntry } from './types';
+import { Select } from './Select';
 
 interface Props { sessionId: string; }
 
@@ -28,23 +29,19 @@ export function ActivityLog({ sessionId }: Props) {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h1 className="page-title">Activity Log</h1>
-        <p className="page-subtitle">Real-time stream of tracking events</p>
-      </div>
-
       <div className="filter-bar">
-        <select value={filter} onChange={e => setFilter(e.target.value)} className="filter-select">
-          <option value="">All events</option>
-          <option value="tracking_event">Tracking</option>
-          <option value="belief_created">Created</option>
-          <option value="belief_deleted">Deleted</option>
-          <option value="simulation">Simulation</option>
-          <option value="config_updated">Config</option>
-        </select>
+        <Select value={filter} onChange={setFilter}
+          options={[
+            {value:'',label:'All events'},
+            {value:'tracking_event',label:'Tracking'},
+            {value:'belief_created',label:'Created'},
+            {value:'belief_deleted',label:'Deleted'},
+            {value:'simulation',label:'Simulation'},
+            {value:'config_updated',label:'Config'},
+          ]} />
       </div>
 
-      <div className="glass-card">
+      <div className="card">
         {loading ? (
           <div className="empty-small">Loading...</div>
         ) : filtered.length === 0 ? (

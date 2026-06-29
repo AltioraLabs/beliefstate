@@ -419,26 +419,64 @@ class BeliefExtractor:
 
             # 1. Discard self-referential assistant opinions/preferences (like "assistant prefers TensorFlow")
             if subj_lower in ("assistant", "system") and b.source == "assistant":
-                if any(x in pred_lower for x in ("prefer", "think", "agree", "comment", "recommend", "suggest", "opinion", "choose")):
-                    logger.debug(f"Filtering out self-referential assistant preference: {b.subject} {b.predicate}")
+                if any(
+                    x in pred_lower
+                    for x in (
+                        "prefer",
+                        "think",
+                        "agree",
+                        "comment",
+                        "recommend",
+                        "suggest",
+                        "opinion",
+                        "choose",
+                    )
+                ):
+                    logger.debug(
+                        f"Filtering out self-referential assistant preference: {b.subject} {b.predicate}"
+                    )
                     continue
 
             # 2. Filter out suggestions/options from assistant source
             if b.source == "assistant":
-                suggestion_keywords = {"should", "could", "would", "consider", "recommend", "suggest", "option", "might", "perhaps"}
-                words_to_check = set(re.findall(r"\b\w+\b", f"{pred_lower} {quote_lower}"))
+                suggestion_keywords = {
+                    "should",
+                    "could",
+                    "would",
+                    "consider",
+                    "recommend",
+                    "suggest",
+                    "option",
+                    "might",
+                    "perhaps",
+                }
+                words_to_check = set(
+                    re.findall(r"\b\w+\b", f"{pred_lower} {quote_lower}")
+                )
                 if words_to_check.intersection(suggestion_keywords):
-                    logger.debug(f"Filtering out assistant suggestion/option belief: {b.subject} {b.predicate}")
+                    logger.debug(
+                        f"Filtering out assistant suggestion/option belief: {b.subject} {b.predicate}"
+                    )
                     continue
 
             # 3. Filter out generic technical knowledge
             generic_keywords = {
-                "in-memory", "popular", "flexible schema", "built-in persistence", "highly scalable",
-                "memory-efficient", "provides high", "supports", "open-source", "popular deep learning"
+                "in-memory",
+                "popular",
+                "flexible schema",
+                "built-in persistence",
+                "highly scalable",
+                "memory-efficient",
+                "provides high",
+                "supports",
+                "open-source",
+                "popular deep learning",
             }
             val_lower = (b.value or "").lower()
             if any(gk in val_lower or gk in pred_lower for gk in generic_keywords):
-                logger.debug(f"Filtering out generic knowledge belief: {b.subject} {b.predicate} {b.value}")
+                logger.debug(
+                    f"Filtering out generic knowledge belief: {b.subject} {b.predicate} {b.value}"
+                )
                 continue
 
             filtered.append(b)

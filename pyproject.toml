@@ -70,11 +70,16 @@ llamaindex = [
 fastapi = [
     "fastapi>=0.95.0",
 ]
+dashboard = [
+    "fastapi>=0.95.0",
+    "uvicorn>=0.22.0",
+    "sse-starlette>=1.6.0",
+]
 flask = [
     "flask>=2.2.0",
 ]
 all = [
-    "beliefstate[openai,anthropic,gemini,ollama,litellm,local,redis,postgres,langchain,llamaindex,fastapi,flask]",
+    "beliefstate[openai,anthropic,gemini,ollama,litellm,local,redis,postgres,langchain,llamaindex,fastapi,dashboard,flask]",
 ]
 dev = [
     "pytest>=7.0",

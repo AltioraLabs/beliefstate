@@ -9,15 +9,16 @@ import { ActivityLog } from './components/ActivityLog';
 import { SessionCompare } from './components/SessionCompare';
 import { Layout } from './components/Layout';
 import { useDashboard } from './hooks/useDashboard';
+import { useNotifications } from './hooks/useNotifications';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'layout-dashboard' },
-  { id: 'beliefs', label: 'Beliefs', icon: 'table' },
-  { id: 'timeline', label: 'Timeline', icon: 'git-branch' },
-  { id: 'conflicts', label: 'Conflicts', icon: 'alert-triangle' },
+  { id: 'beliefs', label: 'Beliefs', icon: 'brain' },
+  { id: 'timeline', label: 'Timeline', icon: 'history' },
+  { id: 'conflicts', label: 'Conflicts', icon: 'shield-alert' },
   { id: 'activity', label: 'Activity', icon: 'activity' },
-  { id: 'compare', label: 'Compare', icon: 'users' },
-  { id: 'simulator', label: 'Simulator', icon: 'cpu' },
+  { id: 'compare', label: 'Compare', icon: 'git-compare' },
+  { id: 'simulator', label: 'Simulator', icon: 'play-circle' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -26,6 +27,8 @@ function App() {
     activeTab, setActiveTab, sessions, selectedSession,
     setSelectedSession, refreshData, loading, sseConnected, trackingStatus,
   } = useDashboard();
+
+  const notif = useNotifications(selectedSession);
 
   useEffect(() => {
     if (sessions.length > 0 && !selectedSession) {
@@ -37,6 +40,7 @@ function App() {
     tabs: TABS, activeTab, setActiveTab,
     sessions, selectedSession, setSelectedSession,
     loading: false, refreshData, sseConnected, trackingStatus,
+    notif,
   };
 
   return (
@@ -48,7 +52,7 @@ function App() {
       {activeTab === 'activity' && selectedSession && <ActivityLog sessionId={selectedSession} />}
       {activeTab === 'compare' && selectedSession && <SessionCompare sessionId={selectedSession} sessions={sessions} />}
       {activeTab === 'simulator' && selectedSession && <Simulator sessionId={selectedSession} />}
-      {activeTab === 'settings' && <Settings />}
+      {activeTab === 'settings' && <Settings alerts={notif.alerts} onUpdateAlerts={notif.setAlerts} />}
     </Layout>
   );
 }

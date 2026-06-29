@@ -1,6 +1,7 @@
 import json
 import csv
 import io
+import os
 import asyncio
 import time
 from typing import Optional, Dict, Any, List
@@ -72,6 +73,12 @@ def get_tracker() -> BeliefTracker:
 
 def get_event_queue() -> asyncio.Queue:
     return event_queue
+
+
+async def push_tracker_event(event: Dict[str, Any]) -> None:
+    """Callback registered on BeliefTracker to push real pipeline events to SSE."""
+    await event_queue.put(event)
+    push_activity("tracking_event", event.get("session_id", "?"), event)
 
 
 def push_activity(event_type: str, session_id: str, data: Dict[str, Any]):
@@ -665,7 +672,10 @@ async def re_extract(session_id: str, request: ReExtractRequest):
     return {"extracted": result, "count": len(result)}
 
 
-app.mount("/", StaticFiles(directory="beliefstate/ui_dist", html=True), name="static")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
+_STATIC_DIR = os.path.join(_PROJECT_ROOT, "beliefstate", "ui_dist")
+app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
 
 
 if __name__ == "__main__":

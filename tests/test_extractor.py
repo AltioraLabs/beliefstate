@@ -130,24 +130,24 @@ async def test_belief_extractor_post_filtering():
 
     mock_adapter.generate = AsyncMock(
         return_value=LLMResponse(
-            text='['
-                 '{"subject": "USER", "predicate": "prefers", "value": "Python", "confidence": 0.9, "source": "user", "source_quote": "I prefer Python"},'
-                 '{"subject": "assistant", "predicate": "prefers", "value": "TensorFlow", "confidence": 0.9, "source": "assistant", "source_quote": "I prefer TensorFlow"},'
-                 '{"subject": "USER", "predicate": "should consider", "value": "Redis", "confidence": 0.8, "source": "assistant", "source_quote": "You should consider Redis"},'
-                 '{"subject": "Redis", "predicate": "has", "value": "built-in persistence", "confidence": 0.9, "source": "assistant", "source_quote": "Redis has built-in persistence"},'
-                 '{"subject": "Cache", "predicate": "type", "value": "Memcached", "confidence": 0.95, "source": "assistant", "source_quote": "I will set up Memcached"}'
-                 ']',
+            text="["
+            '{"subject": "USER", "predicate": "prefers", "value": "Python", "confidence": 0.9, "source": "user", "source_quote": "I prefer Python"},'
+            '{"subject": "assistant", "predicate": "prefers", "value": "TensorFlow", "confidence": 0.9, "source": "assistant", "source_quote": "I prefer TensorFlow"},'
+            '{"subject": "USER", "predicate": "should consider", "value": "Redis", "confidence": 0.8, "source": "assistant", "source_quote": "You should consider Redis"},'
+            '{"subject": "Redis", "predicate": "has", "value": "built-in persistence", "confidence": 0.9, "source": "assistant", "source_quote": "Redis has built-in persistence"},'
+            '{"subject": "Cache", "predicate": "type", "value": "Memcached", "confidence": 0.95, "source": "assistant", "source_quote": "I will set up Memcached"}'
+            "]",
             raw_response=None,
         )
     )
-    mock_adapter.get_embeddings = AsyncMock(return_value=[[0.1]*384]*5)
+    mock_adapter.get_embeddings = AsyncMock(return_value=[[0.1] * 384] * 5)
 
     extractor = BeliefExtractor(adapter=mock_adapter, config=config)
     beliefs = await extractor.process_turn(
         user_message="I prefer Python",
         assistant_response="I will set up Memcached",
         session_id="test_session",
-        turn=1
+        turn=1,
     )
 
     assert len(beliefs) == 2
@@ -161,4 +161,3 @@ async def test_belief_extractor_post_filtering():
     assert beliefs[1].predicate == "type"
     assert beliefs[1].value == "Memcached"
     assert beliefs[1].source == "assistant"
-
