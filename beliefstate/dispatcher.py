@@ -151,6 +151,9 @@ class AsyncioDispatcher:
                     self._in_flight_tasks[session_id].remove(task)
                 except (ValueError, KeyError):
                     pass
+                # Sweep: remove empty session entries
+                if not self._in_flight_tasks[session_id]:
+                    self._in_flight_tasks.pop(session_id, None)
 
         task.add_done_callback(cleanup_task)
 

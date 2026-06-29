@@ -1,5 +1,5 @@
 from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 DEFAULT_EXTRACT_PROMPT = """
 You are a precise fact extraction engine. Extract every factual claim
@@ -148,11 +148,20 @@ class TrackerConfig(BaseModel):
 
     # Store settings
     store_type: str = Field(
-        default="sqlite", description="Type of storage to use ('sqlite', 'redis')."
+        default="sqlite",
+        description="Type of storage to use ('sqlite', 'redis', 'postgres').",
     )
     store_kwargs: Dict[str, Any] = Field(
         default_factory=dict, description="Additional kwargs for the store."
     )
+
+    @field_validator("store_type")
+    @classmethod
+    def validate_store_type(cls, v: str) -> str:
+        valid = {"sqlite", "redis", "postgres"}
+        if v.lower() not in valid:
+            raise ValueError(f"store_type must be one of {valid}, got '{v}'")
+        return v.lower()
 
     # Detection settings
     similarity_threshold: float = Field(

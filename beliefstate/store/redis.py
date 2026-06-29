@@ -14,6 +14,10 @@ class RedisStore(Store):
     """Redis-based asynchronous storage for beliefs.
 
     Uses binary float32 embedding storage for precision.
+
+    Note: search_beliefs is O(n) over all beliefs in a session because
+    Redis hashes don't support vector search. For high-volume deployments,
+    consider using pgvector (PostgreSQLStore) for native vector similarity.
     """
 
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
@@ -23,6 +27,10 @@ class RedisStore(Store):
             self._client = None
         else:
             self._client = redis.Redis.from_url(redis_url, decode_responses=False)
+
+    async def open(self) -> None:
+        """No-op for Redis (client initialized in __init__)."""
+        pass
 
     def _get_key(self, session_id: str) -> str:
         return f"beliefstate:session:{session_id}"

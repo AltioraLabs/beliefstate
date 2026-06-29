@@ -29,8 +29,8 @@ def test_transient_error_detection():
 
     assert is_transient_error(FakeTimeoutError("Timeout occurred"))
 
-    # Generic exceptions are retryable by default
-    assert is_transient_error(Exception("Some unknown issue"))
+    # Generic exceptions are NOT retryable by default (fail fast)
+    assert not is_transient_error(Exception("Some unknown issue"))
 
 
 @pytest.mark.asyncio
@@ -44,11 +44,16 @@ async def test_resilient_wrapper_retries():
     )
 
     mock_adapter = MagicMock()
+
     # Mock calls: raise two transient errors, then succeed
+    # Use errors with names that are recognized as transient by is_transient_error
+    class RateLimitError(Exception):
+        pass
+
     mock_adapter.generate = AsyncMock(
         side_effect=[
-            Exception("Transient error 1"),
-            Exception("Transient error 2"),
+            RateLimitError("Rate limit exceeded"),
+            RateLimitError("Rate limit exceeded again"),
             LLMResponse(text="Success response", raw_response=None),
         ]
     )

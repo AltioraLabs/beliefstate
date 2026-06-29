@@ -31,16 +31,19 @@ class InMemoryBeliefStore(Store):
     def _evict_lru_belief(self) -> None:
         if not self._beliefs:
             return
-        for session_id, beliefs_dict in self._beliefs.items():
-            if beliefs_dict:
-                field, belief = next(iter(beliefs_dict.items()))
-                belief_size = self._estimate_belief_size(belief)
-                del beliefs_dict[field]
-                self.current_bytes -= belief_size
-                logger.debug(f"LRU eviction: removed {field} from session {session_id}")
-                if not beliefs_dict:
-                    del self._beliefs[session_id]
-                return
+        # Evict from the session with the most beliefs to balance memory
+        largest_session = max(self._beliefs, key=lambda s: len(self._beliefs[s]))
+        beliefs_dict = self._beliefs[largest_session]
+        if beliefs_dict:
+            field, belief = next(iter(beliefs_dict.items()))
+            belief_size = self._estimate_belief_size(belief)
+            del beliefs_dict[field]
+            self.current_bytes -= belief_size
+            logger.debug(
+                f"LRU eviction: removed {field} from session {largest_session}"
+            )
+            if not beliefs_dict:
+                del self._beliefs[largest_session]
 
     async def add_belief(self, session_id: str, belief: Belief) -> None:
         if session_id not in self._beliefs:

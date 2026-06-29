@@ -13,7 +13,13 @@ except ImportError:
 
 
 class PostgreSQLStore(Store):
-    """PostgreSQL-based asynchronous storage for beliefs using asyncpg."""
+    """PostgreSQL-based asynchronous storage for beliefs using asyncpg.
+
+    Note: Uses plpgsql cosine_similarity function for vector search.
+    For high-volume deployments, consider installing pgvector extension
+    for native vector indexing (CREATE EXTENSION vector) and replacing
+    the cosine_similarity function with vector cosine distance operators.
+    """
 
     def __init__(self, dsn: Optional[str] = None, **kwargs: Any):
         """Initialize PostgreSQLStore.

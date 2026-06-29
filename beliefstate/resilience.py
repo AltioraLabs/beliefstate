@@ -144,7 +144,8 @@ def is_transient_error(exc: BaseException) -> bool:
     ):
         return True
 
-    return True
+    # Default: do not retry unrecognized errors (fail fast)
+    return False
 
 
 def before_sleep_log(retry_state: Any) -> None:

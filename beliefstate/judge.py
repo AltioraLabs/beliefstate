@@ -1,6 +1,7 @@
 import json
 import asyncio
 import logging
+import re
 from typing import Tuple, Protocol, runtime_checkable, Optional, Any
 from beliefstate.models import Belief
 from beliefstate.adapters.base import ProviderAdapter
@@ -8,6 +9,9 @@ from beliefstate.config import TrackerConfig
 from beliefstate.call import LLMCall
 
 logger = logging.getLogger("beliefstate.judge")
+
+# Compiled regex for extracting JSON from LLM judge responses
+_JUDGE_JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
 @runtime_checkable
@@ -59,9 +63,7 @@ class LLMJudge(ContradictionJudge):
             try:
                 data = json.loads(raw_text)
             except (json.JSONDecodeError, TypeError):
-                import re
-
-                match_obj = re.search(r"\{.*\}", raw_text, re.DOTALL)
+                match_obj = _JUDGE_JSON_RE.search(raw_text)
                 if match_obj:
                     try:
                         data = json.loads(match_obj.group(0))

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import os
 import warnings
 from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar, Tuple, Set
@@ -78,107 +79,156 @@ def calculate_staleness_score(belief: Any) -> float:
 def estimate_tokens(text: str) -> int:
     if not text:
         return 0
-    return len(text) // 4
+    return math.ceil(len(text) / 4)
+
+
+class GenericAdapter(ProviderAdapter):
+    """Fallback adapter for unknown LLM providers. Cannot generate."""
+
+    def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
+        messages = kwargs.get("messages", [])
+        if not messages and len(args) > 0 and isinstance(args[0], list):
+            messages = args[0]
+        return LLMCall(messages=messages, kwargs=kwargs)
+
+    def to_llm_response(self, response: Any) -> LLMResponse:
+        text = ""
+        if hasattr(response, "content"):
+            text = response.content
+        elif hasattr(response, "text"):
+            text = response.text
+        elif hasattr(response, "choices") and response.choices:
+            choice = response.choices[0]
+            if hasattr(choice, "message"):
+                text = choice.message.content
+            elif hasattr(choice, "text"):
+                text = choice.text
+        elif isinstance(response, dict):
+            text = response.get("content") or response.get("text", "")
+        return LLMResponse(text=text, raw_response=response)
+
+    async def generate(
+        self, call: LLMCall, response_format: Optional[Any] = None
+    ) -> LLMResponse:
+        raise NotImplementedError("Generic adapter cannot generate.")
+
+    async def get_embedding(self, text: str) -> list[float]:
+        raise NotImplementedError("Generic adapter cannot generate embeddings.")
+
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
+        raise NotImplementedError("Generic adapter cannot generate embeddings.")
+
+    def inject_context(self, context_prompt: str, *args: Any, **kwargs: Any) -> Any:
+        return kwargs
+
+    async def health_check(self) -> bool:
+        return False
+
+
+# Cache adapter instances to avoid re-instantiation on every call
+_adapter_cache: Dict[str, ProviderAdapter] = {}
+
+
+def _get_cached_adapter(
+    cache_key: str, module_path: str, class_name: str
+) -> ProviderAdapter:
+    """Get or create a cached adapter instance."""
+    if cache_key in _adapter_cache:
+        return _adapter_cache[cache_key]
+    try:
+        import importlib
+
+        module = importlib.import_module(module_path)
+        adapter_cls = getattr(module, class_name)
+        instance = adapter_cls()
+        _adapter_cache[cache_key] = instance
+        return instance
+    except ImportError:
+        raise RuntimeError(
+            f"{class_name} selected but SDK not installed. "
+            f"Install with: pip install {cache_key}"
+        )
 
 
 def _detect_adapter(result: Any) -> ProviderAdapter:
+    # Try isinstance checks first (most reliable), fall back to type name
+    try:
+        from openai.types.chat import ChatCompletion
+
+        if isinstance(result, ChatCompletion):
+            return _get_cached_adapter(
+                "openai", "beliefstate.adapters.openai", "OpenAIAdapter"
+            )
+    except (ImportError, AttributeError, TypeError):
+        pass
+
+    try:
+        from anthropic.types import Message
+
+        if isinstance(result, Message):
+            return _get_cached_adapter(
+                "anthropic", "beliefstate.adapters.anthropic", "AnthropicAdapter"
+            )
+    except (ImportError, AttributeError, TypeError):
+        pass
+
+    try:
+        from google.generativeai.types.generation_types import (
+            GenerateContentResponse,
+        )
+
+        if isinstance(result, GenerateContentResponse):
+            return _get_cached_adapter(
+                "gemini", "beliefstate.adapters.gemini", "GeminiAdapter"
+            )
+    except (ImportError, AttributeError, TypeError):
+        pass
+
+    try:
+        from ollama._types import ChatResponse
+
+        if isinstance(result, ChatResponse):
+            return _get_cached_adapter(
+                "ollama", "beliefstate.adapters.ollama", "OllamaAdapter"
+            )
+    except (ImportError, AttributeError, TypeError):
+        pass
+
+    # Fallback to type name matching
     type_name = type(result).__module__ + "." + type(result).__name__
+    type_lower = type_name.lower()
 
-    if "openai" in type_name.lower():
-        try:
-            from beliefstate.adapters.openai import OpenAIAdapter
-
-            return OpenAIAdapter()
-        except ImportError:
-            raise RuntimeError(
-                "OpenAI adapter selected but openai SDK not installed. "
-                "Install with: pip install openai"
-            )
-
-    if "anthropic" in type_name.lower():
-        try:
-            from beliefstate.adapters.anthropic import AnthropicAdapter
-
-            return AnthropicAdapter()
-        except ImportError:
-            raise RuntimeError(
-                "Anthropic adapter selected but anthropic SDK not installed. "
-                "Install with: pip install anthropic"
-            )
-
-    if "google" in type_name.lower() or "genai" in type_name.lower():
-        try:
-            from beliefstate.adapters.gemini import GeminiAdapter
-
-            return GeminiAdapter()
-        except ImportError:
-            raise RuntimeError(
-                "Gemini adapter selected but google-generativeai SDK not installed. "
-                "Install with: pip install google-generativeai"
-            )
-
-    if "ollama" in type_name.lower():
-        try:
-            from beliefstate.adapters.ollama import OllamaAdapter
-
-            return OllamaAdapter()
-        except ImportError:
-            raise RuntimeError(
-                "Ollama adapter selected but ollama SDK not installed. "
-                "Install with: pip install ollama"
-            )
+    if "openai" in type_lower:
+        return _get_cached_adapter(
+            "openai", "beliefstate.adapters.openai", "OpenAIAdapter"
+        )
+    if "anthropic" in type_lower:
+        return _get_cached_adapter(
+            "anthropic", "beliefstate.adapters.anthropic", "AnthropicAdapter"
+        )
+    if "google" in type_lower or "genai" in type_lower:
+        return _get_cached_adapter(
+            "gemini", "beliefstate.adapters.gemini", "GeminiAdapter"
+        )
+    if "ollama" in type_lower:
+        return _get_cached_adapter(
+            "ollama", "beliefstate.adapters.ollama", "OllamaAdapter"
+        )
 
     logger.warning(
         f"Could not auto-detect adapter from type: {type_name}. Using generic adapter."
     )
-
-    class GenericAdapter(ProviderAdapter):
-        def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
-            messages = kwargs.get("messages", [])
-            if not messages and len(args) > 0 and isinstance(args[0], list):
-                messages = args[0]
-            return LLMCall(messages=messages, kwargs=kwargs)
-
-        def to_llm_response(self, response: Any) -> LLMResponse:
-            text = ""
-            if hasattr(response, "content"):
-                text = response.content
-            elif hasattr(response, "text"):
-                text = response.text
-            elif hasattr(response, "choices") and response.choices:
-                choice = response.choices[0]
-                if hasattr(choice, "message"):
-                    text = choice.message.content
-                elif hasattr(choice, "text"):
-                    text = choice.text
-            elif isinstance(response, dict):
-                text = response.get("content") or response.get("text", "")
-            return LLMResponse(text=text, raw_response=response)
-
-        async def generate(
-            self, call: LLMCall, response_format: Optional[Any] = None
-        ) -> LLMResponse:
-            raise NotImplementedError("Generic adapter cannot generate.")
-
-        async def get_embedding(self, text: str) -> list[float]:
-            raise NotImplementedError("Generic adapter cannot generate embeddings.")
-
-        async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
-            raise NotImplementedError("Generic adapter cannot generate embeddings.")
-
-        def inject_context(self, context_prompt: str, *args: Any, **kwargs: Any) -> Any:
-            return kwargs
-
-        async def health_check(self) -> bool:
-            return False
-
     return GenericAdapter()
 
 
 def _get_session_lock(session_id: str) -> asyncio.Lock:
-    if session_id not in _session_locks:
-        _session_locks[session_id] = asyncio.Lock()
-    return _session_locks[session_id]
+    lock = _session_locks.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        existing = _session_locks.setdefault(session_id, lock)
+        if existing is not lock:
+            lock = existing
+    return lock
 
 
 # --- Stats tracking ---
@@ -303,7 +353,11 @@ class AsyncStreamWrapper:
                 )
             )
         except Exception as e:
-            logger.error(f"Tracker stream accumulation error: {e}", exc_info=True)
+            logger.error(
+                f"Tracker stream finalization error for session {self.session_id} "
+                f"turn {self.turn}: {e}",
+                exc_info=True,
+            )
 
 
 class BeliefTracker:
@@ -417,6 +471,16 @@ class BeliefTracker:
         task = asyncio.create_task(coro)
         self._pending_tasks.add(task)
         task.add_done_callback(self._pending_tasks.discard)
+        self._sweep_stale_locks()
+
+    def _sweep_stale_locks(self) -> None:
+        """Remove session locks for sessions no longer tracked."""
+        active_sessions = set(self._session_turn_counters.keys())
+        stale = set(_session_locks.keys()) - active_sessions
+        for sid in stale:
+            lock = _session_locks[sid]
+            if not lock.locked():
+                del _session_locks[sid]
 
     async def shutdown(self, grace_seconds: float = 5.0) -> None:
         """Gracefully drain pending background tasks and close the store.
@@ -448,7 +512,10 @@ class BeliefTracker:
             raw_adapter = getattr(
                 self.internal_adapter, "adapter", self.internal_adapter
             )
-            if raw_adapter.__class__.__name__ == "GenericAdapter":
+            is_generic = isinstance(raw_adapter, GenericAdapter) or (
+                raw_adapter.__class__.__name__ == "GenericAdapter"
+            )
+            if is_generic:
                 raise ValueError(
                     "Auto-detected LLM provider adapter does not support belief extraction/generation. "
                     "Please explicitly configure a generation-capable 'internal_provider' "
@@ -973,12 +1040,24 @@ class BeliefTracker:
         session_id: str,
         turn: int,
     ) -> None:
+        def _log_task_error(task: asyncio.Task[None]) -> None:
+            if task.cancelled():
+                return
+            exc = task.exception()
+            if exc is not None:
+                logger.error(
+                    f"Background tracking task failed for session {session_id} "
+                    f"turn {turn}: {exc}",
+                    exc_info=exc,
+                )
+
         try:
             loop = asyncio.get_running_loop()
             if loop.is_running():
-                loop.create_task(
+                task = loop.create_task(
                     self.track_async(call_dict, response_dict, session_id, turn)
                 )
+                task.add_done_callback(_log_task_error)
                 return
         except RuntimeError:
             pass
@@ -997,6 +1076,8 @@ class BeliefTracker:
             @wraps(f)
             async def wrapper(*args: Any, **kwargs: Any) -> Any:
                 session_id = session_context.get()
+                # NOTE: Dict operations are atomic under CPython's GIL.
+                # For other Python implementations, this would need a lock.
                 self._session_turn_counters[session_id] = (
                     self._session_turn_counters.get(session_id, 0) + 1
                 )

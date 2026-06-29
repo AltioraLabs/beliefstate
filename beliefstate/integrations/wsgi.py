@@ -25,9 +25,7 @@ class BeliefTrackerWSGIMiddleware:
     def __init__(self, app: Any, header_name: str = "X-Session-ID") -> None:
         self.app = app
         self.header_name = (
-            header_name
-            if isinstance(header_name, str)
-            else header_name.decode("latin1")
+            header_name if isinstance(header_name, str) else str(header_name)
         )
         self.log = IntegrationLogger(__name__, "WSGI")
 

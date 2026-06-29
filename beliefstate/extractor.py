@@ -96,7 +96,9 @@ def normalize_percentages(text: str) -> str:
         value = float(match.group(1)) / 100
         return f"{value:.2f}".rstrip("0").rstrip(".")
 
-    text = re.sub(r"(\d+(?:\.\d+)?)\s*%", replace_percent, text)
+    # Only match percentages followed by whitespace or end of string
+    # to avoid false positives like version numbers (e.g., "v1.50%")
+    text = re.sub(r"(\d+(?:\.\d+)?)\s*%(?=\s|$)", replace_percent, text)
     return text
 
 
@@ -319,13 +321,15 @@ HEDGING_PATTERNS = {
 
 def calibrate_confidence(belief: Belief) -> Belief:
     """Post-extraction calibration: lower confidence and set is_hypothetical when
-    the source_quote contains hedging patterns."""
+    the source_quote contains hedging patterns.
+
+    Applies a floor of 0.10 to prevent confidence from reaching zero."""
     quote = getattr(belief, "source_quote", "").lower()
     if not quote:
         return belief
     for pattern, ceiling in HEDGING_PATTERNS.items():
         if re.search(pattern, quote):
-            belief.confidence = min(belief.confidence, ceiling)
+            belief.confidence = max(0.10, min(belief.confidence, ceiling))
             if ceiling <= 0.60:
                 belief.is_hypothetical = True
             break

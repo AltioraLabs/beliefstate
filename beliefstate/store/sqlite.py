@@ -154,18 +154,21 @@ class SQLiteStore(Store):
         else:
             existing_column_names = {row[1] for row in existing_columns}
 
-            columns_to_add = [
-                ("conversation_id", "TEXT NOT NULL DEFAULT ''"),
-                ("embedding_dim", "INTEGER DEFAULT 0"),
-                ("belief_type", "TEXT DEFAULT 'assertion'"),
-                ("is_hypothetical", "INTEGER DEFAULT 0"),
-                ("last_referenced_at", "TIMESTAMP"),
-                ("source_quote", "TEXT NOT NULL DEFAULT ''"),
-                ("category", "TEXT NOT NULL DEFAULT ''"),
-            ]
+            _VALID_COLUMNS = {
+                "conversation_id": "TEXT NOT NULL DEFAULT ''",
+                "embedding_dim": "INTEGER DEFAULT 0",
+                "belief_type": "TEXT DEFAULT 'assertion'",
+                "is_hypothetical": "INTEGER DEFAULT 0",
+                "last_referenced_at": "TIMESTAMP",
+                "source_quote": "TEXT NOT NULL DEFAULT ''",
+                "category": "TEXT NOT NULL DEFAULT ''",
+            }
 
-            for col_name, col_def in columns_to_add:
+            for col_name, col_def in _VALID_COLUMNS.items():
                 if col_name not in existing_column_names:
+                    if not col_name.isidentifier():
+                        logger.warning(f"Skipping invalid column name: {col_name}")
+                        continue
                     try:
                         await conn.execute(
                             f"ALTER TABLE beliefs ADD COLUMN {col_name} {col_def}"
@@ -315,15 +318,13 @@ class SQLiteStore(Store):
                 else None,
             ),
         )
-        await conn.commit()
 
-        # Audit: create or update
+        # Audit: create or update (single commit for both operations)
         if old_value is not None and old_value != belief.value:
             await self._audit(belief, "contradiction_update", old_value)
-            await conn.commit()
         elif old_value is None:
             await self._audit(belief, "create")
-            await conn.commit()
+        await conn.commit()
 
     async def get_beliefs(
         self, session_id: str, conversation_id: Optional[str] = None

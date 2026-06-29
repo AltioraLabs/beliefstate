@@ -31,8 +31,8 @@ class TestEstimateTokens:
         assert estimate_tokens("") == 0
 
     def test_short_string(self):
-        # "hello" = 5 chars → ~1 token
-        assert estimate_tokens("hello") == 1
+        # "hello" = 5 chars → ceil(5/4) = 2 tokens
+        assert estimate_tokens("hello") == 2
 
     def test_longer_string(self):
         text = "a" * 100

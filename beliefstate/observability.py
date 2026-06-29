@@ -54,6 +54,14 @@ _meter: Optional[Any] = None
 _otel_enabled = False
 
 
+def reset_otel() -> None:
+    """Reset OTel global state (for testing)."""
+    global _tracer, _meter, _otel_enabled
+    _tracer = None
+    _meter = None
+    _otel_enabled = False
+
+
 def setup_otel(
     enabled: bool = True,
     service_name: str = "beliefstate",
