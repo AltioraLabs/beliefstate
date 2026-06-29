@@ -2,107 +2,105 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 DEFAULT_EXTRACT_PROMPT = """
-You are a precise fact extraction engine. Extract ONLY facts that the USER
-explicitly stated. Do NOT extract facts the assistant mentioned, suggested,
-or provided as general knowledge.
+You are a precise fact and decision extraction engine. Your goal is to construct a persistent
+memory of the conversation to prevent memory leakage and hallucinations.
 
-QUALITY OVER QUANTITY — target 1-3 beliefs per turn. Most turns yield 0-1
-beliefs. Only extract when the user shares a concrete, new piece of information.
+Extract ONLY concrete, confirmed facts and decisions declared by the USER, or concrete commitments
+and architectural decisions confirmed by the ASSISTANT.
 
-RULES — ONLY EXTRACT:
-  1. Facts the user personally declared about themselves, their project, or their team
-  2. Decisions the user made ("we're using X", "I prefer Y")
-  3. Updates where the user explicitly overrides a prior statement
-     ("actually, we switched to X", "no longer using Y")
-  4. Concrete numbers, names, dates, or constraints the user provided
+QUALITY OVER QUANTITY — target 1-3 beliefs per turn. Most turns yield 0-1 beliefs.
+Only extract when new, concrete, actionable information is established.
 
-RULES — DO NOT EXTRACT:
-  - Facts the assistant stated, suggested, or recommended
-  - General knowledge about tools, frameworks, or technologies
-    (e.g. "Redis is an in-memory store" — the LLM already knows this)
-  - Opinions or assessments from the assistant ("that's a solid choice")
-  - Hypothetical suggestions ("you could use X", "consider Y")
-  - Restating or rephrasing what was already established
-  - Team role assignments the assistant inferred (unless user confirmed)
+RULES — WHAT TO EXTRACT:
+1. USER Facts & Preferences: Facts the user shares about themselves, their team, or project preferences (e.g., "I prefer PyTorch").
+2. USER Decisions & Constraints: Concrete numbers, budgets, dates, or technical decisions (e.g., "Budget is $20k").
+3. ASSISTANT Commitments: Actionable tasks the assistant commits to doing (e.g., "I will configure the message queue").
+4. ASSISTANT Confirmed Technical Decisions: Concrete architectural decisions established by the assistant (e.g., "I have set up PostgreSQL as the database").
+5. Updates: Explicit overrides of prior statements (e.g., "actually, we switched to SQLite", "no longer using Redis").
 
-STEP 1 — IDENTIFY THE SUBJECT
-Use the most specific, resolvable name. Never a pronoun.
-  1. Actual name if stated: "Raj", "FastAPI", "the auth module"
-  2. Role/type if name unknown: "Database", "Backend Framework"
-  3. First-person user claims → "USER"
-  4. Pronouns (it, they, that) → resolve to most recent entity.
-     If unresolvable → OMIT the belief entirely.
+RULES — WHAT TO EXCLUDE (DO NOT EXTRACT):
+- Assistant Suggestions/Options: Ideas proposed as suggestions/hypotheticals (e.g., "you could use AWS", "consider Celery").
+- General Technical Knowledge: Tech facts the LLM already knows (e.g., "Redis has built-in persistence", "MongoDB has a flexible schema").
+- Subjective Opinions/Commentary: Non-factual remarks from either side (e.g., "that is a modest budget", "PostgreSQL is a solid choice").
+- Assistant Self-Preferences: Personal preferences of the assistant itself (e.g., "I prefer TensorFlow").
+- General conversational filler/agreements (e.g., "I agree that is a challenging task", "Sounds good!").
 
-STEP 2 — NORMALISE THE VALUE
-  - Numbers: digits only (5000 not "five thousand")
-  - Currency: ISO code + amount (USD 5000 not "$5,000")
-  - Dates: ISO 8601 (2024-03-15 not "March 15th")
-  - Tech names: official capitalisation (PostgreSQL, FastAPI, TypeScript)
-  - Port numbers: integer (8080 not "port 8080")
-  - Status: snake_case (in_progress, not_started, done, blocked)
+STEP 1 — IDENTIFY THE SUBJECT (ENTITY)
+Use the most specific, resolvable name for the entity. Never a pronoun.
+- First-person user claims → "USER".
+- First-person assistant claims → Do NOT use "ASSISTANT". Use the system component/task instead (e.g., "Backend API", "Authentication Module").
+- Actual name if stated: "Jake", "FastAPI", "the auth module".
+- Role/type if name unknown: "Database", "Project", "Team".
 
-STEP 3 — CLASSIFY
-  confidence: 0.95–1.0 direct statement, 0.75–0.90 clear implication,
-              0.50–0.70 soft statement ("I think we will use...")
+STEP 2 — IDENTIFY THE PREDICATE (ATTRIBUTE)
+Use a concise, standard attribute key (preferably lowercase snake_case) representing the property.
+- Good attributes: "name", "role", "budget", "framework", "latency_target", "status", "type", "owner".
+- Avoid arbitrary verb phrases (e.g., instead of "annual budget for cloud infrastructure is" use "budget"; instead of "works as ML engineer" use "role").
 
-  belief_type:
-    "assertion" — new fact stated for first time
-    "update"    — explicitly replaces prior statement
-                  triggers: "actually", "instead", "let's switch",
-                  "changed", "no longer", "we decided on X instead"
+STEP 3 — NORMALISE THE VALUE
+- Numbers: digits only (e.g., 5000 not "five thousand").
+- Currency: ISO code + amount (e.g., USD 5000 not "$5,000").
+- Dates: ISO 8601 (e.g., 2024-03-15 not "March 15th").
+- Tech names: official capitalisation (PostgreSQL, FastAPI, TypeScript).
+- Status/State: snake_case (e.g., in_progress, completed, inactive).
 
-  is_hypothetical: true if conditional or speculative
-    triggers: "if", "might", "could", "as an option", "potentially",
-              "we may consider", "in case", "if we face"
-    IMPORTANT: Store hypotheticals — do NOT skip them.
-    They are useful context. Flag them so they can be weighted lower.
+STEP 4 — CLASSIFY
+- confidence: 0.95–1.0 direct statement, 0.75–0.90 clear implication, 0.50–0.70 speculative/soft.
+- belief_type: "assertion" (first time stated), "update" (explicitly overrides/changes a prior belief).
+- is_hypothetical: true if speculative/conditional (e.g., "if we get more budget, we might use X").
 
-  category: one of identity | technical | planning | constraint | state
-    identity:   name, location, role, preference, biographical
-    technical:  framework, database, language, tool, config, version
-    planning:   task, assignment, deadline, dependency, milestone
-    constraint: budget, limit, requirement, rule, must/cannot
-    state:      current status, what is built, what was tried
-
-  source_quote: verbatim excerpt from original text, MAX 100 chars.
-    Trim to the key phrase. Never the full sentence.
-
-OUTPUT FORMAT — return ONLY valid JSON array, no markdown, no explanation.
-If no facts present, return [].
+OUTPUT FORMAT — Return ONLY a valid JSON array of objects. No markdown formatting, no explanations.
+If no beliefs should be extracted, return [].
 [
   {{
-    "subject": "specific entity name — never a pronoun",
-    "predicate": "the relation",
-    "value": "normalised value",
+    "subject": "specific entity/concept name (EAV Entity) — never a pronoun",
+    "predicate": "concise lowercase attribute name (EAV Attribute)",
+    "value": "normalised value (EAV Value)",
     "confidence": 0.0,
     "belief_type": "assertion",
     "is_hypothetical": false,
-    "category": "identity",
-    "source": "user",
+    "category": "identity | technical | planning | constraint | state",
+    "source": "user | assistant",
     "source_quote": "verbatim excerpt max 100 chars"
   }}
 ]
 
 EXAMPLES:
-Input: User: "I am Raj. Budget is $5k. Use FastAPI and PostgreSQL."
+Input:
+User: "I am Sarah, ML Engineer. Budget is $12k. We want a fast cache."
+Assistant: "You should consider Redis. It is an in-memory database. I will set up Memcached for now."
 Output:
 [
-  {{"subject":"USER","predicate":"name is","value":"Raj","confidence":0.99,"belief_type":"assertion","is_hypothetical":false,"category":"identity","source":"user","source_quote":"I am Raj"}},
-  {{"subject":"Project","predicate":"budget is","value":"USD 5000","confidence":0.97,"belief_type":"assertion","is_hypothetical":false,"category":"constraint","source":"user","source_quote":"Budget is $5k"}},
-  {{"subject":"Backend Framework","predicate":"is","value":"FastAPI","confidence":0.97,"belief_type":"assertion","is_hypothetical":false,"category":"technical","source":"user","source_quote":"Use FastAPI"}},
-  {{"subject":"Database","predicate":"is","value":"PostgreSQL","confidence":0.97,"belief_type":"assertion","is_hypothetical":false,"category":"technical","source":"user","source_quote":"and PostgreSQL"}}
+  {{"subject":"USER","predicate":"name","value":"Sarah","confidence":0.99,"belief_type":"assertion","is_hypothetical":false,"category":"identity","source":"user","source_quote":"I am Sarah"}},
+  {{"subject":"USER","predicate":"role","value":"ML Engineer","confidence":0.99,"belief_type":"assertion","is_hypothetical":false,"category":"identity","source":"user","source_quote":"ML Engineer"}},
+  {{"subject":"Project","predicate":"budget","value":"USD 12000","confidence":0.97,"belief_type":"assertion","is_hypothetical":false,"category":"constraint","source":"user","source_quote":"Budget is $12k"}},
+  {{"subject":"Cache","predicate":"type","value":"Memcached","confidence":0.95,"belief_type":"assertion","is_hypothetical":false,"category":"technical","source":"assistant","source_quote":"I will set up Memcached for now"}}
+]
+(Explanation: Sarah/ML Engineer/Budget extracted from user. Redis suggestion and Redis definition ignored. Memcached commitment from assistant extracted.)
+
+Input:
+User: "Actually, increase our budget to $20k."
+Assistant: "Got it, I've updated the project budget. PostgreSQL is a great database, we could also use MongoDB."
+Output:
+[
+  {{"subject":"Project","predicate":"budget","value":"USD 20000","confidence":0.99,"belief_type":"update","is_hypothetical":false,"category":"constraint","source":"user","source_quote":"increase our budget to $20k"}}
+]
+(Explanation: Budget updated to 20k. PostgreSQL/MongoDB suggestions are ignored.)
+
+Input:
+User: "Jake will handle the backend API."
+Assistant: "Perfect. I'll write the API router tomorrow."
+Output:
+[
+  {{"subject":"Jake","predicate":"role","value":"Backend Developer","confidence":0.95,"belief_type":"assertion","is_hypothetical":false,"category":"planning","source":"user","source_quote":"Jake will handle the backend API"}},
+  {{"subject":"Backend API","predicate":"status","value":"to_be_implemented","confidence":0.95,"belief_type":"assertion","is_hypothetical":false,"category":"planning","source":"assistant","source_quote":"I'll write the API router tomorrow"}}
 ]
 
-Input: Assistant: "PostgreSQL is a popular database. You could also use Redis for caching."
+Input:
+User: "That sounds good."
+Assistant: "PostgreSQL with Aurora provides high availability. It is highly performant."
 Output: []
-(Assistant suggestions — not user-declared facts)
-
-Input: User: "Actually switch from PostgreSQL to SQLite."
-Output:
-[{{"subject":"Database","predicate":"is","value":"SQLite","confidence":0.97,"belief_type":"update","is_hypothetical":false,"category":"technical","source":"user","source_quote":"switch from PostgreSQL to SQLite"}}]
-
-Input: User: "That sounds great!"
-Output: []
+(Explanation: General tech definitions and comments are ignored.)
 
 Conversation to extract from:
 {conversation}
@@ -248,6 +246,10 @@ class TrackerConfig(BaseModel):
     resolution_strategy: str = Field(
         default="overwrite",
         description="How to handle contradictions: 'overwrite' (replace old), 'keep_old' (ignore new), 'raise' (throw error).",
+    )
+    respect_strategy_for_updates: bool = Field(
+        default=False,
+        description="If True, belief_type='update' also respects resolution_strategy. If False (default), temporal updates always overwrite regardless of strategy.",
     )
 
     # Belief storage limits

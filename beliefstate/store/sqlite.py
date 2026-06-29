@@ -148,6 +148,7 @@ class SQLiteStore(Store):
                     embedding_dim INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_referenced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    resolution_note TEXT NOT NULL DEFAULT '',
                     UNIQUE(session_id, conversation_id, subject, predicate)
                 )
             """)
@@ -162,6 +163,7 @@ class SQLiteStore(Store):
                 "last_referenced_at": "TIMESTAMP",
                 "source_quote": "TEXT NOT NULL DEFAULT ''",
                 "category": "TEXT NOT NULL DEFAULT ''",
+                "resolution_note": "TEXT NOT NULL DEFAULT ''",
             }
 
             for col_name, col_def in _VALID_COLUMNS.items():
@@ -279,8 +281,8 @@ class SQLiteStore(Store):
 
         await conn.execute(
             """
-            INSERT INTO beliefs (session_id, conversation_id, subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO beliefs (session_id, conversation_id, subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, resolution_note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id, conversation_id, subject, predicate) DO UPDATE SET
                 value=excluded.value,
                 confidence=excluded.confidence,
@@ -294,7 +296,8 @@ class SQLiteStore(Store):
                 belief_type=excluded.belief_type,
                 is_hypothetical=excluded.is_hypothetical,
                 created_at=excluded.created_at,
-                last_referenced_at=excluded.last_referenced_at
+                last_referenced_at=excluded.last_referenced_at,
+                resolution_note=excluded.resolution_note
         """,
             (
                 session_id,
@@ -316,6 +319,7 @@ class SQLiteStore(Store):
                 belief.last_referenced_at.isoformat()
                 if belief.last_referenced_at
                 else None,
+                getattr(belief, "resolution_note", ""),
             ),
         )
 
@@ -334,7 +338,7 @@ class SQLiteStore(Store):
         if conversation_id:
             async with conn.execute(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note
                 FROM beliefs WHERE session_id = ? AND conversation_id = ?
             """,
                 (session_id, conversation_id),
@@ -343,7 +347,7 @@ class SQLiteStore(Store):
         else:
             async with conn.execute(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note
                 FROM beliefs WHERE session_id = ?
             """,
                 (session_id,),
@@ -395,6 +399,7 @@ class SQLiteStore(Store):
             else datetime.now(timezone.utc),
             session_id=r["session_id"],
             conversation_id=r["conversation_id"],
+            resolution_note=r["resolution_note"] or "",
         )
 
     async def search_beliefs(
@@ -411,7 +416,7 @@ class SQLiteStore(Store):
         if conversation_id:
             async with conn.execute(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note
                 FROM beliefs
                 WHERE session_id = ? AND conversation_id = ? AND cosine_similarity_bin(?, embedding) >= ?
                 ORDER BY cosine_similarity_bin(?, embedding) DESC
@@ -430,7 +435,7 @@ class SQLiteStore(Store):
         else:
             async with conn.execute(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note
                 FROM beliefs
                 WHERE session_id = ? AND cosine_similarity_bin(?, embedding) >= ?
                 ORDER BY cosine_similarity_bin(?, embedding) DESC
@@ -457,7 +462,7 @@ class SQLiteStore(Store):
 
         async with conn.execute(
             """
-            SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+            SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note
             FROM beliefs
             WHERE session_id = ? AND conversation_id = ? AND subject = ? AND predicate = ?
             LIMIT 1

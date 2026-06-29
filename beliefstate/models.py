@@ -65,3 +65,7 @@ class Belief(BaseModel):
         default="",
         description="Verbatim excerpt from original text, max 100 chars. Audit only — never injected into prompts.",
     )
+    resolution_note: str = Field(
+        default="",
+        description="How this belief was resolved after a contradiction: 'overwrote:<old_value>' if this belief replaced an older one, 'kept_old:rejected:<new_value>' if this belief survived a conflict, or '' if no conflict occurred.",
+    )

@@ -19,9 +19,15 @@ class BeliefResolver:
     - raise: Throw ValueError
     """
 
-    def __init__(self, store: Store, strategy: str = "overwrite"):
+    def __init__(
+        self,
+        store: Store,
+        strategy: str = "overwrite",
+        respect_strategy_for_updates: bool = False,
+    ):
         self.store = store
         self.strategy = strategy
+        self.respect_strategy_for_updates = respect_strategy_for_updates
         self.pending_conflicts: Dict[str, List[str]] = {}
         self.conflict_history: Dict[str, Dict[Tuple[str, str, str, str], int]] = {}
         self._MAX_SESSIONS = 1000
@@ -65,15 +71,17 @@ class BeliefResolver:
             self.pending_conflicts[session_id] = []
 
         for old_b, new_b, score, reason in contradictions:
-            # Skip resolution for temporal updates (belief_type='update')
-            if new_b.belief_type == "update":
+            # Temporal updates (belief_type='update') always overwrite by default.
+            # If respect_strategy_for_updates is True, fall through to strategy handling.
+            if new_b.belief_type == "update" and not self.respect_strategy_for_updates:
                 logger.info(
-                    f"Session {session_id}: Skipping contradiction resolution for temporal update. "
-                    f"Replacing '{old_b.value}' with '{new_b.value}'"
+                    f"Session {session_id}: Temporal update — replacing "
+                    f"'{old_b.value}' with '{new_b.value}'"
                 )
                 await target_store.remove_belief(
                     session_id, old_b.subject, old_b.predicate
                 )
+                new_b.resolution_note = f"overwrote:{old_b.value}"
                 await target_store.add_belief(session_id, new_b)
                 continue
 
@@ -84,6 +92,7 @@ class BeliefResolver:
                 await target_store.remove_belief(
                     session_id, old_b.subject, old_b.predicate
                 )
+                new_b.resolution_note = f"overwrote:{old_b.value}"
                 await target_store.add_belief(session_id, new_b)
 
             elif self.strategy == "keep_old":
@@ -91,6 +100,11 @@ class BeliefResolver:
                 if current_count == 0:
                     self.pending_conflicts[session_id].append(note)
                 self.conflict_history[session_id][conflict_key] = current_count + 1
+                old_b.resolution_note = f"kept_old:rejected:{new_b.value}"
+                await target_store.remove_belief(
+                    session_id, old_b.subject, old_b.predicate
+                )
+                await target_store.add_belief(session_id, old_b)
                 logger.info(
                     f"Session {session_id}: keep_old — discarded '{new_b.value}', keeping '{old_b.value}'"
                 )

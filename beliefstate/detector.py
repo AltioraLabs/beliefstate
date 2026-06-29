@@ -151,6 +151,35 @@ class ContradictionDetector:
 
             self.judge = LLMJudge(adapter, config)
 
+    def _is_rule_based_contradiction(
+        self, old_b: Belief, new_b: Belief
+    ) -> Tuple[bool, str]:
+        """Fast check for obvious contradictions without LLM/embeddings.
+
+        Returns (is_contradiction, reason) where reason explains the conflict.
+        """
+        old_subj = (old_b.subject or "").lower().strip()
+        new_subj = (new_b.subject or "").lower().strip()
+        old_pred = (old_b.predicate or "").lower().strip()
+        new_pred = (new_b.predicate or "").lower().strip()
+
+        # Same subject + same predicate = candidate for contradiction
+        if old_subj != new_subj or old_pred != new_pred:
+            return False, ""
+
+        old_val = normalize_value(old_b.value)
+        new_val = normalize_value(new_b.value)
+
+        # Exact same value = duplicate, not contradiction
+        if old_val == new_val:
+            return False, ""
+
+        # Same subject+predicate, different value = contradiction
+        return True, (
+            f"Same belief key ({old_b.subject}/{old_b.predicate}) with "
+            f"different values: '{old_b.value}' vs '{new_b.value}'"
+        )
+
     async def detect(
         self, session_id: str, new_beliefs: List[Belief]
     ) -> List[Tuple[Belief, Belief, float, str]]:
@@ -202,9 +231,6 @@ class ContradictionDetector:
         duplicates_to_skip = []
 
         for new_b in new_beliefs:
-            if not new_b.embedding:
-                continue
-
             # Step 0: Exact duplicate check — O(1), no LLM/embedding cost
             existing = await self.store.get_by_key(
                 (new_b.subject or "").lower(),
@@ -216,6 +242,16 @@ class ContradictionDetector:
             ):
                 if new_b not in duplicates_to_skip:
                     duplicates_to_skip.append(new_b)
+                continue
+
+            # No embedding available — use rule-based contradiction check only
+            if not new_b.embedding:
+                if existing:
+                    is_contra, reason = self._is_rule_based_contradiction(
+                        existing, new_b
+                    )
+                    if is_contra:
+                        contradictions.append((existing, new_b, 1.0, reason))
                 continue
 
             new_b_text = f"{new_b.predicate} {new_b.value}"

@@ -409,6 +409,41 @@ class BeliefExtractor:
         """Check if assistant response is trivial (for pre-filter)."""
         return _is_trivial_response(text)
 
+    def _post_filter_beliefs(self, beliefs: List[Belief]) -> List[Belief]:
+        """Apply heuristics to discard low-quality, generic, or self-referential beliefs."""
+        filtered = []
+        for b in beliefs:
+            subj_lower = (b.subject or "").lower().strip()
+            pred_lower = (b.predicate or "").lower().strip()
+            quote_lower = (b.source_quote or "").lower().strip()
+
+            # 1. Discard self-referential assistant opinions/preferences (like "assistant prefers TensorFlow")
+            if subj_lower in ("assistant", "system") and b.source == "assistant":
+                if any(x in pred_lower for x in ("prefer", "think", "agree", "comment", "recommend", "suggest", "opinion", "choose")):
+                    logger.debug(f"Filtering out self-referential assistant preference: {b.subject} {b.predicate}")
+                    continue
+
+            # 2. Filter out suggestions/options from assistant source
+            if b.source == "assistant":
+                suggestion_keywords = {"should", "could", "would", "consider", "recommend", "suggest", "option", "might", "perhaps"}
+                words_to_check = set(re.findall(r"\b\w+\b", f"{pred_lower} {quote_lower}"))
+                if words_to_check.intersection(suggestion_keywords):
+                    logger.debug(f"Filtering out assistant suggestion/option belief: {b.subject} {b.predicate}")
+                    continue
+
+            # 3. Filter out generic technical knowledge
+            generic_keywords = {
+                "in-memory", "popular", "flexible schema", "built-in persistence", "highly scalable",
+                "memory-efficient", "provides high", "supports", "open-source", "popular deep learning"
+            }
+            val_lower = (b.value or "").lower()
+            if any(gk in val_lower or gk in pred_lower for gk in generic_keywords):
+                logger.debug(f"Filtering out generic knowledge belief: {b.subject} {b.predicate} {b.value}")
+                continue
+
+            filtered.append(b)
+        return filtered
+
     async def process_turn(
         self,
         user_message: str,
@@ -433,6 +468,7 @@ class BeliefExtractor:
 
         raw_beliefs = await self._call_extraction_llm(combined_text, turn)
 
+        calibrated = []
         for b in raw_beliefs:
             if b.source == "assistant":
                 b.confidence = min(b.confidence, self.config.assistant_confidence_cap)
@@ -441,8 +477,9 @@ class BeliefExtractor:
             b = calibrate_confidence(b)
             if not b.session_id:
                 b.session_id = session_id
+            calibrated.append(b)
 
-        return raw_beliefs
+        return self._post_filter_beliefs(calibrated)
 
     async def _call_extraction_llm(self, text: str, turn: int) -> List[Belief]:
         """Call the LLM to extract beliefs from text."""
@@ -575,7 +612,7 @@ class BeliefExtractor:
             chunk_beliefs = await self._extract_from_chunk(chunk_text, turn, source)
             all_beliefs.extend(chunk_beliefs)
 
-        return all_beliefs
+        return self._post_filter_beliefs(all_beliefs)
 
     async def _extract_from_chunk(
         self, chunk_text: str, turn: int, source: str

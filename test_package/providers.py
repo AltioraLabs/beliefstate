@@ -55,6 +55,7 @@ def build_tracker(cfg: dict[str, Any]) -> BeliefTracker:
         enable_background_tasks=cfg["background_tasks"],
         task_dispatcher_type="sync" if not cfg["background_tasks"] else "asyncio",
         resolution_strategy=cfg.get("resolution_strategy", "overwrite"),
+        respect_strategy_for_updates=cfg.get("respect_strategy_for_updates", False),
         min_injection_confidence=cfg.get("min_injection_confidence", 0.80),
         include_hypothetical_in_context=cfg.get(
             "include_hypothetical_in_context", False

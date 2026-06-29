@@ -425,7 +425,9 @@ class BeliefTracker:
         self.extractor: Optional[BeliefExtractor] = None
         self.detector: Optional[ContradictionDetector] = None
         self.resolver = BeliefResolver(
-            store=self.store, strategy=self.config.resolution_strategy
+            store=self.store,
+            strategy=self.config.resolution_strategy,
+            respect_strategy_for_updates=self.config.respect_strategy_for_updates,
         )
         self._session_turn_counters: Dict[str, int] = {}
         self._session_turn_states: Dict[str, int] = {}
@@ -1064,7 +1066,18 @@ class BeliefTracker:
                     return
 
                 self._session_turn_states[session_id] = turn
-                await self.resolver.resolve(session_id, contradictions)
+                try:
+                    await self.resolver.resolve(session_id, contradictions)
+                except ValueError as e:
+                    # raise strategy: surface contradiction to caller
+                    self._pending_conflict_notes.setdefault(session_id, []).append(
+                        str(e)
+                    )
+                    self._stats.record_error(f"raise_strategy: {e}")
+                    logger.warning(
+                        f"Session {session_id}: raise strategy triggered: {e}"
+                    )
+                    return
 
                 # Surface conflict notes so they're available via get_pending_conflicts()
                 conflict_notes = self.resolver.pop_pending_conflicts(session_id)

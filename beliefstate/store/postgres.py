@@ -119,6 +119,7 @@ class PostgreSQLStore(Store):
                     is_hypothetical BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     last_referenced_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    resolution_note TEXT DEFAULT '',
                     UNIQUE(session_id, conversation_id, subject, predicate)
                 );
             """)
@@ -172,6 +173,16 @@ class PostgreSQLStore(Store):
             except Exception as e:
                 logger.debug(f"Audit table migration check failed (non-critical): {e}")
 
+            # Migrate beliefs: add resolution_note if missing
+            try:
+                await conn.execute(
+                    "ALTER TABLE beliefs ADD COLUMN IF NOT EXISTS resolution_note TEXT DEFAULT ''"
+                )
+            except Exception as e:
+                logger.debug(
+                    f"resolution_note migration check failed (non-critical): {e}"
+                )
+
     async def add_belief(self, session_id: str, belief: Belief) -> None:
         pool = await self._get_pool()
         conversation_id = belief.conversation_id or ""
@@ -203,8 +214,8 @@ class PostgreSQLStore(Store):
                 INSERT INTO beliefs (
                     session_id, conversation_id, subject, predicate, value, confidence, turn, source,
                     source_quote, category, embedding, embedding_model, embedding_dim, belief_type,
-                    is_hypothetical, created_at, last_referenced_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                    is_hypothetical, created_at, last_referenced_at, resolution_note
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                 ON CONFLICT(session_id, conversation_id, subject, predicate) DO UPDATE SET
                     value = EXCLUDED.value,
                     confidence = EXCLUDED.confidence,
@@ -218,7 +229,8 @@ class PostgreSQLStore(Store):
                     belief_type = EXCLUDED.belief_type,
                     is_hypothetical = EXCLUDED.is_hypothetical,
                     created_at = EXCLUDED.created_at,
-                    last_referenced_at = EXCLUDED.last_referenced_at
+                    last_referenced_at = EXCLUDED.last_referenced_at,
+                    resolution_note = EXCLUDED.resolution_note
             """,
                 session_id,
                 conversation_id,
@@ -237,6 +249,7 @@ class PostgreSQLStore(Store):
                 belief.is_hypothetical,
                 created_at,
                 last_referenced_at,
+                getattr(belief, "resolution_note", ""),
             )
 
             # Audit: create or update
@@ -272,6 +285,7 @@ class PostgreSQLStore(Store):
             last_referenced_at=l_ref or datetime.now(timezone.utc),
             session_id=r["session_id"],
             conversation_id=r["conversation_id"],
+            resolution_note=r.get("resolution_note") or "",
         )
 
     async def get_beliefs(
@@ -282,7 +296,7 @@ class PostgreSQLStore(Store):
             if conversation_id:
                 rows = await conn.fetch(
                     """
-                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note
                     FROM beliefs WHERE session_id = $1 AND conversation_id = $2
                 """,
                     session_id,
@@ -291,7 +305,7 @@ class PostgreSQLStore(Store):
             else:
                 rows = await conn.fetch(
                     """
-                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note
                     FROM beliefs WHERE session_id = $1
                 """,
                     session_id,
@@ -312,7 +326,7 @@ class PostgreSQLStore(Store):
             if conversation_id:
                 rows = await conn.fetch(
                     """
-                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
+                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note,
                            cosine_similarity($1, embedding) as similarity
                     FROM beliefs 
                     WHERE session_id = $2 AND conversation_id = $3 AND cosine_similarity($1, embedding) >= $4
@@ -328,7 +342,7 @@ class PostgreSQLStore(Store):
             else:
                 rows = await conn.fetch(
                     """
-                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id,
+                    SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note,
                            cosine_similarity($1, embedding) as similarity
                     FROM beliefs 
                     WHERE session_id = $2 AND cosine_similarity($1, embedding) >= $3
@@ -399,7 +413,7 @@ class PostgreSQLStore(Store):
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id
+                SELECT subject, predicate, value, confidence, turn, source, source_quote, category, embedding, embedding_model, embedding_dim, belief_type, is_hypothetical, created_at, last_referenced_at, session_id, conversation_id, resolution_note
                 FROM beliefs
                 WHERE session_id = $1 AND conversation_id = $2 AND subject = $3 AND predicate = $4
                 LIMIT 1
