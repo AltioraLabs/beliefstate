@@ -17,7 +17,7 @@
 
 ## Visual Changes (if applicable)
 
-<!-- If this PR changes the local dashboard UI, please include screenshots, mockups, or GIFs of the before and after states. -->
+<!-- If this PR changes the local dashboard UI or documentation, include before and after screenshots. -->
 <details>
 <summary>Click to expand screenshots</summary>
 
@@ -29,9 +29,24 @@
 
 ## Verification & Manual Testing
 
-<!-- Explain how to locally verify these changes. Provide steps to reproduce or test. -->
-1. Run command: ...
-2. Expected behavior: ...
+<!-- REQUIRED: You must provide proof of testing before your PR can be merged. -->
+
+### For Core Library Changes (`beliefstate/`)
+1. Use `test_package/` to write and run a verification script
+2. Upload BEFORE screenshot showing the bug/old behavior
+3. Upload AFTER screenshot showing the fix/new feature working
+
+### For Documentation and Dashboard Fixes
+1. Upload BEFORE screenshot showing the issue
+2. Upload AFTER screenshot showing your fix
+
+### Proof of Testing
+- [ ] I have verified my changes and provided before-and-after visual proof
+- **Verification method**: <!-- e.g. test_package/test_fix.py, manual dashboard testing -->
+- **BEFORE screenshot**:
+<!-- DRAG & DROP BEFORE SCREENSHOT HERE -->
+- **AFTER screenshot**:
+<!-- DRAG & DROP AFTER SCREENSHOT HERE -->
 
 ## Checklist
 

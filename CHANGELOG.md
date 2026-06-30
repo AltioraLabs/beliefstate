@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-30
+
+### Added
+- Complete UI redesign of developer dashboard (8 screens)
+- Logo integration in dashboard sidebar and documentation site
+- GitHub issue templates: Bug Report, Feature Request, Documentation (YAML forms)
+- GitHub PR template with contributor checklist
+- Security scan workflow (Bandit + Gitleaks)
+- Branch protection ruleset with 6 required status checks
+- Bandit configuration in pyproject.toml
+
+### Changed
+- License changed from MIT to Apache 2.0
+- Dashboard UI: shadow-based cards, single accent color (#4F46E5), category pastel pills
+- Dashboard table layout: fixed widths prevent overflow on Beliefs and Conflicts pages
+- Documentation site updated with new logo and license references
+
+### Fixed
+- Table overflow on Beliefs and Conflicts pages
+- Docs version pills and changelog updated to v1.2.0
+
 ## [1.1.0] - 2026-06-26
 
 ### Added
@@ -72,7 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Structured logging via `TrackerEvent`
 - Full test suite and documentation
 
-[Unreleased]: https://github.com/abhay-2108/beliefstate/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/abhay-2108/beliefstate/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/abhay-2108/beliefstate/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/abhay-2108/beliefstate/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/abhay-2108/beliefstate/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/abhay-2108/beliefstate/compare/v1.0.0...v1.0.1

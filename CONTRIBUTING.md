@@ -115,18 +115,25 @@ Update `CHANGELOG.md` under the `[Unreleased]` section using [Keep a Changelog](
    pytest
    ```
 
-2. **Fill out the PR template** completely, including:
+2. **Mandatory Manual Verification**:
+   - To ensure all contributions are genuine and tested, you **must** manually verify your changes and provide before-and-after visual proof:
+     - **For Core Library Changes (`beliefstate/`)**: You must use the `test_package/` environment. Create a Python test file inside `test_package/` (or update an existing script) to demonstrate your fix or feature. Take a screenshot **BEFORE** your change (showing the bug/issue) and **AFTER** your change (showing it resolved/working).
+     - **For Documentation and Dashboard UI Fixes**: Take a screenshot **BEFORE** and **AFTER** your fix of the documentation pages or the dashboard UI showing the issue and your fix.
+   - You must embed these screenshots in your pull request as proof of verification.
+
+3. **Fill out the PR template** completely, including:
    - Description of changes
    - Related issue number
    - Type of change (bug fix, feature, breaking change, etc.)
+   - Your before-and-after verification screenshots.
 
-3. **Keep PRs focused**: One logical change per PR. If you have multiple unrelated fixes, submit them as separate PRs.
+4. **Keep PRs focused**: One logical change per PR. If you have multiple unrelated fixes, submit them as separate PRs.
 
-4. **Update documentation** if your change affects the public API, README, or docstrings.
+5. **Update documentation** if your change affects the public API, README, or docstrings.
 
-5. **Add tests** for new functionality and regression tests for bug fixes.
+6. **Add tests** for new functionality and regression tests for bug fixes.
 
-6. **Request a review** from a maintainer. Address review feedback promptly.
+7. **Request a review** from a maintainer. Address review feedback promptly.
 
 ### PR Review Criteria
 
@@ -190,4 +197,4 @@ If you discover a security vulnerability, please **do not** open a public issue.
 
 ## License
 
-By contributing to BeliefState, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing to BeliefState, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
