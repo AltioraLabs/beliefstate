@@ -4,7 +4,7 @@ import { EntityProfileModal } from './EntityProfileModal';
 import { BeliefNetwork } from './BeliefNetwork';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 
-interface Props { sessionId: string; onRefresh: () => void; }
+interface Props { sessionId: string; onRefresh: () => void; refreshSignal: number; }
 
 const categoryColors: Record<string, string> = {
   identity: '#2563eb', technical: '#8b5cf6', planning: '#22c55e',
@@ -22,22 +22,26 @@ function loadOrder(): string[] {
   return ALL_CARDS;
 }
 
-function StatCard({ label, value, icon, color, trend, onClick }: {
-  label: string; value: string | number; icon: React.ReactNode; color: string; trend?: string; onClick?: () => void;
+function StatCard({ label, value, icon, color, trend, onClick, primary, contradictionCount }: {
+  label: string; value: string | number; icon: React.ReactNode; color: string; trend?: string; onClick?: () => void; primary?: boolean; contradictionCount?: number;
 }) {
+  let extraClass = '';
+  if (contradictionCount !== undefined) {
+    extraClass = contradictionCount === 0 ? ' contradiction-zero' : ' contradiction-nonzero';
+  }
   return (
-    <div className="summary-card" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+    <div className={`summary-card${extraClass}`} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
       <div className="summary-card-top">
         <div className="summary-card-icon" style={{ background: `${color}12`, color }}>{icon}</div>
         {trend && <span className={`summary-card-trend ${trend.startsWith('+') ? 'up' : 'down'}`}>{trend}</span>}
       </div>
-      <div className="summary-card-value">{value}</div>
+      <div className={`summary-card-value${primary ? '' : ' small'}`}>{value}</div>
       <div className="summary-card-label">{label}</div>
     </div>
   );
 }
 
-export function Overview({ sessionId, onRefresh }: Props) {
+export function Overview({ sessionId, onRefresh, refreshSignal }: Props) {
   const [beliefs, setBeliefs] = useState<Belief[]>([]);
   const [stats, setStats] = useState<SessionStats | null>(null);
   const [storeStats, setStoreStats] = useState<StoreStats | null>(null);
@@ -75,7 +79,7 @@ export function Overview({ sessionId, onRefresh }: Props) {
       } catch { /* ignore */ }
       setLoading(false);
     })();
-  }, [sessionId]);
+  }, [sessionId, refreshSignal]);
 
   const confRanges = stats?.by_confidence_range || {};
   const confColors: Record<string, string> = {
@@ -146,12 +150,12 @@ export function Overview({ sessionId, onRefresh }: Props) {
     switch (id) {
       case 'stats': return (
         <div className="summary-cards" style={{ gridColumn: '1 / -1' }} key="stat-cards">
-          <StatCard label="Total Beliefs" value={stats?.total_beliefs ?? 0}
+          <StatCard label="Total Beliefs" value={stats?.total_beliefs ?? 0} primary
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>}
-            color="#2563eb" />
-          <StatCard label="Avg Confidence" value={stats ? `${(stats.avg_confidence * 100).toFixed(1)}%` : '-'}
+            color="#4f46e5" />
+          <StatCard label="Avg Confidence" value={stats ? `${(stats.avg_confidence * 100).toFixed(1)}%` : '-'} primary
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>}
-            color="#22c55e" />
+            color="#10b981" />
           <StatCard label="Latest Turn" value={stats?.latest_turn ?? '-'}
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}
             color="#f59e0b" />
@@ -160,7 +164,7 @@ export function Overview({ sessionId, onRefresh }: Props) {
             color="#8b5cf6" />
           <StatCard label="Contradictions" value={stats?.contradiction_count ?? 0}
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>}
-            color="#ef4444" trend={stats && stats.contradiction_count > 0 ? `${stats.contradiction_count} total` : undefined} />
+            color="#ef4444" contradictionCount={stats?.contradiction_count ?? 0} />
           <StatCard label="Categories" value={stats ? Object.keys(stats.by_category).length : 0}
             icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>}
             color="#6b7280" />
@@ -199,7 +203,7 @@ export function Overview({ sessionId, onRefresh }: Props) {
                     return (<tr key={range}><td className="heatmap-row-label">{range}</td>{cats.map(cat => {
                       const count = beliefs.filter(b => (b.category || 'general') === cat && b.confidence >= (min as number) && b.confidence < ((min as number) === 0 ? 0.5 : (min as number) + ((min as number) === 0.95 ? 0.05 : (min as number) === 0.85 ? 0.1 : (min as number) === 0.7 ? 0.15 : (min as number) === 0.5 ? 0.2 : 0.5))).length;
                       const intensity = count > 0 ? Math.min(0.15 + (count / maxVal) * 0.7, 0.85) : 0.04;
-                      return (<td key={cat} className="heatmap-cell" style={{ background: count > 0 ? `rgba(37,99,235,${intensity})` : 'rgba(0,0,0,0.04)', color: count > 0 ? '#374151' : '#9ca3af' }}>{count > 0 ? count : '·'}</td>);
+                      return (<td key={cat} className="heatmap-cell" style={{ background: count > 0 ? `rgba(79,70,229,${intensity})` : 'rgba(0,0,0,0.03)', color: count > 0 ? '#374151' : '#d1d5db' }}>{count > 0 ? count : '·'}</td>);
                     })}</tr>);
                   })}</tbody>
                 </table>
@@ -332,7 +336,7 @@ export function Overview({ sessionId, onRefresh }: Props) {
   return (
     <div className="page">
       {statsCard}
-      {statsCard && <div className="drag-hint">Drag cards to reorder</div>}
+      {statsCard && <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6}}><button className="btn-icon" title="Drag cards to reorder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="16" height="16"><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/></svg></button></div>}
       <div className="grid-2col">
         {visibleCards.map((id, idx) => {
           const actualIdx = cardOrder.indexOf(id);

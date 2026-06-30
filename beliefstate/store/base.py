@@ -89,6 +89,10 @@ class Store(Protocol):
         """Return audit trail for a specific belief."""
         ...
 
+    async def get_all_session_ids(self) -> List[str]:
+        """Return all session IDs that have beliefs in the store."""
+        ...
+
 
 def summary_for_prompt(
     beliefs: List[Belief],

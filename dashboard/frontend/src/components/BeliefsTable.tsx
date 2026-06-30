@@ -4,7 +4,7 @@ import { EntityProfileModal } from './EntityProfileModal';
 import { Select } from './Select';
 import { BulkActionsBar } from './BulkActionsBar';
 
-interface Props { sessionId: string; onRefresh: () => void; }
+interface Props { sessionId: string; onRefresh: () => void; refreshSignal: number; }
 
 const SAVED_FILTERS_KEY = 'belifstate_saved_filters';
 
@@ -22,7 +22,7 @@ function loadSavedFilters(): SavedFilter[] {
   try { return JSON.parse(localStorage.getItem(SAVED_FILTERS_KEY) || '[]'); } catch { return []; }
 }
 
-export function BeliefsTable({ sessionId, onRefresh }: Props) {
+export function BeliefsTable({ sessionId, onRefresh, refreshSignal }: Props) {
   const [beliefs, setBeliefs] = useState<Belief[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -51,7 +51,7 @@ export function BeliefsTable({ sessionId, onRefresh }: Props) {
     setLoading(false);
   };
 
-  useEffect(() => { fetchBeliefs(); }, [sessionId, showHypothetical, minConfidence]);
+  useEffect(() => { fetchBeliefs(); }, [sessionId, showHypothetical, minConfidence, refreshSignal]);
 
   const filtered = beliefs
     .filter(b => {
@@ -140,7 +140,7 @@ export function BeliefsTable({ sessionId, onRefresh }: Props) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           Refresh
         </button>
-        <button className="btn btn-secondary" onClick={() => setShowSaveFilter(o => !o)}>
+        <button className="btn btn-primary" onClick={() => setShowSaveFilter(o => !o)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Save Filter
         </button>
@@ -172,12 +172,15 @@ export function BeliefsTable({ sessionId, onRefresh }: Props) {
       <div className="filter-bar">
         <div className="search-input-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" className="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="search-input" />
+          <input type="text" placeholder="Search beliefs..." value={search} onChange={e => setSearch(e.target.value)} className="search-input" />
         </div>
-        <Select value={categoryFilter} onChange={setCategoryFilter} options={[{value:'all',label:'Categories'}, ...categories.map(c => ({value:c, label:c}))]} />
-        <Select value={sourceFilter} onChange={setSourceFilter} options={[{value:'all',label:'Sources'}, ...sources.map(s => ({value:s, label:s}))]} />
-        <Select value={typeFilter} onChange={setTypeFilter} options={[{value:'all',label:'Types'}, ...types.map(t => ({value:t, label:t}))]} />
-        <label className="toggle-label"><input type="checkbox" checked={showHypothetical} onChange={e => setShowHypothetical(e.target.checked)} /><span>Hypo</span></label>
+        <Select value={categoryFilter} onChange={setCategoryFilter} options={[{value:'all',label:`Categories${categoryFilter!=='all'?` (1)`:''}`}, ...categories.map(c => ({value:c, label:c}))]} />
+        <Select value={sourceFilter} onChange={setSourceFilter} options={[{value:'all',label:`Sources${sourceFilter!=='all'?` (1)`:''}`}, ...sources.map(s => ({value:s, label:s}))]} />
+        <Select value={typeFilter} onChange={setTypeFilter} options={[{value:'all',label:`Types${typeFilter!=='all'?` (1)`:''}`}, ...types.map(t => ({value:t, label:t}))]} />
+        <label className="toggle-label">
+          <input type="checkbox" checked={showHypothetical} onChange={e => setShowHypothetical(e.target.checked)} />
+          <span>Hypo</span>
+        </label>
         <div className="range-slider">
           <span className="range-label">Min</span>
           <input type="range" min="0" max="1" step="0.05" value={minConfidence} onChange={e => setMinConfidence(Number(e.target.value))} />
@@ -193,15 +196,15 @@ export function BeliefsTable({ sessionId, onRefresh }: Props) {
             <thead>
               <tr>
                 <th style={{width:'36px'}}><input type="checkbox" checked={selectAll && filtered.length > 0} onChange={toggleSelectAll} className="table-checkbox" /></th>
-                <th onClick={() => handleSort('subject')}>Subject<SortIcon col="subject"/></th>
-                <th onClick={() => handleSort('predicate')}>Predicate<SortIcon col="predicate"/></th>
-                <th onClick={() => handleSort('value')}>Value<SortIcon col="value"/></th>
-                <th onClick={() => handleSort('confidence')} style={{width:'150px'}}>Conf<SortIcon col="confidence"/></th>
-                <th onClick={() => handleSort('belief_type')}>Type<SortIcon col="belief_type"/></th>
-                <th onClick={() => handleSort('category')}>Cat<SortIcon col="category"/></th>
-                <th onClick={() => handleSort('source')}>Src<SortIcon col="source"/></th>
-                <th onClick={() => handleSort('turn')} style={{width:'65px'}}>Turn<SortIcon col="turn"/></th>
-                <th style={{width:'70px'}}>Act</th>
+                <th style={{width:'16%'}} onClick={() => handleSort('subject')}>Subject<SortIcon col="subject"/></th>
+                <th style={{width:'14%'}} onClick={() => handleSort('predicate')}>Predicate<SortIcon col="predicate"/></th>
+                <th style={{width:'22%'}} onClick={() => handleSort('value')}>Value<SortIcon col="value"/></th>
+                <th style={{width:'14%'}} onClick={() => handleSort('confidence')}>Conf<SortIcon col="confidence"/></th>
+                <th style={{width:'10%'}} onClick={() => handleSort('belief_type')}>Type<SortIcon col="belief_type"/></th>
+                <th style={{width:'10%'}} onClick={() => handleSort('category')}>Cat<SortIcon col="category"/></th>
+                <th style={{width:'10%'}} onClick={() => handleSort('source')}>Src<SortIcon col="source"/></th>
+                <th style={{width:'8%'}} onClick={() => handleSort('turn')}>Turn<SortIcon col="turn"/></th>
+                <th style={{width:'5%'}}>Act</th>
               </tr>
             </thead>
             <tbody>
@@ -209,7 +212,9 @@ export function BeliefsTable({ sessionId, onRefresh }: Props) {
                 <tr><td colSpan={10} className="empty-cell">No beliefs match filters</td></tr>
               ) : filtered.map((b, i) => {
                 const key = `${b.subject}|${b.predicate}|${b.turn}`;
-                const confClass = b.confidence >= 0.85 ? 'high' : b.confidence >= 0.6 ? 'medium' : 'low';
+                const confClass = b.confidence >= 0.85 ? 'high' : b.confidence >= 0.7 ? 'medium' : 'low';
+                const cat = b.category || 'general';
+                const catClass = `cat-${cat}`;
                 return (
                   <tr key={key}>
                     <td><input type="checkbox" checked={selected.has(key)} onChange={() => toggleSelect(key)} className="table-checkbox" /></td>
@@ -218,8 +223,8 @@ export function BeliefsTable({ sessionId, onRefresh }: Props) {
                     <td className="mono-value" title={b.value}>{b.value.length > 60 ? b.value.slice(0,60)+'…' : b.value}</td>
                     <td><div className="conf-bar-wrap"><div className={`conf-bar conf-${confClass}`} style={{width:`${b.confidence*100}%`}} /><span className="conf-text">{(b.confidence*100).toFixed(0)}%</span></div></td>
                     <td><span className={`badge badge-${b.belief_type}`}>{b.belief_type}</span></td>
-                    <td><span className="badge badge-category" data-cat={b.category || 'general'}>{b.category || 'gen'}</span></td>
-                    <td><span className={`badge badge-source badge-${b.source}`}>{b.source}</span></td>
+                    <td><span className={`badge ${catClass}`}>{cat}</span></td>
+                    <td><span className={`badge badge-${b.source}`}>{b.source}</span></td>
                     <td className="font-mono text-xs text-muted">{b.turn}</td>
                     <td>
                       <div className="action-btns">

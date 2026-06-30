@@ -189,6 +189,9 @@ class InMemoryBeliefStore(Store):
     async def belief_count(self, session_id: str) -> int:
         return len(self._beliefs.get(session_id, {}))
 
+    async def get_all_session_ids(self) -> List[str]:
+        return list(self._beliefs.keys())
+
     async def health_check(self) -> bool:
         return True
 
@@ -199,6 +202,9 @@ class InMemoryBeliefStore(Store):
         predicate: str,
     ) -> List[Dict[str, Any]]:
         """In-memory store does not persist audit history."""
+        return []
+
+    async def get_all_audit_history(self, session_id: str) -> List[Dict[str, Any]]:
         return []
 
     def get_stats(self) -> Dict[str, Any]:

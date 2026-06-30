@@ -33,11 +33,13 @@ def start_dashboard(
 ) -> str:
     global _server_thread, _server_config
 
-    if _server_thread and _server_thread.is_alive():
-        logger.warning("Dashboard already running")
-        return f"http://{host}:{port}"
-
     from dashboard.backend.server import set_tracker, push_tracker_event, app
+
+    if _server_thread and _server_thread.is_alive():
+        logger.warning("Dashboard already running — updating tracker reference")
+        set_tracker(tracker)
+        tracker.register_dashboard_callback(push_tracker_event)
+        return f"http://{host}:{port}"
 
     set_tracker(tracker)
     tracker.register_dashboard_callback(push_tracker_event)

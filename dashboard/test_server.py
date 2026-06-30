@@ -258,6 +258,72 @@ async def get_history(session_id: str):
     }
 
 
+@app.get("/api/sessions/{session_id}/conflicts")
+async def get_conflicts(session_id: str):
+    return {
+        "conflicts": [
+            {
+                "id": "budget/is",
+                "existing_belief": {
+                    "subject": "Budget",
+                    "predicate": "is",
+                    "value": "USD 12000",
+                },
+                "new_belief": {
+                    "subject": "Budget",
+                    "predicate": "is",
+                    "value": "USD 20000",
+                },
+                "score": 0.92,
+                "reason": "Conflicting values: 'USD 12000' vs 'USD 20000'",
+                "resolution": "overwrite",
+                "resolution_note": "overwrote:USD 12000",
+                "escalation_count": 1,
+                "created_at": "2026-06-29T10:00:00Z",
+            },
+            {
+                "id": "framework/is",
+                "existing_belief": {
+                    "subject": "Framework",
+                    "predicate": "is",
+                    "value": "PyTorch",
+                },
+                "new_belief": {
+                    "subject": "Framework",
+                    "predicate": "is",
+                    "value": "TensorFlow",
+                },
+                "score": 0.85,
+                "reason": "Conflicting values: 'PyTorch' vs 'TensorFlow'",
+                "resolution": "overwrite",
+                "resolution_note": "overwrote:PyTorch",
+                "escalation_count": 1,
+                "created_at": "2026-06-29T10:05:00Z",
+            },
+            {
+                "id": "team/has member",
+                "existing_belief": {
+                    "subject": "Team",
+                    "predicate": "has member",
+                    "value": "Li",
+                },
+                "new_belief": {
+                    "subject": "Team",
+                    "predicate": "has member",
+                    "value": "Priya (Frontend)",
+                },
+                "score": 0.75,
+                "reason": "Conflicting values: 'Li' vs 'Priya (Frontend)'",
+                "resolution": "overwrite",
+                "resolution_note": "overwrote:Li",
+                "escalation_count": 2,
+                "created_at": "2026-06-29T10:10:00Z",
+            },
+        ],
+        "pending": [],
+    }
+
+
 @app.get("/api/sessions/{session_id}/activity")
 async def get_activity(session_id: str):
     return {

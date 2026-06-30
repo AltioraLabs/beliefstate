@@ -201,6 +201,19 @@ class RedisStore(Store):
             return None  # Key does not exist
         return int(ttl)  # -1 (no expiry) or positive TTL
 
+    async def get_all_session_ids(self) -> List[str]:
+        if not self._client:
+            return []
+        keys = await self._client.keys("beliefstate:session:*")
+        prefix = len("beliefstate:session:")
+        ids = []
+        for key in keys:
+            if isinstance(key, bytes):
+                ids.append(key.decode()[prefix:])
+            else:
+                ids.append(key[prefix:])
+        return ids
+
     async def get_audit_history(
         self,
         session_id: str,

@@ -54,7 +54,13 @@ export function AlertRules({ rules, onUpdate }: Props) {
             <button className="btn btn-primary btn-sm" onClick={add} disabled={!form.name}>Add</button>
           </div>
         )}
-        {rules.length === 0 && <div className="empty-small">No alert rules configured</div>}
+        {rules.length === 0 && (
+          <div className="empty-state" style={{padding:'60px 24px'}}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <h4>No alert rules configured</h4>
+            <p>Create alert rules to monitor for changes in contradiction count, confidence drops, and other metrics.</p>
+          </div>
+        )}
         {rules.map(r => (
           <div key={r.id} className="alert-rule-row">
             <div className="alert-rule-info">

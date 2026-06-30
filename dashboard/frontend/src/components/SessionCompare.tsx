@@ -2,16 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { CompareResult, Belief } from './types';
 import { Select } from './Select';
 
-interface Props { sessionId: string; sessions: string[]; }
+interface Props { sessionId: string; sessions: string[]; refreshSignal: number; }
 
-export function SessionCompare({ sessionId: currentSession, sessions }: Props) {
+export function SessionCompare({ sessionId: currentSession, sessions, refreshSignal }: Props) {
   const [sessionA, setSessionA] = useState(currentSession);
   const [sessionB, setSessionB] = useState(sessions.find(s => s !== currentSession) || '');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [diffView, setDiffView] = useState<'summary' | 'split' | 'unified'>('summary');
 
-  useEffect(() => { setSessionA(currentSession); }, [currentSession]);
+  useEffect(() => {
+    setSessionA(currentSession);
+    setResult(null);
+  }, [currentSession, refreshSignal]);
 
   const runCompare = async () => {
     if (!sessionA || !sessionB || sessionA === sessionB) return;
@@ -35,27 +38,27 @@ export function SessionCompare({ sessionId: currentSession, sessions }: Props) {
     <div className="page">
       <div className="compare-picker">
         <Select value={sessionA} onChange={setSessionA} options={sessions.map(s => ({value:s, label:s.slice(0,20)+'…'}))} />
-        <span className="compare-vs">vs</span>
+        <span className="compare-vs-badge">vs</span>
         <Select value={sessionB} onChange={setSessionB} options={sessions.filter(s => s !== sessionA).map(s => ({value:s, label:s.slice(0,20)+'…'}))} />
         <button className="btn btn-primary" onClick={runCompare} disabled={loading || sessionA === sessionB || !sessionB}>
           {loading ? 'Comparing...' : 'Compare'}
         </button>
-        <div className="diff-view-toggle">
-          <button className={`btn btn-sm ${diffView === 'summary' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDiffView('summary')}>Summary</button>
-          <button className={`btn btn-sm ${diffView === 'split' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDiffView('split')}>Split</button>
-          <button className={`btn btn-sm ${diffView === 'unified' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDiffView('unified')}>Unified</button>
+        <div className="segmented-control">
+          <button className={`seg-btn ${diffView === 'summary' ? 'active' : ''}`} onClick={() => setDiffView('summary')}>Summary</button>
+          <button className={`seg-btn ${diffView === 'split' ? 'active' : ''}`} onClick={() => setDiffView('split')}>Split</button>
+          <button className={`seg-btn ${diffView === 'unified' ? 'active' : ''}`} onClick={() => setDiffView('unified')}>Unified</button>
         </div>
       </div>
 
       {result && diffView === 'summary' && (
         <>
           <div className="compare-summary">
-            <div className="compare-stat"><span className="stat-value" style={{color:'#2563eb'}}>{result.summary.total_a}</span><span className="stat-label">{sessionA.slice(0,12)}</span></div>
+            <div className="compare-stat"><span className="stat-value" style={{color:'var(--accent)'}}>{result.summary.total_a}</span><span className="stat-label">{sessionA.slice(0,12)}</span></div>
             <div className="compare-stat"><span className="stat-value" style={{color:'#8b5cf6'}}>{result.summary.total_b}</span><span className="stat-label">{sessionB.slice(0,12)}</span></div>
-            <div className="compare-stat"><span className="stat-value" style={{color:'#22c55e'}}>{result.summary.same}</span><span className="stat-label">Shared</span></div>
+            <div className="compare-stat"><span className="stat-value" style={{color:'var(--gray-500)'}}>{result.summary.same}</span><span className="stat-label">Shared</span></div>
             <div className="compare-stat"><span className="stat-value" style={{color:'#f59e0b'}}>{result.summary.changed}</span><span className="stat-label">Changed</span></div>
-            <div className="compare-stat"><span className="stat-value" style={{color:'#ef4444'}}>{result.summary.only_in_a}</span><span className="stat-label">Only A</span></div>
-            <div className="compare-stat"><span className="stat-value" style={{color:'#ef4444'}}>{result.summary.only_in_b}</span><span className="stat-label">Only B</span></div>
+            <div className="compare-stat" style={{borderTopColor:'var(--accent)'}}><span className="stat-value" style={{color:'var(--accent)'}}>{result.summary.only_in_a}</span><span className="stat-label">Only A</span></div>
+            <div className="compare-stat" style={{borderTopColor:'#8b5cf6'}}><span className="stat-value" style={{color:'#8b5cf6'}}>{result.summary.only_in_b}</span><span className="stat-label">Only B</span></div>
           </div>
           <div className="grid-2col">
             {result.changed.length > 0 && (
@@ -66,17 +69,17 @@ export function SessionCompare({ sessionId: currentSession, sessions }: Props) {
                     <div key={i} className="changed-row">
                       <div className="changed-head"><span className="font-mono font-bold">{c.subject}</span><span className="text-muted text-xs">{c.predicate}</span></div>
                       <div className="changed-compare">
-                        <div className="changed-old"><span className="text-xs text-muted">Old:</span><span className="font-mono text-sm" style={{color:'#ef4444'}}>{c.old.value}</span></div>
-                        <div className="changed-arrow">→</div>
-                        <div className="changed-new"><span className="text-xs text-muted">New:</span><span className="font-mono text-sm" style={{color:'#22c55e'}}>{c.new.value}</span></div>
+                        <div className="changed-old"><span className="text-xs text-muted" style={{fontSize:11,textTransform:'uppercase',letterSpacing:'0.03em'}}>Old</span><span className="timeline-old-value">{c.old.value}</span></div>
+                        <div className="changed-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18"><polyline points="9 18 15 12 9 6"/></svg></div>
+                        <div className="changed-new"><span className="text-xs text-muted" style={{fontSize:11,textTransform:'uppercase',letterSpacing:'0.03em'}}>New</span><span className="timeline-new-value">{c.new.value}</span></div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            <div className="card"><div className="card-header"><h3>Only in {sessionA.slice(0,12)}</h3><span className="card-badge">{result.summary.only_in_a}</span></div><div className="card-body">{result.only_in_a.length === 0 ? <div className="empty-small">None</div> : result.only_in_a.map((b, i) => <React.Fragment key={i}>{renderBeliefRow(b, '#2563eb')}</React.Fragment>)}</div></div>
-            <div className="card"><div className="card-header"><h3>Only in {sessionB.slice(0,12)}</h3><span className="card-badge">{result.summary.only_in_b}</span></div><div className="card-body">{result.only_in_b.length === 0 ? <div className="empty-small">None</div> : result.only_in_b.map((b, i) => <React.Fragment key={i}>{renderBeliefRow(b, '#8b5cf6')}</React.Fragment>)}</div></div>
+            <div className="card"><div className="card-header"><h3>Only in {sessionA.slice(0,12)}</h3><span className="card-badge">{result.summary.only_in_a}</span></div><div className="card-body" style={{background:'rgba(79,70,229,0.03)'}}>{result.only_in_a.length === 0 ? <div className="empty-small">None</div> : result.only_in_a.map((b, i) => <React.Fragment key={i}>{renderBeliefRow(b, 'var(--accent)')}</React.Fragment>)}</div></div>
+            <div className="card"><div className="card-header"><h3>Only in {sessionB.slice(0,12)}</h3><span className="card-badge">{result.summary.only_in_b}</span></div><div className="card-body" style={{background:'rgba(139,92,246,0.03)'}}>{result.only_in_b.length === 0 ? <div className="empty-small">None</div> : result.only_in_b.map((b, i) => <React.Fragment key={i}>{renderBeliefRow(b, '#8b5cf6')}</React.Fragment>)}</div></div>
           </div>
         </>
       )}

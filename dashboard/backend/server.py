@@ -2,6 +2,7 @@ import json
 import csv
 import io
 import os
+import queue
 import asyncio
 import time
 from typing import Optional, Dict, Any, List
@@ -16,8 +17,7 @@ from beliefstate.tracker import BeliefTracker
 from beliefstate.models import Belief
 
 tracker_instance: Optional[BeliefTracker] = None
-event_queue: asyncio.Queue = asyncio.Queue()
-activity_buffer: asyncio.Queue = asyncio.Queue()
+_sync_queue: queue.Queue = queue.Queue()
 _activity_log: List[Dict[str, Any]] = []
 _MAX_ACTIVITY = 500
 
@@ -71,13 +71,13 @@ def get_tracker() -> BeliefTracker:
     return tracker_instance
 
 
-def get_event_queue() -> asyncio.Queue:
-    return event_queue
+def get_event_queue() -> queue.Queue:
+    return _sync_queue
 
 
 async def push_tracker_event(event: Dict[str, Any]) -> None:
     """Callback registered on BeliefTracker to push real pipeline events to SSE."""
-    await event_queue.put(event)
+    _sync_queue.put_nowait(event)
     push_activity("tracking_event", event.get("session_id", "?"), event)
 
 
@@ -106,9 +106,7 @@ def make_belief_dict(b: Belief) -> Dict[str, Any]:
         "source_quote": b.source_quote,
         "turn": b.turn,
         "resolution_note": getattr(b, "resolution_note", ""),
-        "created_at": getattr(b, "created_at", datetime.now(timezone.utc).isoformat())
-        if hasattr(b, "created_at")
-        else "",
+        "created_at": b.created_at.isoformat() if b.created_at else "",
     }
 
 
@@ -116,10 +114,10 @@ app = FastAPI(title="BeliefState Dashboard", version="0.2.0")
 
 
 async def sse_event_generator():
-    queue = get_event_queue()
+    loop = asyncio.get_running_loop()
+    sync_q = get_event_queue()
     while True:
-        event = await queue.get()
-        push_activity("tracking_event", event.get("session_id", "?"), event)
+        event = await loop.run_in_executor(None, sync_q.get)
         yield {"event": "update", "data": json.dumps(event)}
 
 
@@ -187,7 +185,7 @@ async def create_belief(session_id: str, belief_data: BeliefCreate):
     belief = Belief(**belief_data.model_dump())
     await tracker.store.add_belief(session_id, belief)
     push_activity("belief_created", session_id, belief_data.model_dump())
-    await event_queue.put(
+    _sync_queue.put_nowait(
         {
             "type": "belief_created",
             "session_id": session_id,
@@ -201,10 +199,14 @@ async def create_belief(session_id: str, belief_data: BeliefCreate):
 async def delete_belief(session_id: str, subject: str, predicate: str):
     tracker = get_tracker()
     await tracker.store.remove_belief(session_id, subject, predicate)
+
+    # Purge from resolver conflict tracking
+    tracker.resolver.remove_belief(session_id, subject, predicate)
+
     push_activity(
         "belief_deleted", session_id, {"subject": subject, "predicate": predicate}
     )
-    await event_queue.put(
+    _sync_queue.put_nowait(
         {
             "type": "belief_deleted",
             "session_id": session_id,
@@ -229,6 +231,99 @@ async def get_history(
         elif hasattr(tracker.store, "get_all_audit_history"):
             history = await tracker.store.get_all_audit_history(session_id)
     return {"history": history}
+
+
+@app.get("/api/sessions/{session_id}/conflicts")
+async def get_conflicts(session_id: str):
+    tracker = get_tracker()
+    resolver = tracker.resolver
+
+    sid_conflicts = getattr(resolver, "conflict_history", {}).get(session_id, {})
+    pending = getattr(resolver, "pending_conflicts", {}).get(session_id, [])
+
+    all_beliefs = await tracker.store.get_beliefs(session_id)
+    belief_map = {(b.subject.lower(), b.predicate.lower()): b for b in all_beliefs}
+
+    conflicts = []
+    seen_keys = set()
+    for key, escalation_count in sid_conflicts.items():
+        subject, predicate, new_subj, new_pred = key
+        subj_lower = subject.lower()
+        pred_lower = predicate.lower()
+        cid = f"{subj_lower}/{pred_lower}"
+        seen_keys.add(cid)
+
+        current = belief_map.get((new_subj.lower(), new_pred.lower()))
+        new_value = current.value if current else ""
+        old_value = ""
+        if current and current.resolution_note.startswith("overwrote:"):
+            old_value = current.resolution_note[len("overwrote:") :]
+
+        conflicts.append(
+            {
+                "id": cid,
+                "existing_belief": {
+                    "subject": subject,
+                    "predicate": predicate,
+                    "value": old_value,
+                },
+                "new_belief": {
+                    "subject": new_subj,
+                    "predicate": new_pred,
+                    "value": new_value,
+                },
+                "score": current.confidence if current else 0.0,
+                "reason": f"Conflicting values: '{old_value}' vs '{new_value}'"
+                if old_value
+                else f"Escalated {escalation_count}x",
+                "resolution": "overwrite" if escalation_count > 0 else "pending",
+                "resolution_note": current.resolution_note if current else "",
+                "escalation_count": escalation_count,
+                "created_at": current.created_at.isoformat()
+                if current and current.created_at
+                else "",
+            }
+        )
+
+    if hasattr(tracker.store, "get_all_audit_history"):
+        try:
+            history = await tracker.store.get_all_audit_history(session_id)
+            for h in history:
+                if h.get("operation") in ("contradiction_update", "create"):
+                    subj = h.get("subject", "")
+                    pred = h.get("predicate", "")
+                    cid = f"{subj.lower()}/{pred.lower()}"
+                    if cid in seen_keys:
+                        continue
+                    if h.get("operation") == "create" and h.get("old_value") is None:
+                        continue
+                    conflicts.append(
+                        {
+                            "id": h.get("id", 0),
+                            "existing_belief": {
+                                "subject": subj,
+                                "predicate": pred,
+                                "value": h.get("old_value", ""),
+                            },
+                            "new_belief": {
+                                "subject": subj,
+                                "predicate": pred,
+                                "value": h.get("new_value", ""),
+                            },
+                            "score": h.get("confidence", 0.0),
+                            "reason": f"Conflicting values: '{h.get('old_value', '?')}' vs '{h.get('new_value', '?')}'",
+                            "resolution": "overwrite",
+                            "resolution_note": f"overwrote:{h['old_value']}"
+                            if h.get("old_value")
+                            else "",
+                            "escalation_count": 0,
+                            "created_at": h.get("created_at", ""),
+                        }
+                    )
+        except Exception:
+            pass
+
+    return {"conflicts": conflicts, "pending": pending}
 
 
 @app.get("/api/sessions/{session_id}/timeline/{subject}/{predicate}")
@@ -339,10 +434,15 @@ async def get_detailed_stats(session_id: str):
             conf_ranges["0.95-1.0"] += 1
 
     conflict_count = 0
-    if hasattr(tracker.store, "get_all_audit_history"):
+    conflict_history = getattr(tracker.resolver, "conflict_history", {})
+    sid_conflicts = conflict_history.get(session_id, {})
+    conflict_count = len(sid_conflicts)
+    if conflict_count == 0 and hasattr(tracker.store, "get_all_audit_history"):
         try:
             history = await tracker.store.get_all_audit_history(session_id)
-            conflict_count = len(history)
+            conflict_count = len(
+                [h for h in history if h.get("operation") == "contradiction_update"]
+            )
         except Exception:
             pass
 

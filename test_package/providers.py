@@ -60,6 +60,7 @@ def build_tracker(cfg: dict[str, Any]) -> BeliefTracker:
         include_hypothetical_in_context=cfg.get(
             "include_hypothetical_in_context", False
         ),
+        enable_dashboard=True,
     )
 
     # Adapter

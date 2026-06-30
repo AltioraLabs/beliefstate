@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 
 interface Props { sessionId: string; }
 
+const EXAMPLE_PROMPTS = [
+  "My name is Alex and I'm working on a mobile app project with a budget of $15,000.",
+  "The project timeline has been extended to 6 months. We're using React Native.",
+  "Our team consists of 3 developers: Priya, Jordan, and myself.",
+];
+
 export function Simulator({ sessionId }: Props) {
   const [message, setMessage] = useState('');
   const [result, setResult] = useState<any>(null);
@@ -50,15 +56,26 @@ export function Simulator({ sessionId }: Props) {
         <div className="card-header"><h3>Test a Message</h3></div>
         <div className="card-body">
           <div className="sim-input-group">
-            <textarea
-              value={message} onChange={e => setMessage(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), runSim())}
-              placeholder="Enter a user message to simulate..."
-              rows={4} className="sim-input"
-            />
-            <button className="btn btn-primary sim-btn" onClick={runSim} disabled={loading || !message.trim()}>
+            <div style={{flex:1,display:'flex',flexDirection:'column',gap:8}}>
+              <textarea
+                value={message} onChange={e => setMessage(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), runSim())}
+                placeholder="Enter a user message to simulate..."
+                rows={4} className="sim-input"
+              />
+              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                {EXAMPLE_PROMPTS.map((p, i) => (
+                  <button key={i} type="button" style={{padding:'4px 10px',border:'1px dashed var(--gray-200)',borderRadius:100,fontSize:11,color:'var(--gray-400)',background:'transparent',cursor:'pointer'}}
+                    onClick={() => setMessage(p)}>
+                    Example {i + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button className="btn btn-primary sim-btn" onClick={runSim} disabled={loading || !message.trim()}
+              style={{boxShadow:'0 2px 8px rgba(79,70,229,0.2)',transition:'all 200ms ease'}}>
               {loading ? (
-                <><span className="spinner" /> Processing...</>
+                <>Processing...</>
               ) : (
                 <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Simulate</>
               )}
@@ -69,7 +86,7 @@ export function Simulator({ sessionId }: Props) {
 
       {result && (
         <div className="card">
-          <div className="sim-tabs">
+          <div className="sim-tabs" style={{margin:4}}>
             <button className={`sim-tab ${activeView === 'prompt' ? 'active' : ''}`} onClick={() => setActiveView('prompt')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><polyline points="4 17 9 12 4 7"/><polyline points="12 19 20 19 20 5 12 5"/></svg>
               Injected Prompt

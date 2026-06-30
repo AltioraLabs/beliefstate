@@ -506,6 +506,12 @@ class PostgreSQLStore(Store):
         except Exception:
             return False
 
+    async def get_all_session_ids(self) -> List[str]:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("SELECT DISTINCT session_id FROM beliefs")
+        return [row["session_id"] for row in rows]
+
     async def prune_expired_beliefs(
         self, max_age_seconds: int, session_id: Optional[str] = None
     ) -> int:

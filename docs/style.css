@@ -80,6 +80,12 @@ nav:not(.prev-next-nav) {
   background: var(--accent);
   box-shadow: 0 0 8px var(--accent);
 }
+.nav-logo-img {
+  width: 20px; height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+}
 
 .nav-links {
   display: flex;

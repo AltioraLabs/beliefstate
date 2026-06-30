@@ -7,9 +7,10 @@ import { AlertRule } from '../hooks/useNotifications';
 interface Props {
   alerts: AlertRule[];
   onUpdateAlerts: (rules: AlertRule[]) => void;
+  refreshSignal: number;
 }
 
-export function Settings({ alerts, onUpdateAlerts }: Props) {
+export function Settings({ alerts, onUpdateAlerts, refreshSignal }: Props) {
   const [config, setConfig] = useState<DashboardConfig | null>(null);
   const [providerInfo, setProviderInfo] = useState<ProviderInfo | null>(null);
   const [saving, setSaving] = useState(false);
@@ -26,7 +27,7 @@ export function Settings({ alerts, onUpdateAlerts }: Props) {
         try { setProviderInfo(await pRes.json()); } catch {}
       } catch {}
     })();
-  }, []);
+  }, [refreshSignal]);
 
   const updateField = (field: string, value: any) => {
     if (!config) return;
@@ -56,6 +57,13 @@ export function Settings({ alerts, onUpdateAlerts }: Props) {
 
   if (!config) return <div className="page"><div className="skeleton-card" style={{height:400}}/></div>;
 
+  const sectionIcons: Record<string, React.ReactNode> = {
+    'Storage & Limits': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>),
+    'Detection Thresholds': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>),
+    'Resolution': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>),
+    'Staleness': (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
+  };
+
   const sections = [
     { title: 'Storage & Limits', icon: 'box', fields: [
       { key: 'max_beliefs', label: 'Max Beliefs', type: 'number', min: 1, max: 10000 },
@@ -83,9 +91,22 @@ export function Settings({ alerts, onUpdateAlerts }: Props) {
     ]},
   ];
 
+  const fetchConfig = async () => {
+    try {
+      const [cRes, pRes] = await Promise.all([fetch('/api/config'), fetch('/api/provider/info')]);
+      const cfg = await cRes.json();
+      setConfig(cfg);
+      try { setProviderInfo(await pRes.json()); } catch {}
+    } catch {}
+  };
+
   return (
     <div className="page settings-page">
       <div className="page-actions">
+        <button className="btn btn-secondary" onClick={fetchConfig}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Refresh
+        </button>
         <button className="btn btn-primary" onClick={saveConfig} disabled={saving}>
           {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Changes'}
         </button>
@@ -94,7 +115,12 @@ export function Settings({ alerts, onUpdateAlerts }: Props) {
       <div className="settings-grid">
         {sections.map(section => (
           <div key={section.title} className="card">
-            <div className="card-header"><h3>{section.title}</h3></div>
+            <div className="card-header">
+              <h3 style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{color:'var(--gray-400)',display:'flex'}}>{sectionIcons[section.title]}</span>
+                {section.title}
+              </h3>
+            </div>
             <div className="card-body settings-body">
               {section.fields.map(f => {
                 const val = (config as any)[f.key];
@@ -102,11 +128,18 @@ export function Settings({ alerts, onUpdateAlerts }: Props) {
                   <div key={f.key} className="settings-field">
                     <label className="settings-label">{f.label}</label>
                     {f.type === 'checkbox' ? (
-                      <label className="toggle-label"><input type="checkbox" checked={!!val} onChange={e => updateField(f.key, e.target.checked)} /><span>{val ? 'On' : 'Off'}</span></label>
+                      <label className="toggle-switch">
+                        <input type="checkbox" checked={!!val} onChange={e => updateField(f.key, e.target.checked)} />
+                        <div className="toggle-switch-track" />
+                        <div className="toggle-switch-thumb" />
+                      </label>
                     ) : f.type === 'select' ? (
                       <Select value={val || ''} onChange={v => updateField(f.key, v)} options={f.options || []} />
                     ) : f.type === 'range' ? (
-                      <div className="range-field"><input type="range" min={f.min || 0} max={f.max || 1} step={0.01} value={val || 0} onChange={e => updateField(f.key, Number(e.target.value))} className="range-input" /><span className="range-value">{f.key.includes('threshold') || f.key.includes('confidence') ? `${(val * 100).toFixed(0)}%` : val}</span></div>
+                      <div className="range-field">
+                        <input type="range" min={f.min || 0} max={f.max || 1} step={0.01} value={val || 0} onChange={e => updateField(f.key, Number(e.target.value))} />
+                        <span className="range-value">{f.key.includes('threshold') || f.key.includes('confidence') ? `${(val * 100).toFixed(0)}%` : val}</span>
+                      </div>
                     ) : (
                       <input type="number" value={val || 0} onChange={e => updateField(f.key, Number(e.target.value))} min={f.min} max={f.max} className="settings-input" />
                     )}

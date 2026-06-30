@@ -26,13 +26,19 @@ function App() {
   const {
     activeTab, setActiveTab, sessions, selectedSession,
     setSelectedSession, refreshData, loading, sseConnected, trackingStatus,
+    refreshSignal,
   } = useDashboard();
 
   const notif = useNotifications(selectedSession);
 
   useEffect(() => {
     if (sessions.length > 0 && !selectedSession) {
-      setSelectedSession(sessions[0]);
+      const saved = localStorage.getItem('beliefstate_selected_session');
+      if (saved && sessions.includes(saved)) {
+        setSelectedSession(saved);
+      } else {
+        setSelectedSession(sessions[0]);
+      }
     }
   }, [sessions, selectedSession, setSelectedSession]);
 
@@ -45,14 +51,14 @@ function App() {
 
   return (
     <Layout {...shared}>
-      {activeTab === 'overview' && selectedSession && <Overview sessionId={selectedSession} onRefresh={refreshData} />}
-      {activeTab === 'beliefs' && selectedSession && <BeliefsTable sessionId={selectedSession} onRefresh={refreshData} />}
-      {activeTab === 'timeline' && selectedSession && <Timeline sessionId={selectedSession} />}
-      {activeTab === 'conflicts' && selectedSession && <ConflictsLog sessionId={selectedSession} onRefresh={refreshData} />}
-      {activeTab === 'activity' && selectedSession && <ActivityLog sessionId={selectedSession} />}
-      {activeTab === 'compare' && selectedSession && <SessionCompare sessionId={selectedSession} sessions={sessions} />}
+      {activeTab === 'overview' && selectedSession && <Overview sessionId={selectedSession} onRefresh={refreshData} refreshSignal={refreshSignal} />}
+      {activeTab === 'beliefs' && selectedSession && <BeliefsTable sessionId={selectedSession} onRefresh={refreshData} refreshSignal={refreshSignal} />}
+      {activeTab === 'timeline' && selectedSession && <Timeline sessionId={selectedSession} refreshSignal={refreshSignal} />}
+      {activeTab === 'conflicts' && selectedSession && <ConflictsLog sessionId={selectedSession} onRefresh={refreshData} refreshSignal={refreshSignal} />}
+      {activeTab === 'activity' && selectedSession && <ActivityLog sessionId={selectedSession} refreshSignal={refreshSignal} />}
+      {activeTab === 'compare' && selectedSession && <SessionCompare sessionId={selectedSession} sessions={sessions} refreshSignal={refreshSignal} />}
       {activeTab === 'simulator' && selectedSession && <Simulator sessionId={selectedSession} />}
-      {activeTab === 'settings' && <Settings alerts={notif.alerts} onUpdateAlerts={notif.setAlerts} />}
+      {activeTab === 'settings' && <Settings alerts={notif.alerts} onUpdateAlerts={notif.setAlerts} refreshSignal={refreshSignal} />}
     </Layout>
   );
 }

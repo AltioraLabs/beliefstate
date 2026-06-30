@@ -104,6 +104,13 @@
     box-shadow: 0 0 8px var(--accent);
   }
 
+  .nav-logo-img {
+    width: 20px; height: 20px;
+    object-fit: contain;
+    flex-shrink: 0;
+    display: block;
+  }
+
   .nav-links {
     display: flex;
     align-items: center;
@@ -648,6 +655,12 @@
       width: 6px;
       height: 6px;
     }
+    .nav-logo-img {
+      width: 20px; height: 20px;
+      object-fit: contain;
+      flex-shrink: 0;
+      display: block;
+    }
     h1 {
       font-size: clamp(20px, 4vw, 28px);
     }
@@ -917,7 +930,7 @@
 <!-- FIXED NAVIGATION BAR -->
 <nav>
   <a href="index.html" class="nav-logo">
-    <span class="nav-logo-dot"></span>
+    <img class="nav-logo-img" src="logo.png" alt="beliefstate">
     beliefstate
   </a>
   <ul class="nav-links">

@@ -93,6 +93,7 @@ export function Layout({
     <>
       <aside className="sidebar">
         <div className="sidebar-header">
+          <img src="/logo.png" alt="BeliefState" className="sidebar-logo-img" />
           <span className="logo-text">BeliefState</span>
         </div>
         <nav className="sidebar-nav">

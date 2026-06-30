@@ -8,6 +8,13 @@ export default defineConfig({
     outDir: '../../beliefstate/ui_dist',
     emptyOutDir: true,
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name].js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name][extname]',
+      },
+    },
   },
   server: {
     port: 3000,

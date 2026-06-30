@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Select } from './Select';
 import { ConflictHeatmap } from './ConflictHeatmap';
 
-interface Props { sessionId: string; onRefresh: () => void; }
+interface Props { sessionId: string; onRefresh: () => void; refreshSignal: number; }
 
-export function ConflictsLog({ sessionId, onRefresh }: Props) {
+export function ConflictsLog({ sessionId, onRefresh, refreshSignal }: Props) {
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -14,14 +14,14 @@ export function ConflictsLog({ sessionId, onRefresh }: Props) {
   const fetchConflicts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/history`);
+      const res = await fetch(`/api/sessions/${sessionId}/conflicts`);
       const data = await res.json();
-      setConflicts(data.history || []);
+      setConflicts(data.conflicts || []);
     } catch {}
     setLoading(false);
   };
 
-  useEffect(() => { fetchConflicts(); }, [sessionId]);
+  useEffect(() => { fetchConflicts(); }, [sessionId, refreshSignal]);
 
   const filtered = filter === 'all' ? conflicts : conflicts.filter(c => c.resolution === filter);
   const resColors: Record<string, string> = { overwrite: '#f59e0b', keep_old: '#22c55e', raise: '#ef4444', pending: '#6b7280' };
@@ -35,14 +35,16 @@ export function ConflictsLog({ sessionId, onRefresh }: Props) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           Refresh
         </button>
-        <button className={`btn ${view === 'list' ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => setView('list')}>List</button>
-        <button className={`btn ${view === 'heatmap' ? 'btn-primary' : 'btn-secondary'} btn-sm`} onClick={() => setView('heatmap')}>Heatmap</button>
+        <div className="segmented-control">
+          <button className={`seg-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}>List</button>
+          <button className={`seg-btn ${view === 'heatmap' ? 'active' : ''}`} onClick={() => setView('heatmap')}>Heatmap</button>
+        </div>
       </div>
 
       <div className="conflict-stats-bar">
         {Object.entries(stats).map(([key, val]) => (
-          <div key={key} className="conflict-stat" style={{borderLeft: `3px solid ${resColors[key] || '#6b7280'}`}}>
-            <span className="stat-value" style={{color: resColors[key] || '#6b7280', fontSize:'1.5rem'}}>{val}</span>
+          <div key={key} className="conflict-stat" style={{borderTopColor: resColors[key] || '#6b7280'}}>
+            <span className="stat-value" style={{color: resColors[key] || '#6b7280'}}>{val}</span>
             <span className="stat-label">{key === 'total' ? 'Total' : resLabels[key] || key}</span>
           </div>
         ))}
@@ -63,19 +65,24 @@ export function ConflictsLog({ sessionId, onRefresh }: Props) {
               ]} />
           </div>
 
-          <div className="card">
+          <div className="card table-wrap">
             {loading ? (<div className="empty-small">Loading...</div>
-            ) : filtered.length === 0 ? (<div className="empty-small">No conflicts found</div>
+            ) : filtered.length === 0 ? (
+              <div className="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                <h4>No conflicts found</h4>
+                <p>All belief updates have been resolved without contradiction.</p>
+              </div>
             ) : (
               <table className="data-table">
                 <thead>
                   <tr>
                     <th style={{width:'30px'}}></th>
-                    <th>Existing</th>
-                    <th>New</th>
-                    <th style={{width:'100px'}}>Score</th>
-                    <th style={{width:'120px'}}>Resolution</th>
-                    <th style={{width:'140px'}}>Time</th>
+                    <th style={{width:'35%'}}>Existing</th>
+                    <th style={{width:'35%'}}>New</th>
+                    <th style={{width:'12%'}}>Score</th>
+                    <th style={{width:'15%'}}>Resolution</th>
+                    <th style={{width:'15%'}}>Time</th>
                   </tr>
                 </thead>
                 <tbody>

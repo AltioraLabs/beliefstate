@@ -545,6 +545,30 @@ class SQLiteStore(Store):
             logger.warning(f"Health check failed: {e}")
             return False
 
+    async def get_all_session_ids(self) -> List[str]:
+        conn = await self._get_connection()
+        async with conn.execute(
+            "SELECT session_id FROM beliefs GROUP BY session_id ORDER BY MAX(created_at) DESC"
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [row[0] for row in rows]
+
+    async def get_all_audit_history(self, session_id: str) -> List[Dict[str, Any]]:
+        conn = await self._get_connection()
+        async with conn.execute(
+            """
+            SELECT id, session_id, conversation_id, subject, predicate,
+                   old_value, new_value, operation, source_quote, confidence,
+                   turn, created_at
+            FROM beliefs_audit
+            WHERE session_id = ?
+            ORDER BY id ASC
+        """,
+            (session_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [{key: row[key] for key in row.keys()} for row in rows]
+
     async def prune_expired_beliefs(
         self, max_age_seconds: int, session_id: Optional[str] = None
     ) -> int:

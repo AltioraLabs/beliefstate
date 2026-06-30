@@ -137,6 +137,27 @@ class BeliefResolver:
 
             self.conflict_history[session_id][conflict_key] = current_count + 1
 
+    def remove_belief(self, session_id: str, subject: str, predicate: str) -> None:
+        """Remove a belief from conflict tracking (conflict_history + pending_conflicts).
+
+        Clears all pending conflicts for the session since notes are plain-text
+        without subject/predicate identifiers.
+        """
+        subj_lower = subject.lower()
+        pred_lower = predicate.lower()
+        sid_history = self.conflict_history.get(session_id, {})
+        keys_to_delete = [
+            k
+            for k in sid_history
+            if (k[0].lower() == subj_lower and k[1].lower() == pred_lower)
+            or (k[2].lower() == subj_lower and k[3].lower() == pred_lower)
+        ]
+        for k in keys_to_delete:
+            del sid_history[k]
+
+        # Pending conflict notes don't embed subject/predicate, so clear all
+        self.pending_conflicts.pop(session_id, None)
+
     def pop_pending_conflicts(self, session_id: str) -> List[str]:
         return self.pending_conflicts.pop(session_id, [])
 

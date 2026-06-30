@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const API_BASE = '/api';
+const STORAGE_KEY_SESSION = 'beliefstate_selected_session';
 
 export function useDashboard() {
   const [sessions, setSessions] = useState<string[]>([]);
-  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<string | null>(
+    () => localStorage.getItem(STORAGE_KEY_SESSION)
+  );
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(false);
   const [sseConnected, setSseConnected] = useState(false);
   const [trackingStatus, setTrackingStatus] = useState<string>('idle');
   const [lastSseEvent, setLastSseEvent] = useState<number>(Date.now());
+  const [refreshSignal, setRefreshSignal] = useState(0);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -24,8 +28,18 @@ export function useDashboard() {
   const refreshData = useCallback(async () => {
     setLoading(true);
     await fetchSessions();
+    setRefreshSignal(n => n + 1);
     setLoading(false);
   }, [fetchSessions]);
+
+  const handleSetSelectedSession = useCallback((session: string | null) => {
+    setSelectedSession(session);
+    if (session) {
+      localStorage.setItem(STORAGE_KEY_SESSION, session);
+    } else {
+      localStorage.removeItem(STORAGE_KEY_SESSION);
+    }
+  }, []);
 
   useEffect(() => {
     fetchSessions();
@@ -33,17 +47,10 @@ export function useDashboard() {
     const es = new EventSource(`${API_BASE}/events`);
     es.onopen = () => { setSseConnected(true); setTrackingStatus('connected'); };
     es.onerror = () => { setSseConnected(false); setTrackingStatus('disconnected'); };
-    es.onmessage = (event) => {
+    es.onmessage = () => {
       setLastSseEvent(Date.now());
       setTrackingStatus('active');
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'update') {
-          fetchSessions();
-        }
-      } catch (e) {
-        console.error('SSE parse error:', e);
-      }
+      fetchSessions();
     };
 
     return () => {
@@ -63,7 +70,7 @@ export function useDashboard() {
   return {
     sessions,
     selectedSession,
-    setSelectedSession,
+    setSelectedSession: handleSetSelectedSession,
     activeTab,
     setActiveTab,
     loading,
@@ -71,6 +78,7 @@ export function useDashboard() {
     sseConnected,
     trackingStatus,
     refreshData,
+    refreshSignal,
   };
 }
 
