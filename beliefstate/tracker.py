@@ -215,6 +215,10 @@ def _detect_adapter(result: Any) -> ProviderAdapter:
         return _get_cached_adapter(
             "ollama", "beliefstate.adapters.ollama", "OllamaAdapter"
         )
+    if "cohere" in type_lower:
+        return _get_cached_adapter(
+            "cohere", "beliefstate.adapters.cohere", "CohereAdapter"
+        )
 
     logger.warning(
         f"Could not auto-detect adapter from type: {type_name}. Using generic adapter."
