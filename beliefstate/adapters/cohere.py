@@ -227,7 +227,7 @@ class CohereAdapter(ProviderAdapter):
         }
         kwargs.update(self.embed_kwargs)
         response = await self.client.embed(**kwargs)
-        return response.embeddings
+        return cast(List[List[float]], response.embeddings)
 
     async def get_embedding(self, text: str) -> List[float]:
         res = await self.get_embeddings([text])
