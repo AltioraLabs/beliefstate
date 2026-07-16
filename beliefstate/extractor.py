@@ -119,8 +119,8 @@ def strip_injection_patterns(text: str) -> str:
     cleaned = text
     for pattern in INJECTION_PREFIX_PATTERNS:
         cleaned = re.sub(pattern, "[redacted]", cleaned, flags=re.IGNORECASE)
-    return cleaned 
-    
+    return cleaned
+
 
 def normalize_value_format(value: str) -> str:
     if not value:
