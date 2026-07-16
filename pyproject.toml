@@ -47,6 +47,9 @@ gemini = [
 ollama = [
     "ollama>=0.2.0",
 ]
+cohere = [
+    "cohere>=7.0.0",
+]
 litellm = [
     "litellm>=1.40.0",
 ]

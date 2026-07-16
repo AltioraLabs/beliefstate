@@ -25,6 +25,7 @@ def build_tracker(cfg: dict[str, Any]) -> BeliefTracker:
     """
     from beliefstate.adapters import (
         AnthropicAdapter,
+        CohereAdapter,
         GeminiAdapter,
         OllamaAdapter,
         OpenAIAdapter,
@@ -116,6 +117,11 @@ def build_tracker(cfg: dict[str, Any]) -> BeliefTracker:
         )
         tracker = BeliefTracker(config=config, adapter=adapter)
 
+    elif provider == "Cohere":
+        os.environ["COHERE_API_KEY"] = api_key
+        adapter = CohereAdapter(model=model, embed_model=embed_model)
+        tracker = BeliefTracker(config=config, adapter=adapter)
+
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -136,6 +142,8 @@ def _extract_response_text(provider: str, raw: Any) -> str:
         return raw.text
     if provider == "Ollama":
         return raw["message"]["content"]
+    if provider == "Cohere":
+        return raw.text
     raise ValueError(f"Unknown provider: {provider}")
 
 

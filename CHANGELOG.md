@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Cohere provider adapter (`CohereAdapter`) for chat generation and embeddings via `cohere>=5.0.0`, closes [#9](https://github.com/AltioraLabs/beliefstate/issues/9)
+
 ## [1.2.0] - 2026-06-30
 
 ### Added
