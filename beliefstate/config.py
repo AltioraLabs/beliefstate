@@ -295,6 +295,10 @@ class TrackerConfig(BaseModel):
         default=300,
         description="Maximum tokens reserved for belief injection in prompts. If belief summary exceeds this, use relevance-based filtering.",
     )
+    max_tracked_sessions: int = Field(
+        default=10000,
+        description="Maximum number of sessions kept in the in-memory turn/state/provider bookkeeping. Least-recently-used sessions are evicted beyond this to bound memory in long-running servers. Set to 0 to disable eviction (unbounded).",
+    )
 
     # Context injection filtering
     exclude_sources: List[str] = Field(

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import wraps
 from contextvars import ContextVar
-from collections import deque
+from collections import deque, OrderedDict
 
 from beliefstate.config import TrackerConfig
 from beliefstate.call import LLMCall, LLMResponse
@@ -429,9 +429,12 @@ class BeliefTracker:
             strategy=self.config.resolution_strategy,
             respect_strategy_for_updates=self.config.respect_strategy_for_updates,
         )
-        self._session_turn_counters: Dict[str, int] = {}
-        self._session_turn_states: Dict[str, int] = {}
-        self._session_providers: Dict[str, str] = {}
+        # LRU-ordered so long-running servers with many unique sessions don't
+        # grow these unbounded; least-recently-used sessions are evicted once
+        # config.max_tracked_sessions is exceeded (see _touch_session).
+        self._session_turn_counters: "OrderedDict[str, int]" = OrderedDict()
+        self._session_turn_states: "OrderedDict[str, int]" = OrderedDict()
+        self._session_providers: "OrderedDict[str, str]" = OrderedDict()
         self._stats = TrackerStats()
         self._pending_tasks: Set[asyncio.Task[None]] = set()
         self._pending_conflict_notes: Dict[str, List[str]] = {}
@@ -514,6 +517,27 @@ class BeliefTracker:
         self._pending_tasks.add(task)
         task.add_done_callback(self._pending_tasks.discard)
         self._sweep_stale_locks()
+
+    def _touch_session(self, session_id: str) -> None:
+        """Mark ``session_id`` as most-recently-used and evict LRU sessions.
+
+        Keeps the per-session bookkeeping dicts bounded so a server handling
+        many unique sessions over a long uptime does not leak memory. The turn
+        counter dict is the LRU authority (it is written every tracked turn);
+        evicted sessions are dropped from the state/provider dicts and the lock
+        registry too.
+        """
+        counters = self._session_turn_counters
+        if session_id in counters:
+            counters.move_to_end(session_id)
+        limit = self.config.max_tracked_sessions
+        if limit <= 0:
+            return
+        while len(counters) > limit:
+            oldest_sid, _ = counters.popitem(last=False)
+            self._session_turn_states.pop(oldest_sid, None)
+            self._session_providers.pop(oldest_sid, None)
+            _session_locks.pop(oldest_sid, None)
 
     def _sweep_stale_locks(self) -> None:
         """Remove session locks for sessions no longer tracked."""
@@ -1237,6 +1261,7 @@ class BeliefTracker:
                         self._session_turn_counters.get(session_id, 0) + 1
                     )
                     current_turn = self._session_turn_counters[session_id]
+                    self._touch_session(session_id)
 
                 if auto_inject:
                     last_user_msg = ""

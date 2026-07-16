@@ -65,6 +65,10 @@ class TestTrackerConfigDefaults:
         assert c.enable_token_aware_injection is True
         assert c.belief_budget_tokens == 300
 
+    def test_default_max_tracked_sessions(self):
+        c = TrackerConfig()
+        assert c.max_tracked_sessions == 10000
+
 
 class TestTrackerConfigOverrides:
     """Verify custom overrides are accepted."""
