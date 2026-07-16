@@ -163,6 +163,14 @@ class TrackerConfig(BaseModel):
             raise ValueError(f"resolution_strategy must be one of {valid}, got '{v}'")
         return v
 
+    @field_validator("tokenizer_backend")
+    @classmethod
+    def validate_tokenizer_backend(cls, v: str) -> str:
+        valid = {"heuristic", "tiktoken"}
+        if v not in valid:
+            raise ValueError(f"tokenizer_backend must be one of {valid}, got '{v}'")
+        return v
+
     # Detection settings
     similarity_threshold: float = Field(
         default=0.82, description="Threshold for embedding similarity."
@@ -294,6 +302,14 @@ class TrackerConfig(BaseModel):
     belief_budget_tokens: int = Field(
         default=300,
         description="Maximum tokens reserved for belief injection in prompts. If belief summary exceeds this, use relevance-based filtering.",
+    )
+    tokenizer_backend: str = Field(
+        default="heuristic",
+        description="Token counting backend for belief budgeting: 'heuristic' (len/4 approximation, no dependencies) or 'tiktoken' (accurate BPE count, requires the 'tokenizer' extra). Falls back to the heuristic if tiktoken is unavailable.",
+    )
+    tokenizer_model: Optional[str] = Field(
+        default=None,
+        description="Optional model name for the tiktoken backend (e.g. 'gpt-4o'). Unknown names fall back to the general-purpose cl100k_base encoding. Ignored by the heuristic backend.",
     )
 
     # Context injection filtering

@@ -77,10 +77,79 @@ def calculate_staleness_score(belief: Any) -> float:
     return confidence / (days_since_referenced + 1)
 
 
-def estimate_tokens(text: str) -> int:
+# Cache tiktoken encoders by key so we build each one only once.
+_tiktoken_encoders: Dict[str, Any] = {}
+
+
+def _heuristic_tokens(text: str) -> int:
+    """Fast, dependency-free approximation: ~4 characters per token."""
+    return math.ceil(len(text) / 4)
+
+
+def _get_tiktoken_encoder(model: Optional[str]) -> Optional[Any]:
+    """Return a cached tiktoken encoder, or None if tiktoken is unavailable.
+
+    Falls back to the general-purpose ``cl100k_base`` encoding when the model
+    name is unknown to tiktoken (or when no model is given).
+    """
+    try:
+        import tiktoken
+    except ImportError:
+        return None
+
+    key = model or "cl100k_base"
+    if key in _tiktoken_encoders:
+        return _tiktoken_encoders[key]
+
+    encoder = None
+    if model:
+        try:
+            encoder = tiktoken.encoding_for_model(model)
+        except KeyError:
+            encoder = None
+    if encoder is None:
+        try:
+            encoder = tiktoken.get_encoding("cl100k_base")
+        except Exception:  # pragma: no cover - defensive; missing BPE data files
+            return None
+
+    _tiktoken_encoders[key] = encoder
+    return encoder
+
+
+def estimate_tokens(
+    text: str,
+    backend: str = "heuristic",
+    model: Optional[str] = None,
+) -> int:
+    """Estimate the number of tokens in ``text``.
+
+    Args:
+        text: The text to measure.
+        backend: ``"heuristic"`` (default) uses a fast ``len(text) / 4``
+            approximation with no dependencies. ``"tiktoken"`` uses an accurate
+            BPE token count and requires the optional ``tiktoken`` package; it
+            transparently falls back to the heuristic if tiktoken is not
+            installed.
+        model: Optional model name for the tiktoken backend (e.g. ``"gpt-4o"``).
+            Ignored by the heuristic backend. Unknown names fall back to the
+            general-purpose ``cl100k_base`` encoding.
+
+    Returns:
+        The estimated token count (``0`` for empty text).
+    """
     if not text:
         return 0
-    return math.ceil(len(text) / 4)
+    if backend == "tiktoken":
+        encoder = _get_tiktoken_encoder(model)
+        if encoder is not None:
+            return len(encoder.encode(text))
+        logger.debug(
+            "estimate_tokens: 'tiktoken' backend requested but tiktoken is not "
+            "available; falling back to the heuristic estimate. Install the "
+            "'tokenizer' extra for accurate counts."
+        )
+    return _heuristic_tokens(text)
 
 
 class GenericAdapter(ProviderAdapter):
@@ -873,7 +942,11 @@ class BeliefTracker:
                 for b in sorted_beliefs[: self.config.max_beliefs]
             ]
             sample_summary = "\n".join(sample_facts)
-            estimated_tokens = estimate_tokens(sample_summary)
+            estimated_tokens = estimate_tokens(
+                sample_summary,
+                backend=self.config.tokenizer_backend,
+                model=self.config.tokenizer_model,
+            )
 
             if estimated_tokens > self.config.belief_budget_tokens:
                 try:
