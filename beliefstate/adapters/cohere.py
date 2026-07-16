@@ -31,7 +31,7 @@ class CohereAdapter(ProviderAdapter):
     def __init__(
         self,
         client: Optional[Any] = None,
-        model: str = "command-r-plus",
+        model: str = "command-r-plus-08-2024",
         embed_model: str = "embed-english-v3.0",
         embed_kwargs: Optional[Dict[str, Any]] = None,
         input_type: str = "search_document",
@@ -84,22 +84,23 @@ class CohereAdapter(ProviderAdapter):
             metadata={"model": kwargs.get("model", self.model)},
         )
 
-    def _map_messages(self, messages: List[Any]) -> List[Dict[str, Any]]:
+    def _map_messages(self, messages: List[Any]) -> List[Dict[str, str]]:
+        """Map to Cohere chat_history format: [{role, message}, ...]."""
         out = []
         for m in messages:
             if isinstance(m, dict):
-                role = m.get("role")
-                content = m.get("content")
+                role = m.get("role", "user")
+                content = m.get("content", "")
             else:
-                role = getattr(m, "role", None)
-                content = getattr(m, "content", None)
+                role = getattr(m, "role", "user")
+                content = getattr(m, "content", "")
             if role == "assistant":
                 role = "chatbot"
             if isinstance(content, list):
                 content = " ".join(
                     b.get("text", "") for b in content if isinstance(b, dict)
                 )
-            out.append({"role": role, "content": content})
+            out.append({"role": role, "message": content})
         return out
 
     def to_llm_response(self, response: Any) -> LLMResponse:
@@ -107,7 +108,11 @@ class CohereAdapter(ProviderAdapter):
             text = response.get("text") or response.get("message", {}).get(
                 "content", ""
             )
+        elif hasattr(response, "text"):
+            # Cohere v7 NonStreamedChatResponse — text is a direct attribute
+            text = response.text
         else:
+            # legacy format (v5) — response.message.content[].text
             blocks = response.message.content
             text = "".join(
                 getattr(b, "text", "")
@@ -170,14 +175,46 @@ class CohereAdapter(ProviderAdapter):
     async def _generate_with_backoff(
         self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
-        kwargs = call.kwargs.copy()
-        kwargs["messages"] = self._map_messages(call.messages)
-        if "model" not in kwargs:
-            kwargs["model"] = self.model
-        if "temperature" not in kwargs:
-            kwargs["temperature"] = 0.0
+        chat_kwargs: Dict[str, Any] = {"model": self.model}
+        if "temperature" not in call.kwargs:
+            chat_kwargs["temperature"] = 0.0
+        for k in (
+            "model",
+            "max_tokens",
+            "temperature",
+            "p",
+            "k",
+            "seed",
+            "stop_sequences",
+            "frequency_penalty",
+            "presence_penalty",
+        ):
+            if k in call.kwargs:
+                chat_kwargs[k] = call.kwargs[k]
 
-        response = await self.client.chat(**kwargs)
+        mapped = self._map_messages(call.messages)
+        # separate system prompt -> preamble, last user msg -> message, rest -> chat_history
+        preamble = None
+        chat_history = []
+        last_user = ""
+        for m in mapped:
+            if m["role"] == "system":
+                preamble = m["message"]
+            elif m["role"] == "user":
+                last_user = m["message"]
+        for m in mapped:
+            if m["role"] in ("chatbot", "assistant") or (
+                m["role"] == "user" and m["message"] != last_user
+            ):
+                chat_history.append(m)
+
+        if preamble:
+            chat_kwargs["preamble"] = preamble
+        chat_kwargs["message"] = last_user
+        if chat_history:
+            chat_kwargs["chat_history"] = chat_history
+
+        response = await self.client.chat(**chat_kwargs)
         return self.to_llm_response(response)
 
     async def generate(

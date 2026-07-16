@@ -13,13 +13,9 @@ async def test_cohere_adapter_generate_and_embed():
     # Mock the native SDK client; we inject it so no network calls happen.
     mock_client = MagicMock(spec=AsyncClient)
 
-    block = MagicMock()
-    block.type = "text"
-    block.text = "cohere reply"
-    chat_msg = MagicMock()
-    chat_msg.content = [block]
+    # v7 NonStreamedChatResponse — has .text directly
     chat_resp = MagicMock()
-    chat_resp.message = chat_msg
+    chat_resp.text = "cohere reply"
     mock_client.chat = AsyncMock(return_value=chat_resp)
 
     emb_resp = MagicMock()
@@ -28,7 +24,7 @@ async def test_cohere_adapter_generate_and_embed():
 
     adapter = CohereAdapter(
         client=mock_client,
-        model="command-r-plus",
+        model="command-r-plus-08-2024",
         embed_model="embed-english-v3.0",
     )
     assert isinstance(adapter, ProviderAdapter)
@@ -39,8 +35,8 @@ async def test_cohere_adapter_generate_and_embed():
     assert resp.text == "cohere reply"
     mock_client.chat.assert_called_once()
     _, kwargs = mock_client.chat.call_args
-    assert kwargs["messages"][0]["role"] == "user"
-    assert kwargs["model"] == "command-r-plus"
+    assert kwargs["message"] == "hello"
+    assert kwargs["model"] == "command-r-plus-08-2024"
 
     # 2. embeddings
     embs = await adapter.get_embeddings(["hello", "world"])
@@ -54,17 +50,16 @@ async def test_cohere_adapter_generate_and_embed():
 
 @pytest.mark.asyncio
 async def test_cohere_adapter_role_mapping():
-    """assistant -> chatbot mapping for Cohere's Command chat format."""
+    """assistant -> chatbot mapping for Cohere's Command chat format.
+
+    Verifies that chat_history entries with role='assistant' are converted
+    to 'chatbot', and the last user message is passed as the 'message' param.
+    """
     from cohere import AsyncClient
 
     mock_client = MagicMock(spec=AsyncClient)
-    block = MagicMock()
-    block.type = "text"
-    block.text = "ok"
-    chat_msg = MagicMock()
-    chat_msg.content = [block]
     chat_resp = MagicMock()
-    chat_resp.message = chat_msg
+    chat_resp.text = "ok"
     mock_client.chat = AsyncMock(return_value=chat_resp)
 
     adapter = CohereAdapter(client=mock_client)
@@ -76,7 +71,10 @@ async def test_cohere_adapter_role_mapping():
         ]
     )
     await adapter.generate(call)
-    mapped = mock_client.chat.call_args[1]["messages"]
-    roles = [m["role"] for m in mapped]
+    kwargs = mock_client.chat.call_args[1]
+    chat_history = kwargs["chat_history"]
+    roles = [m["role"] for m in chat_history]
     assert "chatbot" in roles
     assert "assistant" not in roles
+    assert kwargs["message"] == "hi"  # last user message
+    assert kwargs["preamble"] == "be brief"  # system prompt → preamble
