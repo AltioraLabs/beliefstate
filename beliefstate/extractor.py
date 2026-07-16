@@ -102,6 +102,25 @@ def normalize_percentages(text: str) -> str:
     return text
 
 
+INJECTION_PREFIX_PATTERNS = [
+    r"ignore (all |the )?(previous|prior|above) (instructions|rules|prompts?)",
+    r"disregard (all |the )?(previous|prior|above)",
+    r"you are now (in|acting as)",
+    r"new instructions?:",
+    r"system prompt:",
+    r"</?(system|assistant|developer)>",
+]
+
+
+def strip_injection_patterns(text: str) -> str:
+    """Remove common prompt-injection trigger phrases before sending text to the LLM."""
+    if not text:
+        return text
+    cleaned = text
+    for pattern in INJECTION_PREFIX_PATTERNS:
+        cleaned = re.sub(pattern, "[redacted]", cleaned, flags=re.IGNORECASE)
+    return cleaned 
+    
 def normalize_value_format(value: str) -> str:
     if not value:
         return value
@@ -494,6 +513,8 @@ class BeliefExtractor:
         Pre-filters trivial assistant responses but still extracts from user message.
         Applies confidence ceiling by source after extraction.
         """
+        user_message = strip_injection_patterns(user_message)
+        assistant_response = strip_injection_patterns(assistant_response)
         is_trivial = self._is_trivial(assistant_response)
 
         if is_trivial:
