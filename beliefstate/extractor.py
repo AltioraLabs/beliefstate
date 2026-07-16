@@ -154,6 +154,37 @@ def classify_response_type(text: str) -> str:
     return "conversational"
 
 
+_MIN_JSON_PROSE_WORDS = 5
+
+
+def _json_prose_word_count(text: str) -> int:
+    """Count word-like tokens inside a JSON payload's string *values*.
+
+    Object keys are treated as structural and ignored; only values are walked.
+    Returns 0 if the text is not valid JSON.
+    """
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return 0
+
+    words = 0
+
+    def walk(obj: Any) -> None:
+        nonlocal words
+        if isinstance(obj, str):
+            words += len(re.findall(r"[A-Za-z]{2,}", obj))
+        elif isinstance(obj, dict):
+            for value in obj.values():
+                walk(value)
+        elif isinstance(obj, list):
+            for value in obj:
+                walk(value)
+
+    walk(data)
+    return words
+
+
 def _is_trivial_response(text: str) -> bool:
     """Check if an assistant response is trivial and should be skipped for extraction."""
     if not text or not text.strip():
@@ -168,12 +199,19 @@ def _is_trivial_response(text: str) -> bool:
             if re.match(pattern, text_lower):
                 return True
     code_chars = set("{}()=;:|#|\\><")
-    if text:
-        code_count = sum(1 for c in text if c in code_chars)
-        if code_count / len(text) > 0.6:
+    non_space = [c for c in text if not c.isspace()]
+    if non_space:
+        code_count = sum(1 for c in non_space if c in code_chars)
+        if code_count / len(non_space) > 0.6:
             return True
-    if text.startswith("{") or text.startswith("["):
+    # A structurally JSON/SQL/code response is not automatically trivial: an LLM
+    # may wrap real answers in JSON (e.g. {"answer": "the budget is $20k ..."}).
+    # Skip pure data payloads and code output, but keep JSON that carries prose.
+    response_type = classify_response_type(text)
+    if response_type in ("sql", "code"):
         return True
+    if response_type == "json":
+        return _json_prose_word_count(text) < _MIN_JSON_PROSE_WORDS
     return False
 
 
