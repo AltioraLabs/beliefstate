@@ -134,8 +134,31 @@ class TestPreFilterTrivialResponse:
         assert _is_trivial_response("{ } ( ) = ; : # | \\ > <") is True
 
     def test_is_trivial_json_start(self):
+        # Pure data payloads (no meaningful prose) stay trivial.
         assert _is_trivial_response('{"key": "value"}') is True
         assert _is_trivial_response('[{"key": "value"}]') is True
+
+    def test_not_trivial_json_with_natural_language(self):
+        # Regression for #24: an LLM answer wrapped in JSON must NOT be skipped.
+        assert (
+            _is_trivial_response(
+                '{"answer": "The user\'s budget is $20k, they prefer Python"}'
+            )
+            is False
+        )
+        assert (
+            _is_trivial_response(
+                '{"reply": "We decided to use PostgreSQL for the main database"}'
+            )
+            is False
+        )
+
+    def test_is_trivial_sql(self):
+        assert _is_trivial_response("SELECT id, name FROM users WHERE id = 1") is True
+
+    def test_is_trivial_code_fence(self):
+        code = "```python\n" + "print('hello world')\n" * 3 + "```"
+        assert _is_trivial_response(code) is True
 
     def test_not_trivial_substantive(self):
         assert _is_trivial_response("I understand your budget constraints.") is False
