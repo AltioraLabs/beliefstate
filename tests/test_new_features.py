@@ -134,8 +134,8 @@ class TestPreFilterTrivialResponse:
         assert _is_trivial_response("{ } ( ) = ; : # | \\ > <") is True
 
     def test_is_trivial_json_start(self):
-        assert _is_trivial_response('{"key": "value"}') is True
-        assert _is_trivial_response('[{"key": "value"}]') is True
+        assert _is_trivial_response('{"key": "value"}') is False
+        assert _is_trivial_response('[{"key": "value"}]') is False
 
     def test_not_trivial_substantive(self):
         assert _is_trivial_response("I understand your budget constraints.") is False

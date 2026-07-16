@@ -170,10 +170,8 @@ def _is_trivial_response(text: str) -> bool:
     code_chars = set("{}()=;:|#|\\><")
     if text:
         code_count = sum(1 for c in text if c in code_chars)
-        if code_count / len(text) > 0.6:
+        if code_count / len(text) > 0.5:
             return True
-    if text.startswith("{") or text.startswith("["):
-        return True
     return False
 
 
