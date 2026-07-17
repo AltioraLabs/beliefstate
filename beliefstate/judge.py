@@ -137,7 +137,8 @@ class LocalNLIJudge(ContradictionJudge):
             score = float(res[0].get("score", 0.0))
 
             # Map label names
-            is_contra = "contradiction" in label or label == "label_0" or label == "0"
+            # Standard DeBERTa cross-encoders (MNLI): LABEL_0=entailment, LABEL_1=neutral, LABEL_2=contradiction
+            is_contra = "contradiction" in label or label in ("label_2", "2")
 
             if is_contra and score >= self.threshold:
                 return (
