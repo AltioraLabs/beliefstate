@@ -4,6 +4,7 @@ import { GlobalSearch } from './GlobalSearch';
 import { NotificationPanel } from './NotificationPanel';
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { Notification, AlertRule } from '../hooks/useNotifications';
+import { useTheme } from '../hooks/useTheme';
 
 interface Props {
   children: React.ReactNode;
@@ -55,6 +56,8 @@ function SvgIcon({ name, size = 17 }: { name: string; size?: number }) {
     refresh: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width={size} height={size}><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>),
     book: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width={size} height={size}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>),
     x: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width={size} height={size}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>),
+    sun: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width={size} height={size}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>),
+    moon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width={size} height={size}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>),
   };
   return <>{map[name] || null}</>;
 }
@@ -72,6 +75,7 @@ export function Layout({
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   const handleHelp = useCallback(() => window.open('https://AltioraLabs.github.io/beliefstate/', '_blank', 'noopener'), []);
   const pendingKey = React.useRef('');
@@ -135,6 +139,11 @@ export function Layout({
             <p className="page-subtitle">{meta.subtitle}</p>
           </div>
           <div className="top-header-right">
+            <button className="header-btn" onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label="Toggle color theme">
+              <SvgIcon name={theme === 'dark' ? 'sun' : 'moon'} />
+            </button>
             <button className="header-btn" onClick={() => setSearchOpen(true)} title="Search (/)">
               <SvgIcon name="search" />
             </button>

@@ -1022,6 +1022,82 @@ a { text-decoration: none; color: inherit; }
   .main-content { padding: 24px; }
   .header-search-input { width: 120px; }
 }
+/* ─── DARK THEME ─── */
+/* Most surfaces flip for free because components consume --white and the
+   --gray-* ramp as tokens; we invert those here. The blocks below only patch
+   the hardcoded neutrals that can't inherit from a token. Semantic accents
+   (badges, red/green/amber) are left alone — they read fine on dark. */
+[data-theme="dark"] {
+  --white: #1c1c22;
+  --gray-50: #24242b;
+  --gray-100: #2e2e37;
+  --gray-200: #3a3a44;
+  --gray-300: #4a4a55;
+  --gray-400: #8b8b96;
+  --gray-500: #a6a6b0;
+  --gray-600: #c2c2cb;
+  --gray-700: #d6d6dd;
+  --gray-800: #e8e8ee;
+  --gray-900: #f4f4f7;
+  --accent-light: rgba(99,102,241,0.16);
+  --accent-mid: rgba(99,102,241,0.22);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 1px 3px rgba(0,0,0,0.4), 0 1px 8px rgba(0,0,0,0.3);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.45);
+  --shadow-xl: 0 8px 24px rgba(0,0,0,0.55);
+  --page-bg: #131317;
+}
+
+/* Page background sits darker than card surfaces (--white) so cards separate. */
+[data-theme="dark"] body { background: var(--page-bg); }
+
+/* Shadows barely register on dark, so give elevated surfaces a hairline border. */
+[data-theme="dark"] .summary-card,
+[data-theme="dark"] .card,
+[data-theme="dark"] .timeline-item,
+[data-theme="dark"] .timeline-card,
+[data-theme="dark"] .conflict-item,
+[data-theme="dark"] .conflict-stat,
+[data-theme="dark"] .compare-picker,
+[data-theme="dark"] .compare-stat,
+[data-theme="dark"] .timeline-header,
+[data-theme="dark"] .skeleton-card {
+  border: 1px solid var(--gray-100);
+}
+
+/* Hardcoded neutral surfaces that can't inherit from a token. */
+[data-theme="dark"] .top-header { background: rgba(19,19,23,0.85); }
+[data-theme="dark"] .nav-item:hover,
+[data-theme="dark"] .btn-secondary:hover,
+[data-theme="dark"] .data-table tr:hover td,
+[data-theme="dark"] .activity-entry:hover,
+[data-theme="dark"] .global-search-item:hover { background: var(--gray-50); }
+[data-theme="dark"] .nav-item.active,
+[data-theme="dark"] .btn-icon-sm:hover,
+[data-theme="dark"] .sim-tab.active,
+[data-theme="dark"] .segmented-control .seg-btn.active { background: var(--gray-100); }
+[data-theme="dark"] .data-table td { border-bottom-color: var(--gray-100); }
+[data-theme="dark"] .detail-json,
+[data-theme="dark"] .sim-prompt-head,
+[data-theme="dark"] .expanded-content,
+[data-theme="dark"] .diff-pane-head,
+[data-theme="dark"] .diff-belief,
+[data-theme="dark"] .diff-unified-head,
+[data-theme="dark"] .compare-belief,
+[data-theme="dark"] .global-search-footer { background: var(--gray-50); }
+[data-theme="dark"] .entity-chip-count { background: rgba(255,255,255,0.08); }
+[data-theme="dark"] .toggle-switch-thumb { background: #f4f4f7; }
+
+/* Code blocks stay dark in both themes (light mode uses --gray-900 as their bg,
+   which inverts to a light color under dark — pin them instead). */
+[data-theme="dark"] .raw-llm-pre { background: #0d0d10; color: #e2e8f0; border-color: var(--gray-200); }
+
+/* Category pills use light pastel fills that are unreadable on dark. */
+[data-theme="dark"] .cat-identity { background: rgba(79,70,229,0.18); color: #a5b4fc; }
+[data-theme="dark"] .cat-constraint { background: rgba(234,88,12,0.18); color: #fdba74; }
+[data-theme="dark"] .cat-technical { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+[data-theme="dark"] .cat-planning { background: rgba(192,38,211,0.18); color: #f0abfc; }
+
 @media (max-width: 640px) {
   .summary-cards { grid-template-columns: 1fr; }
   .top-header { padding: 0 16px; }
