@@ -89,6 +89,11 @@ try:
 except ImportError:
     PostgreSQLStore = None  # type: ignore[assignment,misc]
 
+try:
+    from beliefstate.store.duckdb import DuckDBStore
+except ImportError:
+    DuckDBStore = None  # type: ignore[assignment,misc]
+
 # --- Framework Integrations (optional SDKs) ------------------------------------
 try:
     from beliefstate.integrations.fastapi import (
@@ -144,6 +149,7 @@ __all__ = [
     "SQLiteStore",
     "RedisStore",
     "PostgreSQLStore",
+    "DuckDBStore",
     "InMemoryBeliefStore",
     "ProviderAdapter",
     "BeliefExtractor",

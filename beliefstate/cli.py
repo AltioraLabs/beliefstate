@@ -19,6 +19,7 @@ from beliefstate.config import TrackerConfig
 _STORE_DEPENDENCIES: Dict[str, Tuple[str, str]] = {
     "redis": ("redis", "redis"),
     "postgres": ("asyncpg", "postgres"),
+    "duckdb": ("duckdb", "duckdb"),
 }
 
 
@@ -53,6 +54,10 @@ def _build_store(config: TrackerConfig) -> Any:
         if RedisStore is None:
             raise RuntimeError("Redis SDK is not installed.")
         return RedisStore(**config.store_kwargs)
+    if stype == "duckdb":
+        from beliefstate.store.duckdb import DuckDBStore
+
+        return DuckDBStore(**config.store_kwargs)
     from beliefstate.store.sqlite import SQLiteStore
 
     return SQLiteStore(db_path=config.store_kwargs.get("db_path", "beliefstate.db"))
