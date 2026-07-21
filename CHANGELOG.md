@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `DuckDBStore` as an optional embedded SQL backend with native vector similarity search.
+
 ### Security
 - Wrapped conversation content in delimiter tags in the extraction prompt to reduce prompt injection risk
 - Added `strip_injection_patterns` to sanitize common injection trigger phrases from user/assistant text before LLM extraction

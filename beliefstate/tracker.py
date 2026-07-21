@@ -407,6 +407,10 @@ class BeliefTracker:
                 from beliefstate.store.postgres import PostgreSQLStore
 
                 self.store = PostgreSQLStore(**self.config.store_kwargs)
+            elif stype == "duckdb":
+                from beliefstate.store.duckdb import DuckDBStore
+
+                self.store = DuckDBStore(**self.config.store_kwargs)
             elif stype == "redis":
                 from beliefstate.store.redis import RedisStore
 
