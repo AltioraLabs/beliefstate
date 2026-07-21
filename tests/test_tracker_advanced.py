@@ -38,6 +38,47 @@ class TestEstimateTokens:
         text = "a" * 100
         assert estimate_tokens(text) == 25
 
+    def test_default_backend_is_heuristic(self):
+        # Default keeps the historical behaviour so callers/tests stay stable.
+        assert estimate_tokens("hello world") == estimate_tokens(
+            "hello world", backend="heuristic"
+        )
+
+    def test_empty_string_any_backend(self):
+        assert estimate_tokens("", backend="tiktoken") == 0
+
+    def test_tiktoken_backend_counts_tokens(self):
+        pytest.importorskip("tiktoken")
+        # A known phrase encodes to a small, stable token count with cl100k_base.
+        assert estimate_tokens("hello world", backend="tiktoken") == 2
+
+    def test_tiktoken_backend_with_model(self):
+        pytest.importorskip("tiktoken")
+        n = estimate_tokens("The quick brown fox", backend="tiktoken", model="gpt-4o")
+        assert n > 0
+
+    def test_tiktoken_unknown_model_falls_back_to_encoding(self):
+        pytest.importorskip("tiktoken")
+        # An unknown model name must not raise; it uses cl100k_base instead.
+        n = estimate_tokens("hello", backend="tiktoken", model="not-a-real-model")
+        assert n > 0
+
+    def test_tiktoken_beats_heuristic_on_cjk(self):
+        pytest.importorskip("tiktoken")
+        # CJK text is badly under-counted by len/4; tiktoken counts more tokens.
+        cjk = "你好世界，这是一个测试。"
+        assert estimate_tokens(cjk, backend="tiktoken") > estimate_tokens(cjk)
+
+    def test_falls_back_to_heuristic_when_tiktoken_missing(self, monkeypatch):
+        import beliefstate.tracker as tracker_mod
+
+        # Simulate tiktoken being unavailable regardless of the environment.
+        monkeypatch.setattr(
+            tracker_mod, "_get_tiktoken_encoder", lambda model: None
+        )
+        text = "a" * 100
+        assert estimate_tokens(text, backend="tiktoken") == 25
+
 
 class TestEnsureAware:
     def test_naive_datetime_becomes_aware(self):

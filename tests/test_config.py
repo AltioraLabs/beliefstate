@@ -1,5 +1,8 @@
 """Tests for TrackerConfig defaults and overrides."""
 
+import pytest
+from pydantic import ValidationError
+
 from beliefstate.config import TrackerConfig
 
 
@@ -65,6 +68,11 @@ class TestTrackerConfigDefaults:
         assert c.enable_token_aware_injection is True
         assert c.belief_budget_tokens == 300
 
+    def test_default_tokenizer_backend(self):
+        c = TrackerConfig()
+        assert c.tokenizer_backend == "heuristic"
+        assert c.tokenizer_model is None
+
 
 class TestTrackerConfigOverrides:
     """Verify custom overrides are accepted."""
@@ -90,6 +98,15 @@ class TestTrackerConfigOverrides:
     def test_custom_dispatcher_type(self):
         c = TrackerConfig(task_dispatcher_type="sync")
         assert c.task_dispatcher_type == "sync"
+
+    def test_custom_tokenizer_backend(self):
+        c = TrackerConfig(tokenizer_backend="tiktoken", tokenizer_model="gpt-4o")
+        assert c.tokenizer_backend == "tiktoken"
+        assert c.tokenizer_model == "gpt-4o"
+
+    def test_invalid_tokenizer_backend_rejected(self):
+        with pytest.raises(ValidationError):
+            TrackerConfig(tokenizer_backend="sentencepiece")
 
     def test_custom_max_beliefs(self):
         c = TrackerConfig(max_beliefs=100)
