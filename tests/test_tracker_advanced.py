@@ -129,6 +129,44 @@ class TestSessionManagement:
         session_context.set("default")
 
 
+class TestSessionEviction:
+    """LRU eviction of the in-memory session bookkeeping dicts (issue #18)."""
+
+    def _make_tracker(self, max_tracked_sessions):
+        config = make_config(max_tracked_sessions=max_tracked_sessions)
+        return BeliefTracker(config=config, adapter=MagicMock())
+
+    def _add(self, tracker, sid):
+        tracker._session_turn_counters[sid] = 1
+        tracker._session_turn_states[sid] = 1
+        tracker._session_providers[sid] = "openai"
+        tracker._touch_session(sid)
+
+    def test_evicts_lru_beyond_limit(self):
+        tracker = self._make_tracker(3)
+        for i in range(5):
+            self._add(tracker, f"s{i}")
+        # Only the 3 most-recently-used sessions survive, in lockstep.
+        assert set(tracker._session_turn_counters) == {"s2", "s3", "s4"}
+        assert set(tracker._session_turn_states) == {"s2", "s3", "s4"}
+        assert set(tracker._session_providers) == {"s2", "s3", "s4"}
+
+    def test_touch_refreshes_recency(self):
+        tracker = self._make_tracker(3)
+        for sid in ("a", "b", "c"):
+            self._add(tracker, sid)
+        # Re-touch "a" so "b" becomes the LRU; adding "d" must evict "b".
+        tracker._touch_session("a")
+        self._add(tracker, "d")
+        assert set(tracker._session_turn_counters) == {"a", "c", "d"}
+
+    def test_zero_disables_eviction(self):
+        tracker = self._make_tracker(0)
+        for i in range(50):
+            self._add(tracker, f"s{i}")
+        assert len(tracker._session_turn_counters) == 50
+
+
 # ── get_beliefs / get_stats / get_summary ────────────────────────────────
 
 
