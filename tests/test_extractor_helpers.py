@@ -9,6 +9,7 @@ from beliefstate.extractor import (
     normalize_dates,
     normalize_percentages,
     normalize_value_format,
+    redact_pii,
     classify_response_type,
     chunk_response_by_paragraphs,
     recover_json_from_response,
@@ -264,3 +265,35 @@ class TestRecoverJsonFromResponse:
         """A dict without 'beliefs' or 'root' keys should return None."""
         result = recover_json_from_response('{"unrelated": "data"}')
         assert result is None
+
+
+# ── PII Redaction ─────────────────────────────────────────────────────────
+
+
+class TestRedactPii:
+    def test_email_masked(self):
+        result = redact_pii("Contact me at user123@example.com")
+        assert "user123@example.com" not in result
+        assert "@example.com" in result
+
+    def test_phone_masked(self):
+        result = redact_pii("Call 9876543210 anytime")
+        assert "9876543210" not in result
+        assert result.endswith("3210 anytime") or "3210" in result
+
+    def test_card_number_fully_masked(self):
+        result = redact_pii("Card: 4111 1111 1111 1111")
+        assert "4111 1111 1111" not in result
+        assert result.endswith("1111")
+
+    def test_ssn_masked(self):
+        result = redact_pii("SSN: 123-45-6789")
+        assert "123-45-6789" not in result
+        assert result.endswith("6789")
+
+    def test_plain_text_unchanged(self):
+        text = "No sensitive info here, just a plain sentence."
+        assert redact_pii(text) == text
+
+    def test_empty_string(self):
+        assert redact_pii("") == ""
