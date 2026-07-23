@@ -122,6 +122,41 @@ def strip_injection_patterns(text: str) -> str:
     return cleaned
 
 
+PII_PATTERNS = [
+    ("email", r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
+    ("card_or_ssn", r"\d{3}-\d{2}-\d{4}|\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{1,7}"),
+    ("phone", r"\+?\d{1,3}?[\s-]?\d{3,5}[\s-]?\d{3,5}(?:[\s-]?\d{1,4})?"),
+]
+
+
+def _mask_match(text: str, visible_start: int = 1, visible_end: int = 0) -> str:
+    """Mask the middle of a matched string, keeping a little context visible."""
+    if len(text) <= visible_start + visible_end:
+        return "*" * len(text)
+    end_part = text[-visible_end:] if visible_end else ""
+    middle_len = len(text) - visible_start - visible_end
+    return text[:visible_start] + "*" * middle_len + end_part
+
+
+def _redact_email(match: re.Match[str]) -> str:
+    local, domain = match.group(0).split("@", 1)
+    return _mask_match(local, visible_start=1) + "@" + domain
+
+
+def _redact_digits(match: re.Match[str]) -> str:
+    return _mask_match(match.group(0), visible_start=0, visible_end=4)
+
+
+def redact_pii(text: str) -> str:
+    """Mask emails, card/SSN-shaped numbers, and phone numbers in extracted text."""
+    if not text:
+        return text
+    text = re.sub(PII_PATTERNS[0][1], _redact_email, text)
+    for _, pattern in PII_PATTERNS[1:]:
+        text = re.sub(pattern, _redact_digits, text)
+    return text
+
+
 def normalize_value_format(value: str) -> str:
     if not value:
         return value
@@ -586,7 +621,11 @@ class BeliefExtractor:
                     b = Belief(
                         subject=subj,
                         predicate=item.get("predicate", ""),
-                        value=normalize_value_format(item.get("value", "")),
+                        value=(
+                            redact_pii(normalize_value_format(item.get("value", "")))
+                            if self.config.enable_pii_redaction
+                            else normalize_value_format(item.get("value", ""))
+                        ),
                         confidence=float(item.get("confidence", 1.0)),
                         turn=turn,
                         source=source,
@@ -734,7 +773,11 @@ class BeliefExtractor:
                     b = Belief(
                         subject=subj,
                         predicate=item.get("predicate", ""),
-                        value=normalize_value_format(item.get("value", "")),
+                        value=(
+                            redact_pii(normalize_value_format(item.get("value", "")))
+                            if self.config.enable_pii_redaction
+                            else normalize_value_format(item.get("value", ""))
+                        ),
                         confidence=float(item.get("confidence", 1.0)),
                         turn=turn,
                         source=source,

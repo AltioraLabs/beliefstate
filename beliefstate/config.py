@@ -154,6 +154,16 @@ class TrackerConfig(BaseModel):
         default_factory=dict, description="Additional kwargs for the store."
     )
 
+    # Privacy settings
+    enable_pii_redaction: bool = Field(
+        default=True,
+        description=(
+            "Automatically redact PII (emails, phone numbers, "
+            "credit card/SSN-shaped numbers) from belief values "
+            "before storage."
+        ),
+    )
+
     @field_validator("store_type")
     @classmethod
     def validate_store_type(cls, v: str) -> str:

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Wrapped conversation content in delimiter tags in the extraction prompt to reduce prompt injection risk
 - Added `strip_injection_patterns` to sanitize common injection trigger phrases from user/assistant text before LLM extraction
+- Added automatic PII redaction (emails, phone numbers, credit card/SSN-shaped numbers) for belief storage, configurable via `enable_pii_redaction` (#15)
   
 ## [1.2.0] - 2026-06-30
 
