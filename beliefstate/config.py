@@ -149,7 +149,7 @@ class TrackerConfig(BaseModel):
     # Store settings
     store_type: str = Field(
         default="sqlite",
-        description="Type of storage to use ('sqlite', 'redis', 'postgres').",
+        description="Type of storage to use ('sqlite', 'redis', 'postgres', 'duckdb').",
     )
     store_kwargs: dict[str, Any] = Field(
         default_factory=dict, description="Additional kwargs for the store."
@@ -168,7 +168,7 @@ class TrackerConfig(BaseModel):
     @field_validator("store_type")
     @classmethod
     def validate_store_type(cls, v: str) -> str:
-        valid = {"sqlite", "redis", "postgres"}
+        valid = {"sqlite", "redis", "postgres", "duckdb"}
         if v.lower() not in valid:
             raise ValueError(f"store_type must be one of {valid}, got '{v}'")
         return v.lower()
