@@ -22,7 +22,6 @@ class CircuitBreakerOpenException(Exception):
     """Raised when the circuit breaker is OPEN and rejecting calls."""
 
 
-
 class CircuitBreaker:
     """A simple stateful circuit breaker (CLOSED, OPEN, HALF-OPEN)."""
 

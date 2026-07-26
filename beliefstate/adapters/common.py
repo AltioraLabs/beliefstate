@@ -46,10 +46,8 @@ class TransientError(Exception):
     """Indicates an error that might succeed on retry."""
 
 
-
 class PermanentError(Exception):
     """Indicates an error that won't succeed on retry."""
-
 
 
 async def retry_with_backoff(
