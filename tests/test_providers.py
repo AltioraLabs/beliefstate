@@ -1,9 +1,7 @@
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
-
-from beliefstate import Belief, BeliefTracker, TrackerConfig
+from typing import Any
+from unittest.mock import MagicMock, patch, AsyncMock
+from beliefstate import BeliefTracker, TrackerConfig, Belief
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.litellm import LiteLLMAdapter
 from beliefstate.call import LLMCall, LLMResponse

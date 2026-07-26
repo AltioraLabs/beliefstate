@@ -1,10 +1,8 @@
-import asyncio
 import os
-
+import asyncio
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-
-from beliefstate import BeliefTracker, OpenAIAdapter, TrackerConfig
+from beliefstate import BeliefTracker, TrackerConfig, OpenAIAdapter
 
 # Load env variables from .env
 load_dotenv()

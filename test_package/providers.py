@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from utils import run_async
-
 from beliefstate import BeliefTracker, TrackerConfig
 from beliefstate.call import LLMCall, LLMResponse
+
+from utils import run_async
+
 
 # ── Tracker builder ────────────────────────────────────────────────────────────
 

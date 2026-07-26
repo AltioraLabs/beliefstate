@@ -1,3 +1,3 @@
-from .backend import app, get_event_queue, start_dashboard
+from .backend import app, start_dashboard, get_event_queue
 
-__all__ = ["app", "get_event_queue", "start_dashboard"]
+__all__ = ["app", "start_dashboard", "get_event_queue"]

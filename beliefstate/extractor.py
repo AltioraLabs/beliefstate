@@ -1,12 +1,11 @@
 import json
 import logging
 import re
-from typing import Any
-
-from beliefstate.adapters.base import ProviderAdapter
+from typing import Any, List, Optional
+from beliefstate.config import TrackerConfig, DEFAULT_EXTRACT_PROMPT
 from beliefstate.call import LLMCall
-from beliefstate.config import DEFAULT_EXTRACT_PROMPT, TrackerConfig
 from beliefstate.models import Belief
+from beliefstate.adapters.base import ProviderAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +232,7 @@ def _is_trivial_response(text: str) -> bool:
     return False
 
 
-def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> list[str]:
+def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> List[str]:
     if not text or len(text) <= max_chunk_length:
         return [text]
     paragraphs = re.split(r"\n\s*\n", text)
@@ -262,7 +261,7 @@ def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> lis
     return chunks
 
 
-def recover_json_from_response(text: str) -> list[Any] | None:
+def recover_json_from_response(text: str) -> Optional[List[Any]]:
     if not text or not isinstance(text, str):
         return None
     text = text.strip()
@@ -419,7 +418,7 @@ class ExtractedBeliefSchema:
                 default="", description="verbatim excerpt max 100 chars"
             )
 
-        class BeliefListSchema(RootModel[list[ExtractedBelief]]):
+        class BeliefListSchema(RootModel[List[ExtractedBelief]]):
             pass
 
         return BeliefListSchema
@@ -465,7 +464,7 @@ class BeliefExtractor:
         """Check if assistant response is trivial (for pre-filter)."""
         return _is_trivial_response(text)
 
-    def _post_filter_beliefs(self, beliefs: list[Belief]) -> list[Belief]:
+    def _post_filter_beliefs(self, beliefs: List[Belief]) -> List[Belief]:
         """Apply heuristics to discard low-quality, generic, or self-referential beliefs."""
         filtered = []
         for b in beliefs:
@@ -544,7 +543,7 @@ class BeliefExtractor:
         assistant_response: str,
         session_id: str,
         turn: int,
-    ) -> list[Belief]:
+    ) -> List[Belief]:
         """Extract beliefs from BOTH user message and assistant response.
 
         Pre-filters trivial assistant responses but still extracts from user message.
@@ -577,7 +576,7 @@ class BeliefExtractor:
 
         return self._post_filter_beliefs(calibrated)
 
-    async def _call_extraction_llm(self, text: str, turn: int) -> list[Belief]:
+    async def _call_extraction_llm(self, text: str, turn: int) -> List[Belief]:
         """Call the LLM to extract beliefs from text."""
         prompt_template = self.config.extract_prompt_template
         prompt = prompt_template.format(conversation=text)
@@ -681,7 +680,7 @@ class BeliefExtractor:
 
     async def extract(
         self, response_text: str, turn: int, source: str = "assistant"
-    ) -> list[Belief]:
+    ) -> List[Belief]:
         """Legacy extract method — processes a single text block.
 
         For new code, prefer process_turn() which handles both user and assistant.
@@ -718,7 +717,7 @@ class BeliefExtractor:
 
     async def _extract_from_chunk(
         self, chunk_text: str, turn: int, source: str
-    ) -> list[Belief]:
+    ) -> List[Belief]:
         if self.config.extract_prompt_template != DEFAULT_EXTRACT_PROMPT:
             prompt_template = self.config.extract_prompt_template
         elif source == "user":

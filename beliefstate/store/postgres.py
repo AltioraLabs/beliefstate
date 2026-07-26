@@ -1,9 +1,8 @@
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any
-
-from beliefstate.models import Belief
+from typing import List, Optional, Any, Dict
+from datetime import datetime, timezone, timedelta
 from beliefstate.store.base import Store
+from beliefstate.models import Belief
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ class PostgreSQLStore(Store):
     the cosine_similarity function with vector cosine distance operators.
     """
 
-    def __init__(self, dsn: str | None = None, **kwargs: Any):
+    def __init__(self, dsn: Optional[str] = None, **kwargs: Any):
         """Initialize PostgreSQLStore.
 
         Args:
@@ -31,7 +30,7 @@ class PostgreSQLStore(Store):
         """
         self.dsn = dsn
         self.connection_kwargs = kwargs
-        self._pool: Any | None = None
+        self._pool: Optional[Any] = None
 
     async def open(self) -> None:
         """Initialize connection pool and tables/functions."""
@@ -290,8 +289,8 @@ class PostgreSQLStore(Store):
         )
 
     async def get_beliefs(
-        self, session_id: str, conversation_id: str | None = None
-    ) -> list[Belief]:
+        self, session_id: str, conversation_id: Optional[str] = None
+    ) -> List[Belief]:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             if conversation_id:
@@ -317,11 +316,11 @@ class PostgreSQLStore(Store):
     async def search_beliefs(
         self,
         session_id: str,
-        embedding: list[float],
+        embedding: List[float],
         threshold: float = 0.0,
         limit: int = 5,
-        conversation_id: str | None = None,
-    ) -> list[Belief]:
+        conversation_id: Optional[str] = None,
+    ) -> List[Belief]:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             if conversation_id:
@@ -363,7 +362,7 @@ class PostgreSQLStore(Store):
         conn: Any,
         belief: Belief,
         operation: str,
-        old_value: str | None = None,
+        old_value: Optional[str] = None,
     ) -> None:
         """Write an immutable audit record for a belief mutation."""
         await conn.execute(
@@ -404,8 +403,8 @@ class PostgreSQLStore(Store):
         subject: str,
         predicate: str,
         session_id: str,
-        conversation_id: str | None = None,
-    ) -> Belief | None:
+        conversation_id: Optional[str] = None,
+    ) -> Optional[Belief]:
         """Retrieve a single belief by its composite key."""
         pool = await self._get_pool()
         cid = conversation_id or ""
@@ -435,7 +434,7 @@ class PostgreSQLStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> list[dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         """Return audit trail for a specific belief."""
         pool = await self._get_pool()
         async with pool.acquire() as conn:
@@ -459,7 +458,7 @@ class PostgreSQLStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-        conversation_id: str | None = None,
+        conversation_id: Optional[str] = None,
     ) -> None:
         pool = await self._get_pool()
         cid = conversation_id or ""
@@ -507,14 +506,14 @@ class PostgreSQLStore(Store):
         except Exception:
             return False
 
-    async def get_all_session_ids(self) -> list[str]:
+    async def get_all_session_ids(self) -> List[str]:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch("SELECT DISTINCT session_id FROM beliefs")
         return [row["session_id"] for row in rows]
 
     async def prune_expired_beliefs(
-        self, max_age_seconds: int, session_id: str | None = None
+        self, max_age_seconds: int, session_id: Optional[str] = None
     ) -> int:
         pool = await self._get_pool()
         cutoff_time = datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
@@ -541,7 +540,7 @@ class PostgreSQLStore(Store):
             pass
         return 0
 
-    async def get_session_belief_age_stats(self, session_id: str) -> dict[str, Any]:
+    async def get_session_belief_age_stats(self, session_id: str) -> Dict[str, Any]:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(

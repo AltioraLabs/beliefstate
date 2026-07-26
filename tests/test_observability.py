@@ -1,13 +1,11 @@
-from unittest.mock import MagicMock, patch
-
 import pytest
-
+from unittest.mock import MagicMock, patch
 from beliefstate.observability import (
-    OTEL_AVAILABLE,
-    BeliefTrackerMetrics,
     setup_otel,
-    trace_async,
     trace_sync,
+    trace_async,
+    BeliefTrackerMetrics,
+    OTEL_AVAILABLE,
 )
 
 

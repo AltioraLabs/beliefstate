@@ -10,20 +10,20 @@ import pytest
 def test_core_imports():
     """Test that core modules can be imported and are the correct types."""
     from beliefstate import (
-        AnthropicAdapter,
+        BeliefTracker,
+        TrackerConfig,
         Belief,
         BeliefExtractor,
-        BeliefResolver,
-        BeliefTracker,
         ContradictionDetector,
-        GeminiAdapter,
-        LiteLLMAdapter,
-        OllamaAdapter,
-        OpenAIAdapter,
-        ProviderAdapter,
-        RedisStore,
+        BeliefResolver,
         SQLiteStore,
-        TrackerConfig,
+        RedisStore,
+        ProviderAdapter,
+        OpenAIAdapter,
+        AnthropicAdapter,
+        GeminiAdapter,
+        OllamaAdapter,
+        LiteLLMAdapter,
     )
 
     assert callable(BeliefTracker)
@@ -46,11 +46,11 @@ def test_dispatcher_imports():
     """Test that dispatcher modules can be imported and are the correct types."""
     from beliefstate import (
         AsyncioDispatcher,
+        SyncDispatcher,
         CeleryDispatcher,
         RQDispatcher,
-        SyncDispatcher,
-        execute_tracking_task,
         register_global_tracker,
+        execute_tracking_task,
     )
 
     assert callable(AsyncioDispatcher)
@@ -77,9 +77,9 @@ def test_judge_imports():
 def test_resilience_imports():
     """Test that resilience modules can be imported and are the correct types."""
     from beliefstate import (
+        ResilientAdapterWrapper,
         CircuitBreaker,
         CircuitBreakerOpenException,
-        ResilientAdapterWrapper,
     )
 
     assert callable(ResilientAdapterWrapper)
@@ -101,9 +101,8 @@ def test_session_context_import():
 
 def test_basic_models():
     """Test that Belief model works correctly."""
-    from datetime import datetime
-
     from beliefstate import Belief
+    from datetime import datetime
 
     belief = Belief(
         subject="USER",
@@ -137,10 +136,9 @@ def test_tracker_config():
 @pytest.mark.asyncio
 async def test_sqlite_store():
     """Test that SQLiteStore can be instantiated and used."""
-    import os
+    from beliefstate import SQLiteStore, Belief
     import tempfile
-
-    from beliefstate import Belief, SQLiteStore
+    import os
 
     # Create a temporary database file
     tmpdir = tempfile.mkdtemp()
@@ -188,13 +186,12 @@ async def test_sqlite_store():
 @pytest.mark.asyncio
 async def test_belief_tracker_initialization():
     """Test that BeliefTracker can be initialized."""
-    from unittest.mock import MagicMock
-
     from beliefstate import (
         BeliefTracker,
-        OpenAIAdapter,
         TrackerConfig,
+        OpenAIAdapter,
     )
+    from unittest.mock import MagicMock
 
     # Create a mock adapter
     adapter = MagicMock(spec=OpenAIAdapter)

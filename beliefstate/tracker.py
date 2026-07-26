@@ -3,35 +3,34 @@ import logging
 import math
 import os
 import warnings
-from collections import deque
-from collections.abc import Callable, Coroutine
-from contextvars import ContextVar
+from typing import Any, Callable, Coroutine, Dict, List, Optional, TypeVar, Tuple, Set
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Any, TypeVar
+from contextvars import ContextVar
+from collections import deque
 
-from beliefstate.adapters.base import ProviderAdapter
-from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.config import TrackerConfig
-from beliefstate.detector import ContradictionDetector
-from beliefstate.extractor import BeliefExtractor
+from beliefstate.call import LLMCall, LLMResponse
+from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.models import Belief, DeletionReceipt
-from beliefstate.resolver import BeliefResolver
 from beliefstate.store.base import Store, summary_for_prompt
 from beliefstate.store.sqlite import SQLiteStore
+from beliefstate.extractor import BeliefExtractor
+from beliefstate.detector import ContradictionDetector
+from beliefstate.resolver import BeliefResolver
 
 logger = logging.getLogger(__name__)
 
 session_context: ContextVar[str] = ContextVar("session_id", default="default")
-conversation_context: ContextVar[str | None] = ContextVar(
+conversation_context: ContextVar[Optional[str]] = ContextVar(
     "conversation_id", default=None
 )
 
 T = TypeVar("T")
 
 # Per-session async locks for coordinating concurrent writes (bounded to avoid memory leak)
-_session_locks: dict[str, asyncio.Lock] = {}
+_session_locks: Dict[str, asyncio.Lock] = {}
 _MAX_SESSION_LOCKS = 1000
 
 
@@ -110,7 +109,7 @@ class GenericAdapter(ProviderAdapter):
         return LLMResponse(text=text, raw_response=response)
 
     async def generate(
-        self, call: LLMCall, response_format: Any | None = None
+        self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
         raise NotImplementedError("Generic adapter cannot generate.")
 
@@ -128,7 +127,7 @@ class GenericAdapter(ProviderAdapter):
 
 
 # Cache adapter instances to avoid re-instantiation on every call
-_adapter_cache: dict[str, ProviderAdapter] = {}
+_adapter_cache: Dict[str, ProviderAdapter] = {}
 
 
 def _get_cached_adapter(
@@ -249,7 +248,7 @@ class TrackerStats:
     total_duplicates_skipped: int = 0
     extraction_errors: int = 0
     last_error: str = ""
-    last_successful_extraction: datetime | None = None
+    last_successful_extraction: Optional[datetime] = None
     _recent_outcomes: deque[int] = field(default_factory=lambda: deque(maxlen=100))
 
     @property
@@ -274,8 +273,8 @@ class AsyncStreamWrapper:
         self,
         stream_gen: Any,
         tracker: "BeliefTracker",
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
         session_id: str,
         turn: int,
     ):
@@ -306,7 +305,7 @@ class AsyncStreamWrapper:
             ):
                 chunk_text = chunk.choices[0].delta.content or ""
         elif isinstance(chunk, dict):
-            if chunk.get("choices"):
+            if "choices" in chunk and chunk["choices"]:
                 choice = chunk["choices"][0]
                 if "delta" in choice and "content" in choice["delta"]:
                     chunk_text = choice["delta"]["content"] or ""
@@ -371,11 +370,11 @@ class BeliefTracker:
     def __init__(
         self,
         config: TrackerConfig,
-        adapter: ProviderAdapter | None = None,
-        store: Store | None = None,
-        internal_adapter: ProviderAdapter | None = None,
-        dispatcher: Any | None = None,
-        judge: Any | None = None,
+        adapter: Optional[ProviderAdapter] = None,
+        store: Optional[Store] = None,
+        internal_adapter: Optional[ProviderAdapter] = None,
+        dispatcher: Optional[Any] = None,
+        judge: Optional[Any] = None,
     ):
         _validate_deployment_config(config)
         self.config = config
@@ -408,10 +407,6 @@ class BeliefTracker:
                 from beliefstate.store.postgres import PostgreSQLStore
 
                 self.store = PostgreSQLStore(**self.config.store_kwargs)
-            elif stype == "duckdb":
-                from beliefstate.store.duckdb import DuckDBStore
-
-                self.store = DuckDBStore(**self.config.store_kwargs)
             elif stype == "redis":
                 from beliefstate.store.redis import RedisStore
 
@@ -427,31 +422,31 @@ class BeliefTracker:
         else:
             self.store = store
 
-        self.extractor: BeliefExtractor | None = None
-        self.detector: ContradictionDetector | None = None
+        self.extractor: Optional[BeliefExtractor] = None
+        self.detector: Optional[ContradictionDetector] = None
         self.resolver = BeliefResolver(
             store=self.store,
             strategy=self.config.resolution_strategy,
             respect_strategy_for_updates=self.config.respect_strategy_for_updates,
         )
-        self._session_turn_counters: dict[str, int] = {}
-        self._session_turn_states: dict[str, int] = {}
-        self._session_providers: dict[str, str] = {}
+        self._session_turn_counters: Dict[str, int] = {}
+        self._session_turn_states: Dict[str, int] = {}
+        self._session_providers: Dict[str, str] = {}
         self._stats = TrackerStats()
-        self._pending_tasks: set[asyncio.Task[None]] = set()
-        self._pending_conflict_notes: dict[str, list[str]] = {}
-        self._dashboard_callback: (
-            Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None
-        ) = None
+        self._pending_tasks: Set[asyncio.Task[None]] = set()
+        self._pending_conflict_notes: Dict[str, List[str]] = {}
+        self._dashboard_callback: Optional[
+            Callable[[Dict[str, Any]], Coroutine[Any, Any, None]]
+        ] = None
 
         if dispatcher is not None:
             self.dispatcher = dispatcher
         else:
             from beliefstate.dispatcher import (
                 AsyncioDispatcher,
+                SyncDispatcher,
                 CeleryDispatcher,
                 RQDispatcher,
-                SyncDispatcher,
             )
 
             dtype = self.config.task_dispatcher_type.lower()
@@ -500,7 +495,7 @@ class BeliefTracker:
                 "Install deps: pip install fastapi uvicorn sse-starlette"
             )
 
-    def get_session_turn(self, session_id: str | None = None) -> int:
+    def get_session_turn(self, session_id: Optional[str] = None) -> int:
         sid = session_id or session_context.get()
         return self._session_turn_counters.get(sid, 0)
 
@@ -508,7 +503,7 @@ class BeliefTracker:
         return self._stats
 
     def register_dashboard_callback(
-        self, callback: Callable[[dict[str, Any]], Coroutine[Any, Any, None]]
+        self, callback: Callable[[Dict[str, Any]], Coroutine[Any, Any, None]]
     ) -> None:
         """Register an async callback invoked after each pipeline stage."""
         self._dashboard_callback = callback
@@ -615,13 +610,15 @@ class BeliefTracker:
     def set_session(self, session_id: str) -> None:
         session_context.set(session_id)
 
-    def get_pending_conflicts(self, session_id: str | None = None) -> list[str]:
+    def get_pending_conflicts(self, session_id: Optional[str] = None) -> list[str]:
         sid = session_id or session_context.get()
         notes = self._pending_conflict_notes.pop(sid, [])
         notes.extend(self.resolver.pop_pending_conflicts(sid))
         return notes
 
-    async def clear_session(self, session_id: str | None = None) -> "DeletionReceipt":
+    async def clear_session(
+        self, session_id: Optional[str] = None
+    ) -> "DeletionReceipt":
         sid = session_id or session_context.get()
 
         drained_count = 0
@@ -657,11 +654,11 @@ class BeliefTracker:
         logger.info(f"GDPR deletion receipt: {receipt}")
         return receipt
 
-    async def get_beliefs(self, session_id: str | None = None) -> list[Any]:
+    async def get_beliefs(self, session_id: Optional[str] = None) -> List[Any]:
         sid = session_id or session_context.get()
         return await self.store.get_beliefs(sid)
 
-    async def get_stats_dict(self, session_id: str | None = None) -> dict[str, Any]:
+    async def get_stats_dict(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         sid = session_id or session_context.get()
         beliefs = await self.store.get_beliefs(sid)
         if not beliefs:
@@ -674,10 +671,10 @@ class BeliefTracker:
                     sid, {}
                 ).__len__(),
             }
-        by_subject: dict[str, int] = {}
+        by_subject: Dict[str, int] = {}
         for b in beliefs:
             by_subject[b.subject] = by_subject.get(b.subject, 0) + 1
-        by_source: dict[str, int] = {}
+        by_source: Dict[str, int] = {}
         for b in beliefs:
             by_source[b.source] = by_source.get(b.source, 0) + 1
         avg_confidence = sum(b.confidence for b in beliefs) / len(beliefs)
@@ -692,9 +689,9 @@ class BeliefTracker:
 
     async def get_summary(
         self,
-        session_id: str | None = None,
-        max_beliefs: int | None = None,
-        format_template: str | None = None,
+        session_id: Optional[str] = None,
+        max_beliefs: Optional[int] = None,
+        format_template: Optional[str] = None,
     ) -> str:
         max_b = max_beliefs or self.config.max_beliefs
         sid = session_id or session_context.get()
@@ -703,17 +700,19 @@ class BeliefTracker:
             return ""
         return summary_for_prompt(beliefs, max_beliefs=max_b)
 
-    async def clear_beliefs(self, session_id: str | None = None) -> None:
+    async def clear_beliefs(self, session_id: Optional[str] = None) -> None:
         sid = session_id or session_context.get()
         await self.store.clear(sid)
 
     async def remove_belief(
-        self, session_id: str | None, subject: str, predicate: str
+        self, session_id: Optional[str], subject: str, predicate: str
     ) -> None:
         sid = session_id or session_context.get()
         await self.store.remove_belief(sid, subject, predicate)
 
-    async def set_session_ttl(self, session_id: str | None, ttl_seconds: int) -> None:
+    async def set_session_ttl(
+        self, session_id: Optional[str], ttl_seconds: int
+    ) -> None:
         sid = session_id or session_context.get()
         if hasattr(self.store, "set_session_ttl"):
             await self.store.set_session_ttl(sid, ttl_seconds)
@@ -724,7 +723,7 @@ class BeliefTracker:
             )
 
     async def prune_expired_beliefs(
-        self, session_id: str | None = None, max_age_seconds: int | None = None
+        self, session_id: Optional[str] = None, max_age_seconds: Optional[int] = None
     ) -> int:
         if not hasattr(self.store, "prune_expired_beliefs"):
             logger.warning("Store does not support belief pruning")
@@ -737,7 +736,7 @@ class BeliefTracker:
             return int(await self.store.prune_expired_beliefs(max_age, None))
 
     async def update_belief_reference(
-        self, session_id: str | None, subject: str, predicate: str
+        self, session_id: Optional[str], subject: str, predicate: str
     ) -> None:
         sid = session_id or session_context.get()
         beliefs = await self.store.get_beliefs(sid)
@@ -748,16 +747,16 @@ class BeliefTracker:
                 break
 
     async def export_beliefs(
-        self, session_id: str | None = None
-    ) -> list[dict[str, Any]]:
+        self, session_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         sid = session_id or session_context.get()
         beliefs = await self.store.get_beliefs(sid)
         return [b.model_dump(mode="json") for b in beliefs]
 
     async def import_beliefs(
         self,
-        session_id: str | None = None,
-        beliefs_data: list[dict[str, Any]] | None = None,
+        session_id: Optional[str] = None,
+        beliefs_data: Optional[List[Dict[str, Any]]] = None,
     ) -> int:
         if not beliefs_data:
             return 0
@@ -775,8 +774,8 @@ class BeliefTracker:
         )
         return imported
 
-    async def health_check(self) -> dict[str, bool]:
-        result: dict[str, bool] = {"store": False, "adapter": False}
+    async def health_check(self) -> Dict[str, bool]:
+        result: Dict[str, bool] = {"store": False, "adapter": False}
         try:
             if hasattr(self.store, "health_check"):
                 result["store"] = await self.store.health_check()
@@ -799,16 +798,16 @@ class BeliefTracker:
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> list[dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         """Return audit trail for a specific belief."""
         return await self.store.get_audit_history(session_id, subject, predicate)
 
     async def get_context_prompt(
         self,
-        session_id: str | None = None,
-        conversation_id: str | None = None,
-        format_template: str | None = None,
-        current_user_message: str | None = None,
+        session_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        format_template: Optional[str] = None,
+        current_user_message: Optional[str] = None,
     ) -> str:
         sid = session_id or session_context.get()
         cid = conversation_id or conversation_context.get()
@@ -913,12 +912,12 @@ class BeliefTracker:
 
     async def inject_context(
         self,
-        messages: list[dict[str, Any]],
-        session_id: str | None = None,
-        conversation_id: str | None = None,
-        format_template: str | None = None,
-        current_user_message: str | None = None,
-    ) -> list[dict[str, Any]]:
+        messages: list[Dict[str, Any]],
+        session_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        format_template: Optional[str] = None,
+        current_user_message: Optional[str] = None,
+    ) -> list[Dict[str, Any]]:
         context_prompt = await self.get_context_prompt(
             session_id=session_id,
             conversation_id=conversation_id,
@@ -950,7 +949,7 @@ class BeliefTracker:
         context_prompt: str,
         *args: Any,
         **kwargs: Any,
-    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         if "messages" in kwargs:
             messages = kwargs["messages"]
             if isinstance(messages, list):
@@ -982,8 +981,8 @@ class BeliefTracker:
         return args, kwargs
 
     def _fallback_inject_messages(
-        self, messages: list[Any], context_prompt: str
-    ) -> list[Any]:
+        self, messages: List[Any], context_prompt: str
+    ) -> List[Any]:
         new_messages = [m.copy() if isinstance(m, dict) else m for m in messages]
         system_idx = -1
         for idx, m in enumerate(new_messages):
@@ -1179,8 +1178,8 @@ class BeliefTracker:
 
     async def track_async(
         self,
-        call_dict: dict[str, Any],
-        response_dict: dict[str, Any],
+        call_dict: Dict[str, Any],
+        response_dict: Dict[str, Any],
         session_id: str,
         turn: int,
     ) -> None:
@@ -1190,8 +1189,8 @@ class BeliefTracker:
 
     def track_sync(
         self,
-        call_dict: dict[str, Any],
-        response_dict: dict[str, Any],
+        call_dict: Dict[str, Any],
+        response_dict: Dict[str, Any],
         session_id: str,
         turn: int,
     ) -> None:
@@ -1220,7 +1219,7 @@ class BeliefTracker:
 
     def wrap(
         self,
-        func: Callable[..., Coroutine[Any, Any, Any]] | None = None,
+        func: Optional[Callable[..., Coroutine[Any, Any, Any]]] = None,
         *,
         stream: bool = False,
         auto_inject: bool = True,

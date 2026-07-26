@@ -1,11 +1,9 @@
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
-
-from beliefstate.call import LLMResponse
+from unittest.mock import AsyncMock, MagicMock
 from beliefstate.config import TrackerConfig
-from beliefstate.detector import ContradictionDetector, cosine_similarity
 from beliefstate.models import Belief
+from beliefstate.detector import ContradictionDetector, cosine_similarity
+from beliefstate.call import LLMResponse
 from beliefstate.store.sqlite import SQLiteStore
 
 

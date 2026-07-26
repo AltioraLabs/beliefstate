@@ -1,8 +1,7 @@
 """Unit tests for adapter classes (mock-based, no network calls)."""
 
-from unittest.mock import MagicMock
-
 import pytest
+from unittest.mock import MagicMock
 
 from beliefstate.call import LLMCall, LLMResponse
 

@@ -3,9 +3,8 @@
 import asyncio
 import logging
 import random
-from collections.abc import Callable
+from typing import Any, Callable, Optional, TypeVar
 from functools import wraps
-from typing import Any, TypeVar
 
 from beliefstate.resilience import is_transient_error
 
@@ -45,15 +44,19 @@ class RetryConfig:
 class TransientError(Exception):
     """Indicates an error that might succeed on retry."""
 
+    pass
+
 
 class PermanentError(Exception):
     """Indicates an error that won't succeed on retry."""
+
+    pass
 
 
 async def retry_with_backoff(
     coro_func: Callable[..., Any],
     *args: Any,
-    config: RetryConfig | None = None,
+    config: Optional[RetryConfig] = None,
     **kwargs: Any,
 ) -> Any:
     """Execute an async function with retry logic and exponential backoff.
@@ -72,7 +75,7 @@ async def retry_with_backoff(
     """
     config = config or RetryConfig()
 
-    last_error: Exception | None = None
+    last_error: Optional[Exception] = None
 
     for attempt in range(config.max_retries + 1):
         try:
@@ -111,7 +114,7 @@ async def retry_with_backoff(
         raise last_error
 
 
-def async_retry(config: RetryConfig | None = None) -> Callable[..., Any]:
+def async_retry(config: Optional[RetryConfig] = None) -> Callable[..., Any]:
     """Decorator for async functions to add retry logic.
 
     Usage:
@@ -160,7 +163,7 @@ async def with_timeout(
         raise
 
 
-def validate_api_key(api_key: str | None, provider: str) -> None:
+def validate_api_key(api_key: Optional[str], provider: str) -> None:
     """Validate that an API key is configured.
 
     Args:

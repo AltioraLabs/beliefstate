@@ -1,14 +1,13 @@
+import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
-from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.config import TrackerConfig
+from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.resilience import (
+    ResilientAdapterWrapper,
     CircuitBreaker,
     CircuitBreakerOpenException,
-    ResilientAdapterWrapper,
     is_transient_error,
 )
 

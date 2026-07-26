@@ -1,6 +1,5 @@
-from typing import Any
-
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field, ConfigDict
 
 
 def _make_json_safe(obj: Any) -> Any:
@@ -19,12 +18,12 @@ class LLMCall(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    messages: list[dict[str, Any]]
-    kwargs: dict[str, Any] = Field(default_factory=dict)
-    system: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    messages: List[Dict[str, Any]]
+    kwargs: Dict[str, Any] = Field(default_factory=dict)
+    system: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> Dict[str, Any]:
         data = super().model_dump(**kwargs)
         data["kwargs"] = _make_json_safe(data.get("kwargs", {}))
         return data
@@ -37,4 +36,4 @@ class LLMResponse(BaseModel):
 
     text: str
     raw_response: Any
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)

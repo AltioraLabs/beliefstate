@@ -1,8 +1,7 @@
 """Advanced tests for SQLiteStore — context manager, conversations, pruning, stats."""
 
-from datetime import datetime, timedelta, timezone
-
 import pytest
+from datetime import datetime, timezone, timedelta
 
 from beliefstate.models import Belief
 from beliefstate.store.sqlite import SQLiteStore

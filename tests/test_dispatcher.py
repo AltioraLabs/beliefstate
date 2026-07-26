@@ -1,18 +1,17 @@
-import asyncio
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
+import asyncio
+from unittest.mock import MagicMock, AsyncMock
 
 from beliefstate import BeliefTracker, TrackerConfig
 from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.dispatcher import (
     AsyncioDispatcher,
+    SyncDispatcher,
     CeleryDispatcher,
     RQDispatcher,
-    SyncDispatcher,
-    execute_tracking_task,
-    get_global_tracker,
     register_global_tracker,
+    get_global_tracker,
+    execute_tracking_task,
 )
 
 

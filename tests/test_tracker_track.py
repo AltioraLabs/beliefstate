@@ -1,12 +1,11 @@
 """Tests for BeliefTracker.track_sync() and track_async() methods."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+from unittest.mock import MagicMock, AsyncMock, patch
 
-from beliefstate.call import LLMCall
-from beliefstate.config import TrackerConfig
 from beliefstate.tracker import BeliefTracker, GenericAdapter
+from beliefstate.config import TrackerConfig
+from beliefstate.call import LLMCall
 
 
 @pytest.fixture

@@ -45,14 +45,14 @@ st.set_page_config(
 )
 
 from ui_helpers import (  # noqa: E402
-    build_sidebar,
     inject_css,
-    render_beliefs_tab,
+    build_sidebar,
     render_chat_tab,
+    render_beliefs_tab,
+    render_tests_tab,
+    render_gdpr_tab,
     render_context_tab,
     render_footer,
-    render_gdpr_tab,
-    render_tests_tab,
 )
 
 inject_css()

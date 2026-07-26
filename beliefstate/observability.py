@@ -21,24 +21,23 @@ Usage:
 """
 
 import logging
-from collections.abc import Callable, Coroutine
+from typing import Any, Optional, Callable, Coroutine, TypeVar
 from functools import wraps
-from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
 # Optional imports - gracefully degrade if not available
 try:
-    from opentelemetry import metrics, trace
-    from opentelemetry.api.trace import Status, StatusCode
+    from opentelemetry import trace, metrics
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
         OTLPMetricExporter,
     )
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.api.trace import Status, StatusCode
 
     OTEL_AVAILABLE = True
 except ImportError:
@@ -50,8 +49,8 @@ except ImportError:
 T = TypeVar("T")
 
 # Global state
-_tracer: Any | None = None
-_meter: Any | None = None
+_tracer: Optional[Any] = None
+_meter: Optional[Any] = None
 _otel_enabled = False
 
 
@@ -126,7 +125,7 @@ def setup_otel(
 
 
 def trace_sync(
-    operation_name: str, attributes: dict[str, Any] | None = None
+    operation_name: str, attributes: Optional[dict[str, Any]] = None
 ) -> Callable[..., Any]:
     """Decorator to trace synchronous functions.
 
@@ -169,7 +168,7 @@ def trace_sync(
 
 
 def trace_async(
-    operation_name: str, attributes: dict[str, Any] | None = None
+    operation_name: str, attributes: Optional[dict[str, Any]] = None
 ) -> Callable[..., Any]:
     """Decorator to trace async functions.
 

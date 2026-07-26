@@ -1,8 +1,9 @@
 import math
 import struct
+from typing import List
 
 
-def cosine_similarity(v1: list[float], v2: list[float]) -> float:
+def cosine_similarity(v1: List[float], v2: List[float]) -> float:
     """Compute cosine similarity between two float vectors."""
     if not v1 or not v2:
         return 0.0
@@ -16,14 +17,14 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
     return float(dot / (mag1 * mag2))
 
 
-def pack_embedding(embedding: list[float]) -> bytes:
+def pack_embedding(embedding: List[float]) -> bytes:
     """Pack float32 array as binary bytes for storage."""
     if not embedding:
         return b""
     return struct.pack(f"{len(embedding)}f", *embedding)
 
 
-def unpack_embedding(data: bytes) -> list[float]:
+def unpack_embedding(data: bytes) -> List[float]:
     """Unpack binary bytes back to float32 list."""
     if not data:
         return []

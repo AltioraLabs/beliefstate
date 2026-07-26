@@ -1,5 +1,4 @@
-from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Optional, AsyncGenerator, Any
 
 try:
     from fastapi import Header, Request
@@ -8,9 +7,9 @@ try:
 except ImportError:
     Header = Request = Any  # type: ignore
     HAS_FASTAPI = False
+from beliefstate.tracker import session_context
 from beliefstate.integrations.asgi import BeliefTrackerASGIMiddleware
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id
-from beliefstate.tracker import session_context
 
 
 class FastAPIBeliefTrackerMiddleware(BeliefTrackerASGIMiddleware):
@@ -82,8 +81,8 @@ if HAS_FASTAPI:
 
     async def get_session_id(
         request: Request,
-        x_session_id: str | None = Header(None, alias="X-Session-ID"),
-    ) -> AsyncGenerator[str | None, None]:
+        x_session_id: Optional[str] = Header(None, alias="X-Session-ID"),
+    ) -> AsyncGenerator[Optional[str], None]:
         """
         FastAPI dependency injection helper to extract the session ID from the
         X-Session-ID header (or fallback to request.state) and bind it to the

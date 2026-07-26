@@ -1,25 +1,24 @@
-import asyncio
+import json
 import csv
 import io
-import json
 import os
 import queue
+import asyncio
 import time
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
-from typing import Any
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from beliefstate.models import Belief
 from beliefstate.tracker import BeliefTracker
+from beliefstate.models import Belief
 
-tracker_instance: BeliefTracker | None = None
+tracker_instance: Optional[BeliefTracker] = None
 _sync_queue: queue.Queue = queue.Queue()
-_activity_log: list[dict[str, Any]] = []
+_activity_log: List[Dict[str, Any]] = []
 _MAX_ACTIVITY = 500
 
 
@@ -38,27 +37,27 @@ class BeliefCreate(BaseModel):
 
 class SimulateRequest(BaseModel):
     message: str
-    conversation_id: str | None = None
+    conversation_id: Optional[str] = None
 
 
 class ConfigUpdate(BaseModel):
-    max_beliefs: int | None = None
-    belief_budget_tokens: int | None = None
-    similarity_threshold: float | None = None
-    contradiction_threshold: float | None = None
-    entailment_threshold: float | None = None
-    resolution_strategy: str | None = None
-    respect_strategy_for_updates: bool | None = None
-    enable_staleness_scoring: bool | None = None
-    staleness_threshold: float | None = None
-    belief_sort_strategy: str | None = None
-    min_injection_confidence: float | None = None
-    extract_prompt_template: str | None = None
+    max_beliefs: Optional[int] = None
+    belief_budget_tokens: Optional[int] = None
+    similarity_threshold: Optional[float] = None
+    contradiction_threshold: Optional[float] = None
+    entailment_threshold: Optional[float] = None
+    resolution_strategy: Optional[str] = None
+    respect_strategy_for_updates: Optional[bool] = None
+    enable_staleness_scoring: Optional[bool] = None
+    staleness_threshold: Optional[float] = None
+    belief_sort_strategy: Optional[str] = None
+    min_injection_confidence: Optional[float] = None
+    extract_prompt_template: Optional[str] = None
 
 
 class ReExtractRequest(BaseModel):
-    custom_prompt: str | None = None
-    message: str | None = None
+    custom_prompt: Optional[str] = None
+    message: Optional[str] = None
 
 
 def set_tracker(tracker: BeliefTracker):
@@ -76,13 +75,13 @@ def get_event_queue() -> queue.Queue:
     return _sync_queue
 
 
-async def push_tracker_event(event: dict[str, Any]) -> None:
+async def push_tracker_event(event: Dict[str, Any]) -> None:
     """Callback registered on BeliefTracker to push real pipeline events to SSE."""
     _sync_queue.put_nowait(event)
     push_activity("tracking_event", event.get("session_id", "?"), event)
 
 
-def push_activity(event_type: str, session_id: str, data: dict[str, Any]):
+def push_activity(event_type: str, session_id: str, data: Dict[str, Any]):
     entry = {
         "type": event_type,
         "session_id": session_id,
@@ -94,7 +93,7 @@ def push_activity(event_type: str, session_id: str, data: dict[str, Any]):
         _activity_log.pop(0)
 
 
-def make_belief_dict(b: Belief) -> dict[str, Any]:
+def make_belief_dict(b: Belief) -> Dict[str, Any]:
     return {
         "subject": b.subject,
         "predicate": b.predicate,
@@ -140,13 +139,13 @@ async def list_sessions():
 @app.get("/api/sessions/{session_id}/beliefs")
 async def get_beliefs(
     session_id: str,
-    conversation_id: str | None = None,
+    conversation_id: Optional[str] = None,
     include_hypothetical: bool = False,
     min_confidence: float = 0.0,
-    source: str | None = None,
-    category: str | None = None,
-    belief_type: str | None = None,
-    search: str | None = None,
+    source: Optional[str] = None,
+    category: Optional[str] = None,
+    belief_type: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = 500,
     offset: int = 0,
 ):
@@ -220,7 +219,7 @@ async def delete_belief(session_id: str, subject: str, predicate: str):
 
 @app.get("/api/sessions/{session_id}/history")
 async def get_history(
-    session_id: str, subject: str | None = None, predicate: str | None = None
+    session_id: str, subject: Optional[str] = None, predicate: Optional[str] = None
 ):
     tracker = get_tracker()
     history = []
@@ -336,7 +335,7 @@ async def get_timeline(session_id: str, subject: str, predicate: str):
 
     all_beliefs = await tracker.store.get_beliefs(session_id)
 
-    turns: dict[int, list[dict]] = {}
+    turns: Dict[int, List[Dict]] = {}
     for b in all_beliefs:
         t = b.turn
         if t not in turns:
@@ -397,10 +396,10 @@ async def get_detailed_stats(session_id: str):
             "contradiction_count": 0,
         }
 
-    by_cat: dict[str, int] = {}
-    by_src: dict[str, int] = {}
-    by_type: dict[str, int] = {}
-    conf_ranges: dict[str, int] = {
+    by_cat: Dict[str, int] = {}
+    by_src: Dict[str, int] = {}
+    by_type: Dict[str, int] = {}
+    conf_ranges: Dict[str, int] = {
         "0.0-0.5": 0,
         "0.5-0.7": 0,
         "0.7-0.85": 0,
@@ -641,7 +640,7 @@ async def update_config(update: ConfigUpdate):
 @app.get("/api/provider/info")
 async def get_provider_info():
     tracker = get_tracker()
-    info: dict[str, Any] = {}
+    info: Dict[str, Any] = {}
 
     if tracker.internal_adapter:
         try:

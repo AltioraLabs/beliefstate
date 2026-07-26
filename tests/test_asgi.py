@@ -1,5 +1,4 @@
 import pytest
-
 from beliefstate.integrations.asgi import BeliefTrackerASGIMiddleware
 from beliefstate.tracker import session_context
 

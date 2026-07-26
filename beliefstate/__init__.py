@@ -5,27 +5,28 @@ All adapter and integration imports are lazy — they only fail when you
 """
 
 # --- Core (always available) ---------------------------------------------------
-# --- Adapters (optional SDKs) --------------------------------------------------
-from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.call import LLMCall, LLMResponse
+from beliefstate.models import Belief
 from beliefstate.config import TrackerConfig
+from beliefstate.store.base import Store, summary_for_prompt
+from beliefstate.store.sqlite import SQLiteStore
+from beliefstate.tracker import BeliefTracker, session_context, TrackerStats
+from beliefstate.extractor import BeliefExtractor, calibrate_confidence
 from beliefstate.detector import (
     ContradictionDetector,
-    DetectionResult,
     Outcome,
+    DetectionResult,
     normalize_value,
 )
+from beliefstate.resolver import BeliefResolver
+from beliefstate.logging_utils import TrackerEvent, log_event
 
-# Dispatcher Exports
-from beliefstate.dispatcher import (
-    AsyncioDispatcher,
-    CeleryDispatcher,
-    RQDispatcher,
-    SyncDispatcher,
-    execute_tracking_task,
-    register_global_tracker,
+# Resilience Exports
+from beliefstate.resilience import (
+    ResilientAdapterWrapper,
+    CircuitBreaker,
+    CircuitBreakerOpenException,
 )
-from beliefstate.extractor import BeliefExtractor, calibrate_confidence
 
 # Judge Exports
 from beliefstate.judge import (
@@ -33,19 +34,19 @@ from beliefstate.judge import (
     LLMJudge,
     LocalNLIJudge,
 )
-from beliefstate.logging_utils import TrackerEvent, log_event
-from beliefstate.models import Belief
 
-# Resilience Exports
-from beliefstate.resilience import (
-    CircuitBreaker,
-    CircuitBreakerOpenException,
-    ResilientAdapterWrapper,
+# Dispatcher Exports
+from beliefstate.dispatcher import (
+    AsyncioDispatcher,
+    SyncDispatcher,
+    CeleryDispatcher,
+    RQDispatcher,
+    register_global_tracker,
+    execute_tracking_task,
 )
-from beliefstate.resolver import BeliefResolver
-from beliefstate.store.base import Store, summary_for_prompt
-from beliefstate.store.sqlite import SQLiteStore
-from beliefstate.tracker import BeliefTracker, TrackerStats, session_context
+
+# --- Adapters (optional SDKs) --------------------------------------------------
+from beliefstate.adapters.base import ProviderAdapter
 
 try:
     from beliefstate.adapters.openai import OpenAIAdapter
@@ -88,11 +89,6 @@ try:
 except ImportError:
     PostgreSQLStore = None  # type: ignore[assignment,misc]
 
-try:
-    from beliefstate.store.duckdb import DuckDBStore
-except ImportError:
-    DuckDBStore = None  # type: ignore[assignment,misc]
-
 # --- Framework Integrations (optional SDKs) ------------------------------------
 try:
     from beliefstate.integrations.fastapi import (
@@ -129,8 +125,8 @@ except ImportError:
 
 try:
     from beliefstate.integrations.openai import (
-        observe_run,
         process_openai_assistant_message,
+        observe_run,
     )
 except ImportError:
     process_openai_assistant_message = None  # type: ignore[assignment]
@@ -138,61 +134,60 @@ except ImportError:
 
 
 __all__ = [
-    "AnthropicAdapter",
-    "DuckDBStore",
-    # Dispatchers
-    "AsyncioDispatcher",
-    "Belief",
-    "BeliefExtractor",
-    "BeliefResolver",
-    "BeliefTracker",
-    "BeliefTrackerASGIMiddleware",
-    "BeliefTrackerLangchainCallback",
-    "CeleryDispatcher",
-    "CircuitBreaker",
-    "CircuitBreakerOpenException",
-    "ContradictionDetector",
-    # Judges
-    "ContradictionJudge",
-    "DetectionResult",
-    # Integrations (may be None if framework not installed)
-    "FastAPIBeliefTrackerMiddleware",
-    "FlaskBeliefTrackerMiddleware",
-    "GeminiAdapter",
-    "InMemoryBeliefStore",
     # Core
     "LLMCall",
-    "LLMJudge",
     "LLMResponse",
-    "LiteLLMAdapter",
-    "LlamaIndexBeliefTrackerCallback",
-    "LocalNLIJudge",
-    "OllamaAdapter",
-    # Adapters (may be None if SDK not installed)
-    "OpenAIAdapter",
-    "Outcome",
-    "PostgreSQLStore",
-    "ProviderAdapter",
-    "RQDispatcher",
+    "Belief",
+    "TrackerConfig",
+    "Store",
+    "summary_for_prompt",
+    "SQLiteStore",
     "RedisStore",
+    "PostgreSQLStore",
+    "InMemoryBeliefStore",
+    "ProviderAdapter",
+    "BeliefExtractor",
+    "calibrate_confidence",
+    "ContradictionDetector",
+    "Outcome",
+    "DetectionResult",
+    "normalize_value",
+    "BeliefResolver",
+    "BeliefTracker",
+    "TrackerStats",
+    "session_context",
     # Resilience
     "ResilientAdapterWrapper",
-    "SQLiteStore",
-    "Store",
+    "CircuitBreaker",
+    "CircuitBreakerOpenException",
+    # Judges
+    "ContradictionJudge",
+    "LLMJudge",
+    "LocalNLIJudge",
+    # Dispatchers
+    "AsyncioDispatcher",
     "SyncDispatcher",
-    "TrackerConfig",
+    "CeleryDispatcher",
+    "RQDispatcher",
+    "register_global_tracker",
+    "execute_tracking_task",
+    # Adapters (may be None if SDK not installed)
+    "OpenAIAdapter",
+    "AnthropicAdapter",
+    "GeminiAdapter",
+    "OllamaAdapter",
+    "LiteLLMAdapter",
+    # Integrations (may be None if framework not installed)
+    "FastAPIBeliefTrackerMiddleware",
+    "get_session_id",
+    "FlaskBeliefTrackerMiddleware",
+    "register_flask_hooks",
+    "BeliefTrackerASGIMiddleware",
+    "BeliefTrackerLangchainCallback",
+    "LlamaIndexBeliefTrackerCallback",
+    "process_openai_assistant_message",
+    "observe_run",
     # Structured logging
     "TrackerEvent",
-    "TrackerStats",
-    "calibrate_confidence",
-    "execute_tracking_task",
-    "get_session_id",
     "log_event",
-    "normalize_value",
-    "observe_run",
-    "process_openai_assistant_message",
-    "register_flask_hooks",
-    "register_global_tracker",
-    "session_context",
-    "summary_for_prompt",
 ]

@@ -1,9 +1,8 @@
 import asyncio
 import logging
-from typing import Any
-
-from beliefstate.call import LLMCall, LLMResponse
+from typing import Any, Dict, List, Optional, Tuple
 from beliefstate.tracker import BeliefTracker, session_context
+from beliefstate.call import LLMCall, LLMResponse
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +16,14 @@ except ImportError:
 
 
 def process_openai_assistant_message(
-    thread_messages: list[Any], run_id: str
-) -> tuple[LLMCall, LLMResponse]:
+    thread_messages: List[Any], run_id: str
+) -> Tuple[LLMCall, LLMResponse]:
     """
     Reconstructs the LLMCall and LLMResponse from the thread messages for a specific run.
     thread_messages should be a list of OpenAI Message objects (ordered newest first, as returned by API).
     """
-    response_texts: list[str] = []
-    call_messages: list[dict[str, Any]] = []
+    response_texts: List[str] = []
+    call_messages: List[Dict[str, Any]] = []
 
     found_run_msg = False
     for msg in thread_messages:
@@ -112,7 +111,7 @@ async def observe_run(
     client: Any,
     thread_id: str,
     run_id: str,
-    session_id: str | None = None,
+    session_id: Optional[str] = None,
     poll_interval: float = 1.0,
     timeout: float = 300.0,
 ) -> None:

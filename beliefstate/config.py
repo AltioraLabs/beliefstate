@@ -1,6 +1,5 @@
-from typing import Any
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 DEFAULT_EXTRACT_PROMPT = """
 You are a precise fact and decision extraction engine. Your goal is to construct a persistent
@@ -149,9 +148,9 @@ class TrackerConfig(BaseModel):
     # Store settings
     store_type: str = Field(
         default="sqlite",
-        description="Type of storage to use ('sqlite', 'redis', 'postgres', 'duckdb').",
+        description="Type of storage to use ('sqlite', 'redis', 'postgres').",
     )
-    store_kwargs: dict[str, Any] = Field(
+    store_kwargs: Dict[str, Any] = Field(
         default_factory=dict, description="Additional kwargs for the store."
     )
 
@@ -168,7 +167,7 @@ class TrackerConfig(BaseModel):
     @field_validator("store_type")
     @classmethod
     def validate_store_type(cls, v: str) -> str:
-        valid = {"sqlite", "redis", "postgres", "duckdb"}
+        valid = {"sqlite", "redis", "postgres"}
         if v.lower() not in valid:
             raise ValueError(f"store_type must be one of {valid}, got '{v}'")
         return v.lower()
@@ -216,13 +215,13 @@ class TrackerConfig(BaseModel):
     )
 
     # Internal override for the tracker
-    internal_provider: Any | None = Field(
+    internal_provider: Optional[Any] = Field(
         default=None, description="Explicit provider for tracker's internal LLM calls."
     )
-    embed_provider: Any | None = Field(
+    embed_provider: Optional[Any] = Field(
         default=None, description="Explicit provider for embedding generation."
     )
-    embed_model: str | None = Field(
+    embed_model: Optional[str] = Field(
         default=None, description="Model name to use for embeddings."
     )
 
@@ -255,7 +254,7 @@ class TrackerConfig(BaseModel):
         default="asyncio",
         description="Task dispatcher type ('asyncio', 'sync', 'celery', 'rq').",
     )
-    dispatcher_kwargs: dict[str, Any] = Field(
+    dispatcher_kwargs: Dict[str, Any] = Field(
         default_factory=dict,
         description="Arguments/instances for initializing dispatcher.",
     )
@@ -315,7 +314,7 @@ class TrackerConfig(BaseModel):
     )
 
     # Context injection filtering
-    exclude_sources: list[str] = Field(
+    exclude_sources: List[str] = Field(
         default_factory=lambda: ["assistant"],
         description="Belief sources to exclude from context injection (e.g. ['assistant'] to skip LLM-generated beliefs).",
     )

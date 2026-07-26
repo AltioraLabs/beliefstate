@@ -1,16 +1,15 @@
 import asyncio
 import logging
 import os
-from typing import Any, cast
-
+from typing import Any, Dict, List, Optional, Tuple, cast
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
-    PermanentError,
     RetryConfig,
-    StructuredLogger,
     retry_with_backoff,
-    validate_api_key,
     with_timeout,
+    validate_api_key,
+    StructuredLogger,
+    PermanentError,
 )
 from beliefstate.call import LLMCall, LLMResponse
 
@@ -41,14 +40,14 @@ class GeminiAdapter(ProviderAdapter):
 
     def __init__(
         self,
-        client: Any | None = None,
+        client: Optional[Any] = None,
         model: str = "gemini-2.0-flash",
         embed_model: str = "text-embedding-004",
-        embed_kwargs: dict[str, Any] | None = None,
+        embed_kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 30.0,
-        retry_config: RetryConfig | None = None,
+        retry_config: Optional[RetryConfig] = None,
         health_check_timeout: float = 5.0,
-        safety_settings: list[dict[str, str]] | None = None,
+        safety_settings: Optional[List[Dict[str, str]]] = None,
     ):
         self.model = model
         self.embed_model = embed_model
@@ -133,7 +132,7 @@ class GeminiAdapter(ProviderAdapter):
         context_prompt: str,
         *args: Any,
         **kwargs: Any,
-    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         """Inject context prompt into Gemini config.system_instruction."""
         new_kwargs = kwargs.copy()
         config = new_kwargs.get("config")
@@ -185,7 +184,7 @@ class GeminiAdapter(ProviderAdapter):
         return args, new_kwargs
 
     async def _generate_with_backoff(
-        self, call: LLMCall, response_format: Any | None = None
+        self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
         """Internal method that actually calls the API."""
         from google.genai import types
@@ -195,7 +194,7 @@ class GeminiAdapter(ProviderAdapter):
         for m in call.messages:
             formatted_contents += f"{m.get('role', 'user')}: {m.get('content', '')}\n"
 
-        config_args: dict[str, Any] = {}
+        config_args: Dict[str, Any] = {}
         if call.system:
             config_args["system_instruction"] = call.system
 
@@ -223,7 +222,7 @@ class GeminiAdapter(ProviderAdapter):
         return self.to_llm_response(response)
 
     async def generate(
-        self, call: LLMCall, response_format: Any | None = None
+        self, call: LLMCall, response_format: Optional[Any] = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
 
@@ -276,7 +275,7 @@ class GeminiAdapter(ProviderAdapter):
             )
             raise
 
-    async def _get_embeddings_with_backoff(self, texts: list[str]) -> list[list[float]]:
+    async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
         """Internal method that actually calls the embeddings API."""
         kwargs = {"model": self.embed_model, "contents": texts}
         if self.embed_kwargs:
@@ -285,7 +284,7 @@ class GeminiAdapter(ProviderAdapter):
         response = await self.client.aio.models.embed_content(**kwargs)
         return [list(emb.values) for emb in response.embeddings]
 
-    async def get_embedding(self, text: str) -> list[float]:
+    async def get_embedding(self, text: str) -> List[float]:
         """Get embedding for a single text.
 
         Args:
@@ -297,7 +296,7 @@ class GeminiAdapter(ProviderAdapter):
         res = await self.get_embeddings([text])
         return res[0]
 
-    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
+    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Get embeddings for multiple texts with automatic retry and timeout.
 
         Args:
@@ -320,9 +319,9 @@ class GeminiAdapter(ProviderAdapter):
 
         try:
 
-            async def api_call() -> list[list[float]]:
+            async def api_call() -> List[List[float]]:
                 return cast(
-                    list[list[float]],
+                    List[List[float]],
                     await retry_with_backoff(
                         self._get_embeddings_with_backoff,
                         texts,
@@ -335,7 +334,7 @@ class GeminiAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 f"Gemini embeddings ({len(texts)} texts)",
             )
-            return cast(list[list[float]], result)
+            return cast(List[List[float]], result)
 
         except PermanentError:
             self.log.error(

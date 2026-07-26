@@ -10,20 +10,19 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from beliefstate.config import TrackerConfig
 
 # Optional third-party dependency required by each non-default store backend,
 # as (import_name, pip_extra). sqlite relies on aiosqlite, a core dependency.
-_STORE_DEPENDENCIES: dict[str, tuple[str, str]] = {
+_STORE_DEPENDENCIES: Dict[str, Tuple[str, str]] = {
     "redis": ("redis", "redis"),
     "postgres": ("asyncpg", "postgres"),
-    "duckdb": ("duckdb", "duckdb"),
 }
 
 
-def _load_config_file(path: Path) -> dict[str, Any]:
+def _load_config_file(path: Path) -> Dict[str, Any]:
     """Load a JSON or YAML config file into a dict."""
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() in (".yaml", ".yml"):
@@ -54,16 +53,12 @@ def _build_store(config: TrackerConfig) -> Any:
         if RedisStore is None:
             raise RuntimeError("Redis SDK is not installed.")
         return RedisStore(**config.store_kwargs)
-    if stype == "duckdb":
-        from beliefstate.store.duckdb import DuckDBStore
-
-        return DuckDBStore(**config.store_kwargs)
     from beliefstate.store.sqlite import SQLiteStore
 
     return SQLiteStore(db_path=config.store_kwargs.get("db_path", "beliefstate.db"))
 
 
-def _check_store_dependency(store_type: str) -> tuple[bool, str]:
+def _check_store_dependency(store_type: str) -> Tuple[bool, str]:
     """Verify the optional dependency for the store backend is importable."""
     dep = _STORE_DEPENDENCIES.get(store_type.lower())
     if dep is None:
@@ -80,7 +75,7 @@ def _check_store_dependency(store_type: str) -> tuple[bool, str]:
         )
 
 
-async def _health_check_store(config: TrackerConfig) -> tuple[bool, str]:
+async def _health_check_store(config: TrackerConfig) -> Tuple[bool, str]:
     """Best-effort connection check against the configured store."""
     try:
         store = _build_store(config)
@@ -173,7 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 

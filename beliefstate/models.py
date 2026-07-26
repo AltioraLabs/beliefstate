@@ -1,5 +1,5 @@
+from typing import List, Optional
 from datetime import datetime, timezone
-
 from pydantic import BaseModel, Field
 
 
@@ -24,7 +24,7 @@ class Belief(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     turn: int
     source: str
-    embedding: list[float] = Field(default_factory=list)
+    embedding: List[float] = Field(default_factory=list)
     embedding_model: str = Field(
         default="",
         description="Model used to generate the embedding (e.g., 'text-embedding-3-small', 'nomic-embed-text'). Empty string for backwards compatibility.",
@@ -37,11 +37,11 @@ class Belief(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc),
         description="UTC timestamp when this belief was created.",
     )
-    session_id: str | None = Field(
+    session_id: Optional[str] = Field(
         default=None,
         description="Session ID (user identity) this belief belongs to (optional, for schema flexibility).",
     )
-    conversation_id: str | None = Field(
+    conversation_id: Optional[str] = Field(
         default=None,
         description="Conversation ID (specific thread) this belief belongs to. Separates parallel conversations within same session.",
     )

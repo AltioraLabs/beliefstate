@@ -2,13 +2,12 @@ import logging
 import math
 import re
 import unicodedata
-from dataclasses import dataclass
 from enum import Enum
-from typing import Any
-
-from beliefstate.adapters.base import ProviderAdapter
+from typing import Any, List, Optional, Tuple
+from dataclasses import dataclass
 from beliefstate.config import TrackerConfig
 from beliefstate.models import Belief
+from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.store.base import Store
 
 logger = logging.getLogger(__name__)
@@ -27,7 +26,7 @@ class Outcome(str, Enum):
 class DetectionResult:
     belief: Belief
     outcome: Outcome
-    matched_belief: Belief | None = None
+    matched_belief: Optional[Belief] = None
     score: float = 0.0
     reason: str = ""
 
@@ -109,7 +108,7 @@ def has_negation(text: str) -> bool:
     return False
 
 
-def cosine_similarity(v1: list[float], v2: list[float]) -> float:
+def cosine_similarity(v1: List[float], v2: List[float]) -> float:
     if not v1 or not v2:
         return 0.0
     if len(v1) != len(v2):
@@ -140,7 +139,7 @@ class ContradictionDetector:
         adapter: ProviderAdapter,
         store: Store,
         config: TrackerConfig,
-        judge: Any | None = None,
+        judge: Optional[Any] = None,
     ):
         self.adapter = adapter
         self.store = store
@@ -154,7 +153,7 @@ class ContradictionDetector:
 
     def _is_rule_based_contradiction(
         self, old_b: Belief, new_b: Belief
-    ) -> tuple[bool, str]:
+    ) -> Tuple[bool, str]:
         """Fast check for obvious contradictions without LLM/embeddings.
 
         Returns (is_contradiction, reason) where reason explains the conflict.
@@ -182,8 +181,8 @@ class ContradictionDetector:
         )
 
     async def detect(
-        self, session_id: str, new_beliefs: list[Belief]
-    ) -> list[tuple[Belief, Belief, float, str]]:
+        self, session_id: str, new_beliefs: List[Belief]
+    ) -> List[Tuple[Belief, Belief, float, str]]:
         """Detect contradictions between new beliefs and existing store."""
         contradictions = []
 
@@ -219,8 +218,8 @@ class ContradictionDetector:
         return contradictions
 
     async def detect_with_deduplication(
-        self, session_id: str, new_beliefs: list[Belief]
-    ) -> tuple[list[tuple[Belief, Belief, float, str]], list[Belief]]:
+        self, session_id: str, new_beliefs: List[Belief]
+    ) -> Tuple[List[Tuple[Belief, Belief, float, str]], List[Belief]]:
         """Detect contradictions AND deduplicate entailed beliefs.
 
         Step 0: Exact duplicate check (O(1), no LLM/embedding cost)

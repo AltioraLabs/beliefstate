@@ -1,10 +1,9 @@
+import pytest
 from unittest.mock import AsyncMock
 
-import pytest
-
 from beliefstate.models import Belief
-from beliefstate.store.redis import RedisStore
 from beliefstate.store.sqlite import SQLiteStore
+from beliefstate.store.redis import RedisStore
 
 
 @pytest.mark.asyncio
