@@ -44,7 +44,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-from ui_helpers import (
+from ui_helpers import (  # noqa: E402
     build_sidebar,
     inject_css,
     render_beliefs_tab,

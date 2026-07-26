@@ -56,7 +56,7 @@ class TestValidateConfig:
 
     def test_missing_store_dependency_reported(self, tmp_path, capsys):
         try:
-            import redis
+            import redis  # noqa: F401
 
             pytest.skip("redis is installed; dependency-missing path not exercised")
         except ImportError:
