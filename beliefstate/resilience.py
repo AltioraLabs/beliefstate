@@ -1,17 +1,19 @@
-import time
 import logging
 import threading
-from typing import Any, List, Callable, Coroutine, Optional, cast
+import time
+from collections.abc import Callable, Coroutine
+from typing import Any, List, Optional, cast
+
 from tenacity import (
     AsyncRetrying,
-    wait_exponential,
-    stop_after_attempt,
     retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
 )
 
-from beliefstate.config import TrackerConfig
-from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.adapters.base import ProviderAdapter
+from beliefstate.call import LLMCall, LLMResponse
+from beliefstate.config import TrackerConfig
 
 logger = logging.getLogger("beliefstate.resilience")
 
@@ -182,7 +184,7 @@ class ResilientAdapterWrapper(ProviderAdapter):
         return self.adapter.to_llm_response(response)
 
     async def generate(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         return cast(
             LLMResponse,
@@ -193,9 +195,9 @@ class ResilientAdapterWrapper(ProviderAdapter):
             ),
         )
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         return cast(
-            List[float],
+            list[float],
             await self._execute_with_resilience(
                 lambda: self.adapter.get_embedding(text),
                 self.embed_breaker,
@@ -203,9 +205,9 @@ class ResilientAdapterWrapper(ProviderAdapter):
             ),
         )
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         return cast(
-            List[List[float]],
+            list[list[float]],
             await self._execute_with_resilience(
                 lambda: self.adapter.get_embeddings(texts),
                 self.embed_breaker,

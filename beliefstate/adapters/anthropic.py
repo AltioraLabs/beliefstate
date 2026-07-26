@@ -2,14 +2,15 @@ import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple, cast
+
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
-    RetryConfig,
-    retry_with_backoff,
-    with_timeout,
-    validate_api_key,
-    StructuredLogger,
     PermanentError,
+    RetryConfig,
+    StructuredLogger,
+    retry_with_backoff,
+    validate_api_key,
+    with_timeout,
 )
 from beliefstate.call import LLMCall, LLMResponse
 
@@ -38,12 +39,12 @@ class AnthropicAdapter(ProviderAdapter):
 
     def __init__(
         self,
-        client: Optional[Any] = None,
+        client: Any | None = None,
         model: str = "claude-3-5-sonnet-latest",
         embed_model: str = "voyage-large-2",
-        embed_kwargs: Optional[Dict[str, Any]] = None,
+        embed_kwargs: dict[str, Any] | None = None,
         timeout: float = 30.0,
-        retry_config: Optional[RetryConfig] = None,
+        retry_config: RetryConfig | None = None,
         health_check_timeout: float = 5.0,
         default_max_tokens: int = 1024,
     ):
@@ -102,7 +103,7 @@ class AnthropicAdapter(ProviderAdapter):
         context_prompt: str,
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         """Inject context prompt into Anthropic kwargs['system']."""
         new_kwargs = kwargs.copy()
         system = new_kwargs.get("system", "")
@@ -113,7 +114,7 @@ class AnthropicAdapter(ProviderAdapter):
         return args, new_kwargs
 
     async def _generate_with_backoff(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Internal method that actually calls the API."""
         import json
@@ -159,7 +160,7 @@ class AnthropicAdapter(ProviderAdapter):
         return self.to_llm_response(response)
 
     async def generate(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
 
@@ -212,7 +213,7 @@ class AnthropicAdapter(ProviderAdapter):
             )
             raise
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         """Get embedding for a single text.
 
         NOTE: Anthropic does not provide native embeddings.
@@ -230,7 +231,7 @@ class AnthropicAdapter(ProviderAdapter):
             "\nFor more details, see beliefstate/config.py:Config.internal_adapter"
         )
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for multiple texts.
 
         NOTE: Anthropic does not provide native embeddings.

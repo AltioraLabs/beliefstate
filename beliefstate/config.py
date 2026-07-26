@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 DEFAULT_EXTRACT_PROMPT = """
 You are a precise fact and decision extraction engine. Your goal is to construct a persistent
@@ -150,7 +151,7 @@ class TrackerConfig(BaseModel):
         default="sqlite",
         description="Type of storage to use ('sqlite', 'redis', 'postgres').",
     )
-    store_kwargs: Dict[str, Any] = Field(
+    store_kwargs: dict[str, Any] = Field(
         default_factory=dict, description="Additional kwargs for the store."
     )
 
@@ -215,13 +216,13 @@ class TrackerConfig(BaseModel):
     )
 
     # Internal override for the tracker
-    internal_provider: Optional[Any] = Field(
+    internal_provider: Any | None = Field(
         default=None, description="Explicit provider for tracker's internal LLM calls."
     )
-    embed_provider: Optional[Any] = Field(
+    embed_provider: Any | None = Field(
         default=None, description="Explicit provider for embedding generation."
     )
-    embed_model: Optional[str] = Field(
+    embed_model: str | None = Field(
         default=None, description="Model name to use for embeddings."
     )
 
@@ -254,7 +255,7 @@ class TrackerConfig(BaseModel):
         default="asyncio",
         description="Task dispatcher type ('asyncio', 'sync', 'celery', 'rq').",
     )
-    dispatcher_kwargs: Dict[str, Any] = Field(
+    dispatcher_kwargs: dict[str, Any] = Field(
         default_factory=dict,
         description="Arguments/instances for initializing dispatcher.",
     )
@@ -314,7 +315,7 @@ class TrackerConfig(BaseModel):
     )
 
     # Context injection filtering
-    exclude_sources: List[str] = Field(
+    exclude_sources: list[str] = Field(
         default_factory=lambda: ["assistant"],
         description="Belief sources to exclude from context injection (e.g. ['assistant'] to skip LLM-generated beliefs).",
     )

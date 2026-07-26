@@ -1,10 +1,14 @@
 import asyncio
 from typing import Any, Dict, List, Optional
-from beliefstate.tracker import BeliefTracker, session_context
+
 from beliefstate.call import LLMCall, LLMResponse
+from beliefstate.tracker import BeliefTracker, session_context
 
 try:
-    from llama_index.core.callbacks import CBEventType, BaseCallbackHandler  # type: ignore[attr-defined]
+    from llama_index.core.callbacks import (  # type: ignore[attr-defined]
+        BaseCallbackHandler,
+        CBEventType,
+    )
 
     HAS_LLAMAINDEX = True
 except ImportError:
@@ -28,11 +32,11 @@ class LlamaIndexBeliefTrackerCallback(BaseCallbackHandler):  # type: ignore[misc
     def __init__(
         self,
         tracker: BeliefTracker,
-        event_starts_to_ignore: Optional[List[Any]] = None,
-        event_ends_to_ignore: Optional[List[Any]] = None,
+        event_starts_to_ignore: list[Any] | None = None,
+        event_ends_to_ignore: list[Any] | None = None,
     ) -> None:
         self.tracker = tracker
-        self.pending_calls: Dict[str, LLMCall] = {}
+        self.pending_calls: dict[str, LLMCall] = {}
         super().__init__(
             event_starts_to_ignore=event_starts_to_ignore or [],
             event_ends_to_ignore=event_ends_to_ignore or [],
@@ -41,7 +45,7 @@ class LlamaIndexBeliefTrackerCallback(BaseCallbackHandler):  # type: ignore[misc
     def on_event_start(
         self,
         event_type: Any,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
         event_id: str = "",
         **kwargs: Any,
     ) -> str:
@@ -68,7 +72,7 @@ class LlamaIndexBeliefTrackerCallback(BaseCallbackHandler):  # type: ignore[misc
     def on_event_end(
         self,
         event_type: Any,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
         event_id: str = "",
         **kwargs: Any,
     ) -> None:

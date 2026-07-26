@@ -2,14 +2,15 @@ import asyncio
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple, cast
+
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
-    RetryConfig,
-    retry_with_backoff,
-    with_timeout,
-    validate_api_key,
-    StructuredLogger,
     PermanentError,
+    RetryConfig,
+    StructuredLogger,
+    retry_with_backoff,
+    validate_api_key,
+    with_timeout,
 )
 from beliefstate.call import LLMCall, LLMResponse
 
@@ -34,12 +35,12 @@ class OpenAIAdapter(ProviderAdapter):
 
     def __init__(
         self,
-        client: Optional[Any] = None,
+        client: Any | None = None,
         model: str = "gpt-4o-mini",
         embed_model: str = "text-embedding-3-small",
-        embed_kwargs: Optional[Dict[str, Any]] = None,
+        embed_kwargs: dict[str, Any] | None = None,
         timeout: float = 30.0,
-        retry_config: Optional[RetryConfig] = None,
+        retry_config: RetryConfig | None = None,
         health_check_timeout: float = 5.0,
     ):
         self.model = model
@@ -104,7 +105,7 @@ class OpenAIAdapter(ProviderAdapter):
         context_prompt: str,
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         """Inject context prompt into OpenAI messages (either in args or kwargs)."""
         messages = kwargs.get("messages", [])
         in_kwargs = "messages" in kwargs
@@ -160,7 +161,7 @@ class OpenAIAdapter(ProviderAdapter):
         return args, kwargs
 
     async def _generate_with_backoff(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Internal method that actually calls the API (without timeout wrapper)."""
         kwargs = call.kwargs.copy()
@@ -182,7 +183,7 @@ class OpenAIAdapter(ProviderAdapter):
         return self.to_llm_response(response)
 
     async def generate(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
 
@@ -236,7 +237,7 @@ class OpenAIAdapter(ProviderAdapter):
             )
             raise
 
-    async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
+    async def _get_embeddings_with_backoff(self, texts: list[str]) -> list[list[float]]:
         """Internal method that actually calls the embeddings API."""
         kwargs = {"input": texts, "model": self.embed_model}
         if self.embed_kwargs:
@@ -245,7 +246,7 @@ class OpenAIAdapter(ProviderAdapter):
         response = await self.client.embeddings.create(**kwargs)
         return [item.embedding for item in response.data]
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         """Get embedding for a single text.
 
         Args:
@@ -257,7 +258,7 @@ class OpenAIAdapter(ProviderAdapter):
         res = await self.get_embeddings([text])
         return res[0]
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for multiple texts with automatic retry and timeout.
 
         Args:
@@ -280,9 +281,9 @@ class OpenAIAdapter(ProviderAdapter):
 
         try:
 
-            async def api_call() -> List[List[float]]:
+            async def api_call() -> list[list[float]]:
                 return cast(
-                    List[List[float]],
+                    list[list[float]],
                     await retry_with_backoff(
                         self._get_embeddings_with_backoff,
                         texts,
@@ -295,7 +296,7 @@ class OpenAIAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 f"OpenAI embeddings ({len(texts)} texts)",
             )
-            return cast(List[List[float]], result)
+            return cast(list[list[float]], result)
 
         except PermanentError:
             self.log.error(

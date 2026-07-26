@@ -8,27 +8,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from beliefstate.config import TrackerConfig
-from beliefstate.models import Belief
-from beliefstate.extractor import (
-    BeliefExtractor,
-    calibrate_confidence,
-    _is_trivial_response,
-)
 from beliefstate.detector import (
     ContradictionDetector,
 )
+from beliefstate.extractor import (
+    BeliefExtractor,
+    _is_trivial_response,
+    calibrate_confidence,
+)
+from beliefstate.models import Belief
 from beliefstate.resolver import BeliefResolver
+from beliefstate.store.base import summary_for_prompt
+from beliefstate.store.memory import InMemoryBeliefStore
+from beliefstate.store.sqlite import SQLiteStore, pack_embedding, unpack_embedding
 from beliefstate.tracker import (
     BeliefTracker,
+    ConfigurationWarning,
     TrackerStats,
     _get_session_lock,
     _validate_deployment_config,
-    ConfigurationWarning,
 )
-from beliefstate.store.base import summary_for_prompt
-from beliefstate.store.sqlite import SQLiteStore, pack_embedding, unpack_embedding
-from beliefstate.store.memory import InMemoryBeliefStore
-
 
 # --- Helpers ---
 

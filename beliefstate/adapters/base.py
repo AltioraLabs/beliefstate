@@ -1,4 +1,5 @@
-from typing import Any, List, Protocol, runtime_checkable, Optional
+from typing import Any, List, Optional, Protocol, runtime_checkable
+
 from beliefstate.call import LLMCall, LLMResponse
 
 
@@ -23,16 +24,16 @@ class ProviderAdapter(Protocol):
         ...
 
     async def generate(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Execute a generation request using this provider natively (used for internal tracker logic)."""
         ...
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         """Generate an embedding for the text using this provider natively."""
         ...
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for a list of texts using this provider natively."""
         ...
 

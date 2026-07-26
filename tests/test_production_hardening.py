@@ -12,19 +12,20 @@ Covers:
 """
 
 import asyncio
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from beliefstate.config import TrackerConfig
+from beliefstate.logging_utils import TrackerEvent, log_event
 from beliefstate.models import Belief
+from beliefstate.store.memory import InMemoryBeliefStore
+from beliefstate.store.sqlite import SQLiteStore
 from beliefstate.tracker import (
     BeliefTracker,
-    session_context,
     _session_locks,
+    session_context,
 )
-from beliefstate.store.sqlite import SQLiteStore
-from beliefstate.store.memory import InMemoryBeliefStore
-from beliefstate.logging_utils import TrackerEvent, log_event
 
 
 def make_config(**kwargs):

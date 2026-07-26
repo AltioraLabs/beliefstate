@@ -1,6 +1,7 @@
 """Tests for beliefstate.integrations.common (IntegrationLogger, validate_session_id)."""
 
 import pytest
+
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id
 
 

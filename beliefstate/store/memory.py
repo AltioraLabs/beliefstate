@@ -1,9 +1,10 @@
-from typing import Dict, List, Optional, Any
-from collections import OrderedDict
 import logging
+from collections import OrderedDict
+from typing import Any, Dict, List, Optional
+
+from beliefstate.models import Belief
 from beliefstate.store.base import Store
 from beliefstate.store.utils import cosine_similarity
-from beliefstate.models import Belief
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class InMemoryBeliefStore(Store):
     def __init__(self, max_bytes: int = 100 * 1024 * 1024):
         self.max_bytes = max_bytes
         self.current_bytes = 0
-        self._beliefs: Dict[str, OrderedDict[str, Belief]] = {}
+        self._beliefs: dict[str, OrderedDict[str, Belief]] = {}
 
     def _estimate_belief_size(self, belief: Belief) -> int:
         return len(belief.model_dump_json().encode("utf-8"))
@@ -84,8 +85,8 @@ class InMemoryBeliefStore(Store):
             self._evict_lru_belief()
 
     async def get_beliefs(
-        self, session_id: str, conversation_id: Optional[str] = None
-    ) -> List[Belief]:
+        self, session_id: str, conversation_id: str | None = None
+    ) -> list[Belief]:
         if session_id not in self._beliefs:
             return []
 
@@ -102,11 +103,11 @@ class InMemoryBeliefStore(Store):
     async def search_beliefs(
         self,
         session_id: str,
-        embedding: List[float],
+        embedding: list[float],
         threshold: float = 0.0,
         limit: int = 5,
-        conversation_id: Optional[str] = None,
-    ) -> List[Belief]:
+        conversation_id: str | None = None,
+    ) -> list[Belief]:
         beliefs = await self.get_beliefs(session_id, conversation_id)
         scored_beliefs = []
 
@@ -127,8 +128,8 @@ class InMemoryBeliefStore(Store):
         subject: str,
         predicate: str,
         session_id: str,
-        conversation_id: Optional[str] = None,
-    ) -> Optional[Belief]:
+        conversation_id: str | None = None,
+    ) -> Belief | None:
         """Retrieve a single belief by its composite key."""
         if session_id not in self._beliefs:
             return None
@@ -157,7 +158,7 @@ class InMemoryBeliefStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
     ) -> None:
         if session_id not in self._beliefs:
             return
@@ -189,7 +190,7 @@ class InMemoryBeliefStore(Store):
     async def belief_count(self, session_id: str) -> int:
         return len(self._beliefs.get(session_id, {}))
 
-    async def get_all_session_ids(self) -> List[str]:
+    async def get_all_session_ids(self) -> list[str]:
         return list(self._beliefs.keys())
 
     async def health_check(self) -> bool:
@@ -200,14 +201,14 @@ class InMemoryBeliefStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """In-memory store does not persist audit history."""
         return []
 
-    async def get_all_audit_history(self, session_id: str) -> List[Dict[str, Any]]:
+    async def get_all_audit_history(self, session_id: str) -> list[dict[str, Any]]:
         return []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total_beliefs = sum(len(beliefs) for beliefs in self._beliefs.values())
         total_sessions = len(self._beliefs)
 

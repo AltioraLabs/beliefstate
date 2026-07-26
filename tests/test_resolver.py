@@ -1,4 +1,5 @@
 import pytest
+
 from beliefstate.models import Belief
 from beliefstate.resolver import BeliefResolver
 from beliefstate.store.sqlite import SQLiteStore

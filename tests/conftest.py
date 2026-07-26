@@ -1,6 +1,6 @@
 import sys
+from typing import Any, List, Optional
 from unittest.mock import MagicMock
-from typing import Optional, List, Any
 
 import pytest
 
@@ -21,8 +21,8 @@ mock_llama_index.core.callbacks.CBEventType = MockCBEventType
 class MockBaseCallbackHandler:
     def __init__(
         self,
-        event_starts_to_ignore: Optional[List[Any]] = None,
-        event_ends_to_ignore: Optional[List[Any]] = None,
+        event_starts_to_ignore: list[Any] | None = None,
+        event_ends_to_ignore: list[Any] | None = None,
     ) -> None:
         self.event_starts_to_ignore = event_starts_to_ignore or []
         self.event_ends_to_ignore = event_ends_to_ignore or []
@@ -41,7 +41,7 @@ sys.modules["llama_index.core"] = mock_llama_index.core
 sys.modules["llama_index.core.callbacks"] = mock_llama_index.core.callbacks
 
 # Now safe to import beliefstate (llamaindex.py will see the mocks)
-from beliefstate import session_context  # noqa: E402
+from beliefstate import session_context
 
 
 @pytest.fixture(autouse=True, scope="session")

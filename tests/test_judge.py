@@ -1,10 +1,12 @@
 import sys
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from beliefstate.models import Belief
-from beliefstate.config import TrackerConfig
+
+import pytest
+
 from beliefstate.call import LLMResponse
+from beliefstate.config import TrackerConfig
 from beliefstate.judge import LLMJudge, LocalNLIJudge
+from beliefstate.models import Belief
 
 
 @pytest.mark.asyncio

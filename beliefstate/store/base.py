@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
-from beliefstate.models import Belief
 
+from beliefstate.models import Belief
 
 CATEGORY_LABELS = {
     "identity": "Identity",
@@ -21,19 +21,19 @@ class Store(Protocol):
         ...
 
     async def get_beliefs(
-        self, session_id: str, conversation_id: Optional[str] = None
-    ) -> List[Belief]:
+        self, session_id: str, conversation_id: str | None = None
+    ) -> list[Belief]:
         """Retrieve all beliefs for a given session."""
         ...
 
     async def search_beliefs(
         self,
         session_id: str,
-        embedding: List[float],
+        embedding: list[float],
         threshold: float = 0.0,
         limit: int = 5,
-        conversation_id: Optional[str] = None,
-    ) -> List[Belief]:
+        conversation_id: str | None = None,
+    ) -> list[Belief]:
         """Search the store for beliefs semantically similar to the target embedding."""
         ...
 
@@ -42,7 +42,7 @@ class Store(Protocol):
         session_id: str,
         subject: str,
         predicate: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
     ) -> None:
         """Remove a specific belief based on its subject and predicate."""
         ...
@@ -75,8 +75,8 @@ class Store(Protocol):
         subject: str,
         predicate: str,
         session_id: str,
-        conversation_id: Optional[str] = None,
-    ) -> Optional[Belief]:
+        conversation_id: str | None = None,
+    ) -> Belief | None:
         """Retrieve a single belief by its composite key."""
         ...
 
@@ -85,17 +85,17 @@ class Store(Protocol):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return audit trail for a specific belief."""
         ...
 
-    async def get_all_session_ids(self) -> List[str]:
+    async def get_all_session_ids(self) -> list[str]:
         """Return all session IDs that have beliefs in the store."""
         ...
 
 
 def summary_for_prompt(
-    beliefs: List[Belief],
+    beliefs: list[Belief],
     max_beliefs: int = 50,
     max_speculative_beliefs: int = 5,
 ) -> str:
@@ -105,7 +105,7 @@ def summary_for_prompt(
     Groups beliefs by category and excludes superseded beliefs.
     """
     # B5: Deduplicate by (subject, predicate) keeping highest turn (latest)
-    deduped: Dict[Tuple[str, str], Belief] = {}
+    deduped: dict[tuple[str, str], Belief] = {}
     for b in beliefs:
         key = (b.subject.lower(), b.predicate.lower())
         existing = deduped.get(key)
@@ -119,7 +119,7 @@ def summary_for_prompt(
     real.sort(key=lambda b: (b.confidence, b.turn), reverse=True)
     real = real[:max_beliefs]
 
-    categories: Dict[str, List[Belief]] = {}
+    categories: dict[str, list[Belief]] = {}
     for b in real:
         cat = b.category or "general"
         categories.setdefault(cat, []).append(b)

@@ -1,6 +1,7 @@
 from typing import Any
-from beliefstate.tracker import session_context
+
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id
+from beliefstate.tracker import session_context
 
 
 class BeliefTrackerASGIMiddleware:

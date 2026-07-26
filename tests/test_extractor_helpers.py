@@ -4,17 +4,16 @@ All tests exercise pure functions (no mocks or I/O needed).
 """
 
 from beliefstate.extractor import (
-    normalize_numbers,
+    chunk_response_by_paragraphs,
+    classify_response_type,
     normalize_currency,
     normalize_dates,
+    normalize_numbers,
     normalize_percentages,
     normalize_value_format,
-    redact_pii,
-    classify_response_type,
-    chunk_response_by_paragraphs,
     recover_json_from_response,
+    redact_pii,
 )
-
 
 # ── Number Normalization ─────────────────────────────────────────────────
 

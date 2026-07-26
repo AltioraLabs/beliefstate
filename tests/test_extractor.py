@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from beliefstate.call import LLMResponse
 from beliefstate.config import TrackerConfig
 from beliefstate.extractor import BeliefExtractor, strip_injection_patterns
-from beliefstate.call import LLMResponse
 
 
 @pytest.mark.asyncio

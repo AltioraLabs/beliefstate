@@ -1,11 +1,12 @@
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from beliefstate.models import Belief
 from beliefstate.store.base import Store
 from beliefstate.store.utils import cosine_similarity, pack_embedding, unpack_embedding
-from beliefstate.models import Belief
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class SQLiteStore(Store):
 
     def __init__(self, db_path: str = ":memory:"):
         self.db_path = db_path
-        self._conn: Optional[Any] = None
+        self._conn: Any | None = None
 
     async def open(self) -> None:
         """Open and initialize the database connection (called once)."""
@@ -234,7 +235,7 @@ class SQLiteStore(Store):
         self,
         belief: Belief,
         operation: str,
-        old_value: Optional[str] = None,
+        old_value: str | None = None,
     ) -> None:
         """Write an immutable audit record for a belief mutation."""
         conn = await self._get_connection()
@@ -331,8 +332,8 @@ class SQLiteStore(Store):
         await conn.commit()
 
     async def get_beliefs(
-        self, session_id: str, conversation_id: Optional[str] = None
-    ) -> List[Belief]:
+        self, session_id: str, conversation_id: str | None = None
+    ) -> list[Belief]:
         conn = await self._get_connection()
 
         if conversation_id:
@@ -405,11 +406,11 @@ class SQLiteStore(Store):
     async def search_beliefs(
         self,
         session_id: str,
-        embedding: List[float],
+        embedding: list[float],
         threshold: float = 0.0,
         limit: int = 5,
-        conversation_id: Optional[str] = None,
-    ) -> List[Belief]:
+        conversation_id: str | None = None,
+    ) -> list[Belief]:
         conn = await self._get_connection()
         embedding_blob = pack_embedding(embedding) if embedding else b""
 
@@ -452,8 +453,8 @@ class SQLiteStore(Store):
         subject: str,
         predicate: str,
         session_id: str,
-        conversation_id: Optional[str] = None,
-    ) -> Optional[Belief]:
+        conversation_id: str | None = None,
+    ) -> Belief | None:
         """Retrieve a single belief by its composite key."""
         conn = await self._get_connection()
         cid = conversation_id or ""
@@ -480,7 +481,7 @@ class SQLiteStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
     ) -> None:
         conn = await self._get_connection()
         subject = subject.lower()
@@ -545,7 +546,7 @@ class SQLiteStore(Store):
             logger.warning(f"Health check failed: {e}")
             return False
 
-    async def get_all_session_ids(self) -> List[str]:
+    async def get_all_session_ids(self) -> list[str]:
         conn = await self._get_connection()
         async with conn.execute(
             "SELECT session_id FROM beliefs GROUP BY session_id ORDER BY MAX(created_at) DESC"
@@ -553,7 +554,7 @@ class SQLiteStore(Store):
             rows = await cursor.fetchall()
         return [row[0] for row in rows]
 
-    async def get_all_audit_history(self, session_id: str) -> List[Dict[str, Any]]:
+    async def get_all_audit_history(self, session_id: str) -> list[dict[str, Any]]:
         conn = await self._get_connection()
         async with conn.execute(
             """
@@ -570,7 +571,7 @@ class SQLiteStore(Store):
         return [{key: row[key] for key in row.keys()} for row in rows]
 
     async def prune_expired_beliefs(
-        self, max_age_seconds: int, session_id: Optional[str] = None
+        self, max_age_seconds: int, session_id: str | None = None
     ) -> int:
         from datetime import timedelta
 
@@ -597,7 +598,7 @@ class SQLiteStore(Store):
             )
         return int(deleted_count)
 
-    async def get_session_belief_age_stats(self, session_id: str) -> Dict[str, Any]:
+    async def get_session_belief_age_stats(self, session_id: str) -> dict[str, Any]:
         conn = await self._get_connection()
         async with conn.execute(
             """
@@ -629,7 +630,7 @@ class SQLiteStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return audit trail for a specific belief."""
         conn = await self._get_connection()
         async with conn.execute(

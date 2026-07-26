@@ -18,7 +18,7 @@ Usage:
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger("beliefstate.events")
@@ -41,10 +41,10 @@ class TrackerEvent:
     operation: str = ""
     turn: int = 0
     detail: str = ""
-    latency_ms: Optional[float] = None
-    extra: Dict[str, Any] = field(default_factory=dict)
+    latency_ms: float | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to a flat dict suitable for structured logging."""
         d = asdict(self)
         # Remove None values for cleaner output

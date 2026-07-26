@@ -1,12 +1,13 @@
-import json
 import asyncio
+import json
 import logging
 import re
-from typing import Tuple, Protocol, runtime_checkable, Optional, Any
-from beliefstate.models import Belief
+from typing import Any, Optional, Protocol, Tuple, runtime_checkable
+
 from beliefstate.adapters.base import ProviderAdapter
-from beliefstate.config import TrackerConfig
 from beliefstate.call import LLMCall
+from beliefstate.config import TrackerConfig
+from beliefstate.models import Belief
 
 logger = logging.getLogger("beliefstate.judge")
 
@@ -18,7 +19,7 @@ _JUDGE_JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 class ContradictionJudge(Protocol):
     """Protocol for checking semantic contradictions between beliefs."""
 
-    async def check(self, old: Belief, new: Belief) -> Tuple[bool, float, str]:
+    async def check(self, old: Belief, new: Belief) -> tuple[bool, float, str]:
         """
         Evaluate if a new belief contradicts an old belief.
 
@@ -35,7 +36,7 @@ class LLMJudge(ContradictionJudge):
         self.adapter = adapter
         self.config = config
 
-    async def check(self, old: Belief, new: Belief) -> Tuple[bool, float, str]:
+    async def check(self, old: Belief, new: Belief) -> tuple[bool, float, str]:
         premise = f"{old.subject} {old.predicate} {old.value}"
         hypothesis = f"{new.subject} {new.predicate} {new.value}"
 
@@ -98,7 +99,7 @@ class LocalNLIJudge(ContradictionJudge):
     ):
         self.model_name = model_name
         self.threshold = threshold
-        self._pipeline: Optional[Any] = None
+        self._pipeline: Any | None = None
 
     def _init_pipeline(self) -> None:
         if self._pipeline is None:
@@ -112,7 +113,7 @@ class LocalNLIJudge(ContradictionJudge):
                 )
             self._pipeline = pipeline("text-classification", model=self.model_name)
 
-    async def check(self, old: Belief, new: Belief) -> Tuple[bool, float, str]:
+    async def check(self, old: Belief, new: Belief) -> tuple[bool, float, str]:
         self._init_pipeline()
 
         premise = f"{old.subject} {old.predicate} {old.value}"
