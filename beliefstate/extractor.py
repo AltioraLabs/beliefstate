@@ -617,6 +617,8 @@ class BeliefExtractor:
                     source_quote = item.get("source_quote", "")
                     if source_quote and len(source_quote) > 100:
                         source_quote = source_quote[:100]
+                    if self.config.enable_pii_redaction:
+                        source_quote = redact_pii(source_quote)
 
                     b = Belief(
                         subject=subj,
@@ -769,6 +771,8 @@ class BeliefExtractor:
                     source_quote = item.get("source_quote", "")
                     if source_quote and len(source_quote) > 100:
                         source_quote = source_quote[:100]
+                    if self.config.enable_pii_redaction:
+                        source_quote = redact_pii(source_quote)
 
                     b = Belief(
                         subject=subj,
