@@ -31,7 +31,6 @@ class RedisStore(Store):
 
     async def open(self) -> None:
         """No-op for Redis (client initialized in __init__)."""
-        pass
 
     def _get_key(self, session_id: str) -> str:
         return f"beliefstate:session:{session_id}"

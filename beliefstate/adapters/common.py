@@ -45,13 +45,11 @@ class RetryConfig:
 class TransientError(Exception):
     """Indicates an error that might succeed on retry."""
 
-    pass
 
 
 class PermanentError(Exception):
     """Indicates an error that won't succeed on retry."""
 
-    pass
 
 
 async def retry_with_backoff(

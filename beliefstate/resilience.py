@@ -21,7 +21,6 @@ logger = logging.getLogger("beliefstate.resilience")
 class CircuitBreakerOpenException(Exception):
     """Raised when the circuit breaker is OPEN and rejecting calls."""
 
-    pass
 
 
 class CircuitBreaker:

@@ -224,7 +224,6 @@ class InMemoryBeliefStore(Store):
 
     async def close(self) -> None:
         """No-op for in-memory store."""
-        pass
 
     async def __aenter__(self) -> "InMemoryBeliefStore":
         return self
