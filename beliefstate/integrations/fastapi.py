@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator
-from typing import Any, Optional
+from typing import Any
 
 try:
     from fastapi import Header, Request

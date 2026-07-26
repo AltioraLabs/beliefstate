@@ -5,7 +5,7 @@ import logging
 import random
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from beliefstate.resilience import is_transient_error
 

@@ -1,6 +1,5 @@
 import math
 import struct
-from typing import List
 
 
 def cosine_similarity(v1: list[float], v2: list[float]) -> float:

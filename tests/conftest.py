@@ -1,5 +1,5 @@
 import sys
-from typing import Any, List, Optional
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest

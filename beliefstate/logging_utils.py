@@ -19,7 +19,7 @@ Usage:
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger("beliefstate.events")
 

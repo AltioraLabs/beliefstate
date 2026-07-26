@@ -2,7 +2,7 @@ import asyncio
 import logging
 import threading
 from asyncio import Task as AsyncTask
-from typing import Any, Dict, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.tracker import session_context

@@ -10,7 +10,7 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from beliefstate.config import TrackerConfig
 

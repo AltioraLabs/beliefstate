@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 try:
     from flask import Flask, g, request

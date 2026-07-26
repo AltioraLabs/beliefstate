@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import Any, List, Optional
+from typing import Any
 
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.call import LLMCall

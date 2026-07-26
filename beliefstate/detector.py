@@ -4,7 +4,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.config import TrackerConfig

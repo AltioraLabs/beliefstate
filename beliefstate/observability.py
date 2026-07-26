@@ -23,7 +23,7 @@ Usage:
 import logging
 from collections.abc import Callable, Coroutine
 from functools import wraps
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 

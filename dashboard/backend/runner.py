@@ -2,7 +2,6 @@ import logging
 import socket
 import threading
 import time
-from typing import Optional
 
 import uvicorn
 
