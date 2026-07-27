@@ -7,7 +7,6 @@ import math
 from typing import Any
 
 import streamlit as st
-
 from providers import build_tracker, call_llm_sync
 from utils import (
     belief_card_html,
@@ -852,7 +851,7 @@ def render_context_tab(tracker: Any) -> None:
                 context = run_async(
                     tracker.get_context_prompt(
                         session_id=ctx_session,
-                        current_user_message=ctx_user_msg if ctx_user_msg else None,
+                        current_user_message=ctx_user_msg or None,
                     )
                 )
                 st.session_state["last_context"] = context

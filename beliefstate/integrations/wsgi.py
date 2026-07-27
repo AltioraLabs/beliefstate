@@ -1,7 +1,8 @@
 import logging
 from typing import Any
-from beliefstate.tracker import session_context
+
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id
+from beliefstate.tracker import session_context
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class BeliefTrackerWSGIMiddleware:
                 self.log.warning("Invalid session ID in header", error=str(e))
                 return self.app(environ, start_response)
             except Exception as e:
-                self.log.error("Error in middleware", error=str(e))
+                self.log.exception("Error in middleware", error=str(e))
                 raise
         else:
             self.log.debug("No session ID found in request")

@@ -3,8 +3,9 @@
 import asyncio
 import logging
 import random
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable
 from functools import wraps
+from typing import Any, TypeVar
 
 from beliefstate.resilience import is_transient_error
 
@@ -44,19 +45,17 @@ class RetryConfig:
 class TransientError(Exception):
     """Indicates an error that might succeed on retry."""
 
-    pass
 
 
 class PermanentError(Exception):
     """Indicates an error that won't succeed on retry."""
 
-    pass
 
 
 async def retry_with_backoff(
     coro_func: Callable[..., Any],
     *args: Any,
-    config: Optional[RetryConfig] = None,
+    config: RetryConfig | None = None,
     **kwargs: Any,
 ) -> Any:
     """Execute an async function with retry logic and exponential backoff.
@@ -75,7 +74,7 @@ async def retry_with_backoff(
     """
     config = config or RetryConfig()
 
-    last_error: Optional[Exception] = None
+    last_error: Exception | None = None
 
     for attempt in range(config.max_retries + 1):
         try:
@@ -92,12 +91,12 @@ async def retry_with_backoff(
 
             # Check if error is permanent
             if not is_transient_error(e):
-                logger.error(f"Permanent error in {coro_func.__name__}: {e}")
+                logger.exception(f"Permanent error in {coro_func.__name__}: {e}")
                 raise PermanentError(f"Permanent error: {e}") from e
 
             # Check if we've exhausted retries
             if attempt >= config.max_retries:
-                logger.error(
+                logger.exception(
                     f"Max retries ({config.max_retries}) exceeded for {coro_func.__name__}: {e}"
                 )
                 raise
@@ -114,7 +113,7 @@ async def retry_with_backoff(
         raise last_error
 
 
-def async_retry(config: Optional[RetryConfig] = None) -> Callable[..., Any]:
+def async_retry(config: RetryConfig | None = None) -> Callable[..., Any]:
     """Decorator for async functions to add retry logic.
 
     Usage:
@@ -159,11 +158,11 @@ async def with_timeout(
         logger.debug(f"Completed {operation_name}")
         return result
     except asyncio.TimeoutError:
-        logger.error(f"Timeout after {timeout_seconds}s for {operation_name}")
+        logger.exception(f"Timeout after {timeout_seconds}s for {operation_name}")
         raise
 
 
-def validate_api_key(api_key: Optional[str], provider: str) -> None:
+def validate_api_key(api_key: str | None, provider: str) -> None:
     """Validate that an API key is configured.
 
     Args:
@@ -209,3 +208,7 @@ class StructuredLogger:
 
     def error(self, operation: str, **metadata: Any) -> None:
         self._log("error", operation, **metadata)
+
+    def exception(self, operation: str, **metadata: Any) -> None:
+        self._log("exception", operation, **metadata)
+

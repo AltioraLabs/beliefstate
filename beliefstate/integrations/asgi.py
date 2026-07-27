@@ -1,6 +1,7 @@
 from typing import Any
-from beliefstate.tracker import session_context
+
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id
+from beliefstate.tracker import session_context
 
 
 class BeliefTrackerASGIMiddleware:
@@ -43,7 +44,7 @@ class BeliefTrackerASGIMiddleware:
                         self.log.warning("Invalid session ID in header", error=str(e))
                         session_id = None
         except Exception as e:
-            self.log.error("Error extracting session ID", error=str(e))
+            self.log.exception("Error extracting session ID", error=str(e))
             session_id = None
 
         if session_id:
@@ -57,7 +58,7 @@ class BeliefTrackerASGIMiddleware:
                 )
                 await self.app(scope, receive, send)
             except Exception as e:
-                self.log.error(
+                self.log.exception(
                     "Error in middleware",
                     session_id=session_id,
                     error=str(e),

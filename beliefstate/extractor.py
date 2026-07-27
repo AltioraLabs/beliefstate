@@ -1,11 +1,12 @@
 import json
 import logging
 import re
-from typing import Any, List, Optional
-from beliefstate.config import TrackerConfig, DEFAULT_EXTRACT_PROMPT
-from beliefstate.call import LLMCall
-from beliefstate.models import Belief
+from typing import Any
+
 from beliefstate.adapters.base import ProviderAdapter
+from beliefstate.call import LLMCall
+from beliefstate.config import DEFAULT_EXTRACT_PROMPT, TrackerConfig
+from beliefstate.models import Belief
 
 logger = logging.getLogger(__name__)
 
@@ -227,12 +228,10 @@ def _is_trivial_response(text: str) -> bool:
         code_count = sum(1 for c in text if c in code_chars)
         if code_count / len(text) > 0.6:
             return True
-    if text.startswith("{") or text.startswith("["):
-        return True
-    return False
+    return bool(text.startswith(("{", "[")))
 
 
-def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> List[str]:
+def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> list[str]:
     if not text or len(text) <= max_chunk_length:
         return [text]
     paragraphs = re.split(r"\n\s*\n", text)
@@ -261,7 +260,7 @@ def chunk_response_by_paragraphs(text: str, max_chunk_length: int = 2000) -> Lis
     return chunks
 
 
-def recover_json_from_response(text: str) -> Optional[List[Any]]:
+def recover_json_from_response(text: str) -> list[Any] | None:
     if not text or not isinstance(text, str):
         return None
     text = text.strip()
@@ -333,8 +332,7 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
 
     if not json_substr.rstrip().endswith("]"):
         json_substr_recover = json_substr.rstrip()
-        if json_substr_recover.endswith(","):
-            json_substr_recover = json_substr_recover[:-1]
+        json_substr_recover = json_substr_recover.removesuffix(",")
         json_substr_recover += "]"
         try:
             data = json.loads(json_substr_recover)
@@ -347,8 +345,7 @@ def recover_json_from_response(text: str) -> Optional[List[Any]]:
     if json_substr.count("{") > json_substr.count("}"):
         missing_braces = json_substr.count("{") - json_substr.count("}")
         json_substr_recover = json_substr.rstrip()
-        if json_substr_recover.endswith(","):
-            json_substr_recover = json_substr_recover[:-1]
+        json_substr_recover = json_substr_recover.removesuffix(",")
         json_substr_recover += "}" * missing_braces + "]"
         try:
             data = json.loads(json_substr_recover)
@@ -418,7 +415,7 @@ class ExtractedBeliefSchema:
                 default="", description="verbatim excerpt max 100 chars"
             )
 
-        class BeliefListSchema(RootModel[List[ExtractedBelief]]):
+        class BeliefListSchema(RootModel[list[ExtractedBelief]]):
             pass
 
         return BeliefListSchema
@@ -457,14 +454,14 @@ class BeliefExtractor:
         if self.embedding_adapter is not None and hasattr(
             self.embedding_adapter, "embedding_dim"
         ):
-            return int(getattr(self.embedding_adapter, "embedding_dim"))
+            return int(self.embedding_adapter.embedding_dim)
         return 0
 
     def _is_trivial(self, text: str) -> bool:
         """Check if assistant response is trivial (for pre-filter)."""
         return _is_trivial_response(text)
 
-    def _post_filter_beliefs(self, beliefs: List[Belief]) -> List[Belief]:
+    def _post_filter_beliefs(self, beliefs: list[Belief]) -> list[Belief]:
         """Apply heuristics to discard low-quality, generic, or self-referential beliefs."""
         filtered = []
         for b in beliefs:
@@ -543,7 +540,7 @@ class BeliefExtractor:
         assistant_response: str,
         session_id: str,
         turn: int,
-    ) -> List[Belief]:
+    ) -> list[Belief]:
         """Extract beliefs from BOTH user message and assistant response.
 
         Pre-filters trivial assistant responses but still extracts from user message.
@@ -576,7 +573,7 @@ class BeliefExtractor:
 
         return self._post_filter_beliefs(calibrated)
 
-    async def _call_extraction_llm(self, text: str, turn: int) -> List[Belief]:
+    async def _call_extraction_llm(self, text: str, turn: int) -> list[Belief]:
         """Call the LLM to extract beliefs from text."""
         prompt_template = self.config.extract_prompt_template
         prompt = prompt_template.format(conversation=text)
@@ -648,7 +645,7 @@ class BeliefExtractor:
                     embeddings = await self.embedding_adapter.get_embeddings(
                         texts_to_embed
                     )
-                    for b, emb in zip(temp_beliefs, embeddings):
+                    for b, emb in zip(temp_beliefs, embeddings, strict=False):
                         b.embedding = emb
                         b.embedding_model = self.embedding_model
                         b.embedding_dim = self.embedding_dim
@@ -680,7 +677,7 @@ class BeliefExtractor:
 
     async def extract(
         self, response_text: str, turn: int, source: str = "assistant"
-    ) -> List[Belief]:
+    ) -> list[Belief]:
         """Legacy extract method — processes a single text block.
 
         For new code, prefer process_turn() which handles both user and assistant.
@@ -717,7 +714,7 @@ class BeliefExtractor:
 
     async def _extract_from_chunk(
         self, chunk_text: str, turn: int, source: str
-    ) -> List[Belief]:
+    ) -> list[Belief]:
         if self.config.extract_prompt_template != DEFAULT_EXTRACT_PROMPT:
             prompt_template = self.config.extract_prompt_template
         elif source == "user":
@@ -802,7 +799,7 @@ class BeliefExtractor:
                     embeddings = await self.embedding_adapter.get_embeddings(
                         texts_to_embed
                     )
-                    for b, emb in zip(temp_beliefs, embeddings):
+                    for b, emb in zip(temp_beliefs, embeddings, strict=False):
                         b.embedding = emb
                         b.embedding_model = self.embedding_model
                         b.embedding_dim = self.embedding_dim

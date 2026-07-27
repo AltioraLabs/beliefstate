@@ -1,11 +1,11 @@
 """Tests for Belief and DeletionReceipt Pydantic models."""
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 from pydantic import ValidationError
 
 from beliefstate.models import Belief, DeletionReceipt
-
 
 # --- Belief Model Tests ---
 

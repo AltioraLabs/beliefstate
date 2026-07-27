@@ -1,15 +1,15 @@
-from typing import Optional, Any
+from typing import Any
 
 try:
-    from flask import Flask, request, g
+    from flask import Flask, g, request
 
     HAS_FLASK = True
 except ImportError:
     Flask = request = g = Any  # type: ignore
     HAS_FLASK = False
-from beliefstate.tracker import session_context
-from beliefstate.integrations.wsgi import BeliefTrackerWSGIMiddleware
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id
+from beliefstate.integrations.wsgi import BeliefTrackerWSGIMiddleware
+from beliefstate.tracker import session_context
 
 
 class FlaskBeliefTrackerMiddleware(BeliefTrackerWSGIMiddleware):
@@ -79,12 +79,12 @@ def register_flask_hooks(app: Flask, header_name: str = "X-Session-ID") -> None:
                 g.session_id = None
                 g.session_token = None
         except Exception as e:
-            log.error("Error setting session ID", error=str(e))
+            log.exception("Error setting session ID", error=str(e))
             g.session_id = None
             g.session_token = None
 
     @app.teardown_request
-    def reset_session_id(exception: Optional[BaseException] = None) -> None:
+    def reset_session_id(exception: BaseException | None = None) -> None:
         """Reset session context at the end of request."""
         try:
             token = getattr(g, "session_token", None)
@@ -100,4 +100,4 @@ def register_flask_hooks(app: Flask, header_name: str = "X-Session-ID") -> None:
                     error=str(exception),
                 )
         except Exception as e:
-            log.error("Error resetting session ID", error=str(e))
+            log.exception("Error resetting session ID", error=str(e))

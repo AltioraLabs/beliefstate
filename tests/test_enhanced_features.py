@@ -1,9 +1,11 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from beliefstate import TrackerConfig, BeliefTracker, Belief
+
+from beliefstate import Belief, BeliefTracker, TrackerConfig
+from beliefstate.extractor import BeliefExtractor
 from beliefstate.store.postgres import PostgreSQLStore
 from beliefstate.tracker import AsyncStreamWrapper
-from beliefstate.extractor import BeliefExtractor
 
 
 @pytest.mark.asyncio

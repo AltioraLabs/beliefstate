@@ -1,20 +1,17 @@
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from typing import Optional
 
 from beliefstate import (
-    session_context,
-)
-
-from beliefstate import (
-    FastAPIBeliefTrackerMiddleware,
-    get_session_id,
-    FlaskBeliefTrackerMiddleware,
-    register_flask_hooks,
-    LlamaIndexBeliefTrackerCallback,
-    process_openai_assistant_message,
-    observe_run,
     BeliefTrackerLangchainCallback,
+    FastAPIBeliefTrackerMiddleware,
+    FlaskBeliefTrackerMiddleware,
+    LlamaIndexBeliefTrackerCallback,
+    get_session_id,
+    observe_run,
+    process_openai_assistant_message,
+    register_flask_hooks,
+    session_context,
 )
 
 HAS_FASTAPI = FastAPIBeliefTrackerMiddleware is not None and get_session_id is not None
@@ -218,7 +215,7 @@ class MockContentBlock:
 
 
 class MockOpenAIMessage:
-    def __init__(self, role: str, content_val: str, run_id: Optional[str] = None):
+    def __init__(self, role: str, content_val: str, run_id: str | None = None):
         self.role = role
         self.run_id = run_id
         self.content = [MockContentBlock(content_val)]

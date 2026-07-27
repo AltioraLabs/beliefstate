@@ -1,5 +1,5 @@
-from typing import List, Tuple, Dict, Optional
 import logging
+
 from beliefstate.models import Belief
 from beliefstate.store.base import Store
 
@@ -28,20 +28,20 @@ class BeliefResolver:
         self.store = store
         self.strategy = strategy
         self.respect_strategy_for_updates = respect_strategy_for_updates
-        self.pending_conflicts: Dict[str, List[str]] = {}
-        self.conflict_history: Dict[str, Dict[Tuple[str, str, str, str], int]] = {}
+        self.pending_conflicts: dict[str, list[str]] = {}
+        self.conflict_history: dict[str, dict[tuple[str, str, str, str], int]] = {}
         self._MAX_SESSIONS = 1000
 
     def _get_conflict_key(
         self, old_b: Belief, new_b: Belief
-    ) -> Tuple[str, str, str, str]:
+    ) -> tuple[str, str, str, str]:
         return (old_b.subject, old_b.predicate, new_b.subject, new_b.predicate)
 
     async def resolve(
         self,
         session_id: str,
-        contradictions: List[Tuple[Belief, Belief, float, str]],
-        store: Optional[Store] = None,
+        contradictions: list[tuple[Belief, Belief, float, str]],
+        store: Store | None = None,
     ) -> None:
         """Resolve contradictions using the configured strategy.
 
@@ -70,7 +70,7 @@ class BeliefResolver:
         if session_id not in self.pending_conflicts:
             self.pending_conflicts[session_id] = []
 
-        for old_b, new_b, score, reason in contradictions:
+        for old_b, new_b, _score, reason in contradictions:
             # Temporal updates (belief_type='update') always overwrite by default.
             # If respect_strategy_for_updates is True, fall through to strategy handling.
             if new_b.belief_type == "update" and not self.respect_strategy_for_updates:
@@ -158,7 +158,7 @@ class BeliefResolver:
         # Pending conflict notes don't embed subject/predicate, so clear all
         self.pending_conflicts.pop(session_id, None)
 
-    def pop_pending_conflicts(self, session_id: str) -> List[str]:
+    def pop_pending_conflicts(self, session_id: str) -> list[str]:
         return self.pending_conflicts.pop(session_id, [])
 
     def clear_session(self, session_id: str) -> None:

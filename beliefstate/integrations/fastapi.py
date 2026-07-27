@@ -1,4 +1,5 @@
-from typing import Optional, AsyncGenerator, Any
+from collections.abc import AsyncGenerator
+from typing import Any
 
 try:
     from fastapi import Header, Request
@@ -7,9 +8,9 @@ try:
 except ImportError:
     Header = Request = Any  # type: ignore
     HAS_FASTAPI = False
-from beliefstate.tracker import session_context
 from beliefstate.integrations.asgi import BeliefTrackerASGIMiddleware
 from beliefstate.integrations.common import IntegrationLogger, validate_session_id
+from beliefstate.tracker import session_context
 
 
 class FastAPIBeliefTrackerMiddleware(BeliefTrackerASGIMiddleware):
@@ -51,7 +52,7 @@ class FastAPIBeliefTrackerMiddleware(BeliefTrackerASGIMiddleware):
                         self.log.warning("Invalid session ID in header", error=str(e))
                         session_id = None
         except Exception as e:
-            self.log.error("Error extracting session ID", error=str(e))
+            self.log.exception("Error extracting session ID", error=str(e))
             session_id = None
 
         if session_id:
@@ -64,7 +65,7 @@ class FastAPIBeliefTrackerMiddleware(BeliefTrackerASGIMiddleware):
                 self.log.debug("Session context set", session_id=session_id)
                 await self.app(scope, receive, send)
             except Exception as e:
-                self.log.error(
+                self.log.exception(
                     "Error in middleware", session_id=session_id, error=str(e)
                 )
                 raise
@@ -81,8 +82,8 @@ if HAS_FASTAPI:
 
     async def get_session_id(
         request: Request,
-        x_session_id: Optional[str] = Header(None, alias="X-Session-ID"),
-    ) -> AsyncGenerator[Optional[str], None]:
+        x_session_id: str | None = Header(None, alias="X-Session-ID"),
+    ) -> AsyncGenerator[str | None, None]:
         """
         FastAPI dependency injection helper to extract the session ID from the
         X-Session-ID header (or fallback to request.state) and bind it to the
@@ -119,7 +120,7 @@ if HAS_FASTAPI:
                     session_context.reset(token)
                     log.debug("Session context reset in dependency", session_id=sid)
             except ValueError as e:
-                log.error("Invalid session ID in dependency", error=str(e))
+                log.exception("Invalid session ID in dependency", error=str(e))
                 raise
         else:
             # Session ID is optional

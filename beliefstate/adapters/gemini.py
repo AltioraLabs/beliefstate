@@ -1,15 +1,16 @@
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, cast
+
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
-    RetryConfig,
-    retry_with_backoff,
-    with_timeout,
-    validate_api_key,
-    StructuredLogger,
     PermanentError,
+    RetryConfig,
+    StructuredLogger,
+    retry_with_backoff,
+    validate_api_key,
+    with_timeout,
 )
 from beliefstate.call import LLMCall, LLMResponse
 
@@ -40,14 +41,14 @@ class GeminiAdapter(ProviderAdapter):
 
     def __init__(
         self,
-        client: Optional[Any] = None,
+        client: Any | None = None,
         model: str = "gemini-2.0-flash",
         embed_model: str = "text-embedding-004",
-        embed_kwargs: Optional[Dict[str, Any]] = None,
+        embed_kwargs: dict[str, Any] | None = None,
         timeout: float = 30.0,
-        retry_config: Optional[RetryConfig] = None,
+        retry_config: RetryConfig | None = None,
         health_check_timeout: float = 5.0,
-        safety_settings: Optional[List[Dict[str, str]]] = None,
+        safety_settings: list[dict[str, str]] | None = None,
     ):
         self.model = model
         self.embed_model = embed_model
@@ -74,10 +75,10 @@ class GeminiAdapter(ProviderAdapter):
                     note="Using experimental google-genai library",
                 )
             except ImportError:
-                self.log.error("google-genai SDK not installed")
+                self.log.exception("google-genai SDK not installed")
                 self.client = None
             except ValueError as e:
-                self.log.error(f"Configuration error: {e}")
+                self.log.exception(f"Configuration error: {e}")
                 self.client = None
 
     def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
@@ -132,7 +133,7 @@ class GeminiAdapter(ProviderAdapter):
         context_prompt: str,
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         """Inject context prompt into Gemini config.system_instruction."""
         new_kwargs = kwargs.copy()
         config = new_kwargs.get("config")
@@ -184,7 +185,7 @@ class GeminiAdapter(ProviderAdapter):
         return args, new_kwargs
 
     async def _generate_with_backoff(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Internal method that actually calls the API."""
         from google.genai import types
@@ -194,7 +195,7 @@ class GeminiAdapter(ProviderAdapter):
         for m in call.messages:
             formatted_contents += f"{m.get('role', 'user')}: {m.get('content', '')}\n"
 
-        config_args: Dict[str, Any] = {}
+        config_args: dict[str, Any] = {}
         if call.system:
             config_args["system_instruction"] = call.system
 
@@ -222,7 +223,7 @@ class GeminiAdapter(ProviderAdapter):
         return self.to_llm_response(response)
 
     async def generate(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
 
@@ -264,18 +265,18 @@ class GeminiAdapter(ProviderAdapter):
             return cast(LLMResponse, result)
 
         except PermanentError:
-            self.log.error("Generate failed with permanent error", model=self.model)
+            self.log.exception("Generate failed with permanent error", model=self.model)
             raise
         except asyncio.TimeoutError:
-            self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
+            self.log.exception("Generate timed out", timeout=self.timeout, model=self.model)
             raise
         except Exception as e:
-            self.log.error(
+            self.log.exception(
                 "Generate failed unexpectedly", error=str(e), model=self.model
             )
             raise
 
-    async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
+    async def _get_embeddings_with_backoff(self, texts: list[str]) -> list[list[float]]:
         """Internal method that actually calls the embeddings API."""
         kwargs = {"model": self.embed_model, "contents": texts}
         if self.embed_kwargs:
@@ -284,7 +285,7 @@ class GeminiAdapter(ProviderAdapter):
         response = await self.client.aio.models.embed_content(**kwargs)
         return [list(emb.values) for emb in response.embeddings]
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         """Get embedding for a single text.
 
         Args:
@@ -296,7 +297,7 @@ class GeminiAdapter(ProviderAdapter):
         res = await self.get_embeddings([text])
         return res[0]
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for multiple texts with automatic retry and timeout.
 
         Args:
@@ -319,9 +320,9 @@ class GeminiAdapter(ProviderAdapter):
 
         try:
 
-            async def api_call() -> List[List[float]]:
+            async def api_call() -> list[list[float]]:
                 return cast(
-                    List[List[float]],
+                    list[list[float]],
                     await retry_with_backoff(
                         self._get_embeddings_with_backoff,
                         texts,
@@ -334,17 +335,17 @@ class GeminiAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 f"Gemini embeddings ({len(texts)} texts)",
             )
-            return cast(List[List[float]], result)
+            return cast(list[list[float]], result)
 
         except PermanentError:
-            self.log.error(
+            self.log.exception(
                 "Get embeddings failed with permanent error",
                 model=self.embed_model,
                 count=len(texts),
             )
             raise
         except asyncio.TimeoutError:
-            self.log.error(
+            self.log.exception(
                 "Get embeddings timed out",
                 timeout=self.timeout,
                 model=self.embed_model,
@@ -352,7 +353,7 @@ class GeminiAdapter(ProviderAdapter):
             )
             raise
         except Exception as e:
-            self.log.error(
+            self.log.exception(
                 "Get embeddings failed unexpectedly",
                 error=str(e),
                 model=self.embed_model,
