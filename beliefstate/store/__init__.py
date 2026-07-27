@@ -7,11 +7,6 @@ except ImportError:
     PostgreSQLStore = None  # type: ignore[assignment,misc]
 
 try:
-    from beliefstate.store.duckdb import DuckDBStore
-except ImportError:
-    DuckDBStore = None  # type: ignore[assignment,misc]
-
-try:
     from beliefstate.store.redis import RedisStore
 except ImportError:
     RedisStore = None  # type: ignore[assignment,misc]
@@ -25,7 +20,6 @@ __all__ = [
     "Store",
     "SQLiteStore",
     "PostgreSQLStore",
-    "DuckDBStore",
     "RedisStore",
     "InMemoryBeliefStore",
 ]

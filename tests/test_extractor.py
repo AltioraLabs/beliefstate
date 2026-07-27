@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from beliefstate.call import LLMResponse
 from beliefstate.config import TrackerConfig
 from beliefstate.extractor import BeliefExtractor, strip_injection_patterns
-from beliefstate.call import LLMResponse
 
 
 @pytest.mark.asyncio
@@ -173,3 +175,31 @@ def test_strip_injection_patterns_removes_known_triggers():
 def test_strip_injection_patterns_leaves_normal_text_untouched():
     text = "I prefer PostgreSQL for the database."
     assert strip_injection_patterns(text) == text
+
+
+@pytest.mark.asyncio
+async def test_belief_extractor_redacts_source_quote():
+    """source_quote must be redacted the same way value is (maintainer review, #55)."""
+    config = TrackerConfig()
+
+    mock_adapter = MagicMock()
+    mock_adapter.generate = AsyncMock(
+        return_value=LLMResponse(
+            text=(
+                '[{"subject": "USER", "predicate": "has_email", '
+                '"value": "user@example.com", "confidence": 0.9, '
+                '"source_quote": "my email is user@example.com"}]'
+            ),
+            raw_response=None,
+        )
+    )
+    mock_adapter.get_embeddings = AsyncMock(return_value=[[0.1, 0.2, 0.3]])
+
+    extractor = BeliefExtractor(adapter=mock_adapter, config=config)
+
+    beliefs = await extractor.extract(
+        "my email is user@example.com", turn=1, source="user"
+    )
+    assert len(beliefs) == 1
+    assert "user@example.com" not in beliefs[0].source_quote
+    assert "user@example.com" not in beliefs[0].value
