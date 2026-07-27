@@ -44,12 +44,16 @@ from beliefstate.adapters import OpenAIAdapter
 
 tracker = BeliefTracker(
     adapter=OpenAIAdapter(model="gpt-4o"),
-    config=TrackerConfig(store_type="sqlite", store_kwargs={"db_path": "beliefs.db"})
+    config=TrackerConfig(store_type="sqlite", store_kwargs={"db_path": "beliefs.db"}),
 )
+
 
 @tracker.wrap
 async def chat(messages):
-    return await openai_client.chat.completions.create(model="gpt-4o", messages=messages)
+    return await openai_client.chat.completions.create(
+        model="gpt-4o", messages=messages
+    )
+
 
 tracker.set_session("user_123")
 await chat([{"role": "user", "content": "I live in Tokyo and work at Google."}])
