@@ -4,9 +4,9 @@ import pytest
 
 pytest.importorskip("duckdb")
 
-from beliefstate.models import Belief
 from beliefstate import BeliefTracker, TrackerConfig
 from beliefstate import DuckDBStore as TopLevelDuckDBStore
+from beliefstate.models import Belief
 from beliefstate.store import DuckDBStore
 from beliefstate.store.duckdb import DuckDBStore as DirectDuckDBStore
 

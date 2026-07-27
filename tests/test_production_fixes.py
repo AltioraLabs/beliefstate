@@ -1,9 +1,11 @@
 """Tests for production bug fixes: search, upsert, shutdown, resolver, audit."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from beliefstate.models import Belief
+
+import pytest
+
 from beliefstate.config import TrackerConfig
+from beliefstate.models import Belief
 
 
 # ─── SQLite search_beliefs() SQL alias bug fix ───
@@ -230,7 +232,7 @@ async def test_judge_json_decode_error_handled():
         source="user",
         session_id="s1",
     )
-    is_contradiction, score, reason = await judge.check(old, new)
+    is_contradiction, score, _reason = await judge.check(old, new)
     assert isinstance(is_contradiction, bool)
     assert isinstance(score, float)
 
@@ -276,8 +278,8 @@ async def test_resolver_keep_old_generates_feedback():
 @pytest.mark.asyncio
 async def test_shutdown_closes_store():
     """shutdown() should close the store connection."""
-    from beliefstate.tracker import BeliefTracker
     from beliefstate.store.sqlite import SQLiteStore
+    from beliefstate.tracker import BeliefTracker
 
     store = SQLiteStore(":memory:")
     config = TrackerConfig()

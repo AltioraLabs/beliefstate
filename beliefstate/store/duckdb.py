@@ -3,7 +3,9 @@ import importlib
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
+
+from typing_extensions import Self
 
 from beliefstate.models import Belief
 from beliefstate.store.base import Store
@@ -28,7 +30,7 @@ class DuckDBStore(Store):
 
     def __init__(self, db_path: str = ":memory:"):
         self.db_path = db_path
-        self._conn: Optional[Any] = None
+        self._conn: Any | None = None
         self._lock = asyncio.Lock()
 
     async def open(self) -> None:
@@ -57,7 +59,7 @@ class DuckDBStore(Store):
                 self._conn.close()
                 self._conn = None
 
-    async def __aenter__(self) -> "DuckDBStore":
+    async def __aenter__(self) -> Self:
         await self.open()
         return self
 
@@ -136,16 +138,16 @@ class DuckDBStore(Store):
 
     async def _fetchall(
         self, query: str, params: tuple[Any, ...] = ()
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         conn = await self._get_connection()
         async with self._lock:
             result = conn.execute(query, params)
             columns = [col[0] for col in result.description]
-            return [dict(zip(columns, row)) for row in result.fetchall()]
+            return [dict(zip(columns, row, strict=False)) for row in result.fetchall()]
 
     async def _fetchone(
         self, query: str, params: tuple[Any, ...] = ()
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         rows = await self._fetchall(query, params)
         return rows[0] if rows else None
 
@@ -158,7 +160,7 @@ class DuckDBStore(Store):
         self,
         belief: Belief,
         operation: str,
-        old_value: Optional[str] = None,
+        old_value: str | None = None,
     ) -> None:
         await self._execute(
             """INSERT INTO beliefs_audit
@@ -253,7 +255,7 @@ class DuckDBStore(Store):
         elif old_value is None:
             await self._audit(belief, "create")
 
-    def _row_to_belief(self, row: Dict[str, Any]) -> Belief:
+    def _row_to_belief(self, row: dict[str, Any]) -> Belief:
         def _ensure_aware(dt: datetime) -> datetime:
             if dt.tzinfo is None:
                 return dt.replace(tzinfo=timezone.utc)
@@ -292,8 +294,8 @@ class DuckDBStore(Store):
         )
 
     async def get_beliefs(
-        self, session_id: str, conversation_id: Optional[str] = None
-    ) -> List[Belief]:
+        self, session_id: str, conversation_id: str | None = None
+    ) -> list[Belief]:
         if conversation_id:
             rows = await self._fetchall(
                 """
@@ -325,11 +327,11 @@ class DuckDBStore(Store):
     async def search_beliefs(
         self,
         session_id: str,
-        embedding: List[float],
+        embedding: list[float],
         threshold: float = 0.0,
         limit: int = 5,
-        conversation_id: Optional[str] = None,
-    ) -> List[Belief]:
+        conversation_id: str | None = None,
+    ) -> list[Belief]:
         if not embedding:
             return []
 
@@ -408,8 +410,8 @@ class DuckDBStore(Store):
         subject: str,
         predicate: str,
         session_id: str,
-        conversation_id: Optional[str] = None,
-    ) -> Optional[Belief]:
+        conversation_id: str | None = None,
+    ) -> Belief | None:
         row = await self._fetchone(
             """
             SELECT subject, predicate, value, confidence, turn, source,
@@ -447,7 +449,7 @@ class DuckDBStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
     ) -> None:
         existing = await self.get_by_key(
             subject, predicate, session_id, conversation_id
@@ -485,7 +487,7 @@ class DuckDBStore(Store):
             logger.warning(f"Health check failed: {e}")
             return False
 
-    async def get_all_session_ids(self) -> List[str]:
+    async def get_all_session_ids(self) -> list[str]:
         rows = await self._fetchall(
             "SELECT DISTINCT session_id FROM beliefs ORDER BY session_id"
         )
@@ -496,7 +498,7 @@ class DuckDBStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         rows = await self._fetchall(
             """
             SELECT turn, old_value, new_value, operation, confidence, created_at,
@@ -509,7 +511,7 @@ class DuckDBStore(Store):
         )
         return rows
 
-    async def get_all_audit_history(self, session_id: str) -> List[Dict[str, Any]]:
+    async def get_all_audit_history(self, session_id: str) -> list[dict[str, Any]]:
         return await self._fetchall(
             """
             SELECT session_id, conversation_id, subject, predicate, old_value,

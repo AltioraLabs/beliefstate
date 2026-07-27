@@ -1,8 +1,9 @@
 import asyncio
+import contextlib
 import logging
 import threading
-from typing import Any, Dict, Protocol, runtime_checkable
 from asyncio import Task as AsyncTask
+from typing import Any, Protocol, runtime_checkable
 
 from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.tracker import session_context
@@ -53,7 +54,7 @@ def get_global_tracker() -> Any:
 
 
 def execute_tracking_task(
-    call_dict: Dict[str, Any], response_dict: Dict[str, Any], session_id: str, turn: int
+    call_dict: dict[str, Any], response_dict: dict[str, Any], session_id: str, turn: int
 ) -> None:
     """Worker entrypoint for processing belief tracking tasks.
 
@@ -121,7 +122,7 @@ class AsyncioDispatcher:
         Args:
             log_warning_in_production: If True, logs a warning if BELIEFSTATE_ENV=production is detected
         """
-        self._in_flight_tasks: Dict[
+        self._in_flight_tasks: dict[
             str, list[AsyncTask[Any]]
         ] = {}  # session_id -> [tasks]
 
@@ -159,10 +160,8 @@ class AsyncioDispatcher:
         # Clean up completed tasks
         def cleanup_task(t: AsyncTask[Any]) -> None:
             if session_id in self._in_flight_tasks:
-                try:
+                with contextlib.suppress(ValueError, KeyError):
                     self._in_flight_tasks[session_id].remove(task)
-                except (ValueError, KeyError):
-                    pass
                 # Sweep: remove empty session entries
                 if not self._in_flight_tasks[session_id]:
                     self._in_flight_tasks.pop(session_id, None)
@@ -323,8 +322,8 @@ class RQDispatcher:
             self.queue = queue
         else:
             try:
-                from rq import Queue
                 from redis import Redis
+                from rq import Queue
             except ImportError:
                 raise ImportError(
                     "rq and redis packages are required to use RQDispatcher. "

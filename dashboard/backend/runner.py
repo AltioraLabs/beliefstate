@@ -1,15 +1,15 @@
-import threading
-import socket
-import time
 import logging
-from typing import Optional
+import socket
+import threading
+import time
+
 import uvicorn
 
 logger = logging.getLogger(__name__)
 
 
-_server_thread: Optional[threading.Thread] = None
-_server_config: Optional[uvicorn.Config] = None
+_server_thread: threading.Thread | None = None
+_server_config: uvicorn.Config | None = None
 
 
 def find_free_port(start_port: int = 8000, max_attempts: int = 100) -> int:
@@ -33,7 +33,7 @@ def start_dashboard(
 ) -> str:
     global _server_thread, _server_config
 
-    from dashboard.backend.server import set_tracker, push_tracker_event, app
+    from dashboard.backend.server import app, push_tracker_event, set_tracker
 
     if _server_thread and _server_thread.is_alive():
         logger.warning("Dashboard already running — updating tracker reference")

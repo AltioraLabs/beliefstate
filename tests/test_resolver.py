@@ -1,4 +1,5 @@
 import pytest
+
 from beliefstate.models import Belief
 from beliefstate.resolver import BeliefResolver
 from beliefstate.store.sqlite import SQLiteStore
@@ -140,7 +141,7 @@ async def test_resolver_conflict_history_enriched():
 
     # Simulate what the /conflicts endpoint does
     key = next(iter(sid_conflicts))
-    subject, predicate, new_subj, new_pred = key
+    _subject, _predicate, new_subj, new_pred = key
     all_beliefs = await store.get_beliefs("s1")
     belief_map = {(b.subject.lower(), b.predicate.lower()): b for b in all_beliefs}
     current = belief_map.get((new_subj.lower(), new_pred.lower()))

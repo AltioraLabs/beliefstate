@@ -1,17 +1,19 @@
-import time
 import logging
 import threading
-from typing import Any, List, Callable, Coroutine, Optional, cast
+import time
+from collections.abc import Callable, Coroutine
+from typing import Any, cast
+
 from tenacity import (
     AsyncRetrying,
-    wait_exponential,
-    stop_after_attempt,
     retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
 )
 
-from beliefstate.config import TrackerConfig
-from beliefstate.call import LLMCall, LLMResponse
 from beliefstate.adapters.base import ProviderAdapter
+from beliefstate.call import LLMCall, LLMResponse
+from beliefstate.config import TrackerConfig
 
 logger = logging.getLogger("beliefstate.resilience")
 
@@ -19,7 +21,6 @@ logger = logging.getLogger("beliefstate.resilience")
 class CircuitBreakerOpenException(Exception):
     """Raised when the circuit breaker is OPEN and rejecting calls."""
 
-    pass
 
 
 class CircuitBreaker:
@@ -69,9 +70,7 @@ class CircuitBreaker:
                     self.last_state_change = now
                     return True
                 return False
-            if self.state == "HALF-OPEN":
-                return True
-            return False
+            return self.state == "HALF-OPEN"
 
 
 def is_transient_error(exc: BaseException) -> bool:
@@ -182,7 +181,7 @@ class ResilientAdapterWrapper(ProviderAdapter):
         return self.adapter.to_llm_response(response)
 
     async def generate(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         return cast(
             LLMResponse,
@@ -193,9 +192,9 @@ class ResilientAdapterWrapper(ProviderAdapter):
             ),
         )
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         return cast(
-            List[float],
+            list[float],
             await self._execute_with_resilience(
                 lambda: self.adapter.get_embedding(text),
                 self.embed_breaker,
@@ -203,9 +202,9 @@ class ResilientAdapterWrapper(ProviderAdapter):
             ),
         )
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         return cast(
-            List[List[float]],
+            list[list[float]],
             await self._execute_with_resilience(
                 lambda: self.adapter.get_embeddings(texts),
                 self.embed_breaker,
@@ -254,8 +253,8 @@ class ResilientAdapterWrapper(ProviderAdapter):
             # Entire operation failed after all retries
             if self.config.enable_circuit_breaker:
                 breaker.record_failure()
-            logger.error(f"All retry attempts failed for operation '{op_name}': {e}")
-            raise e
+            logger.exception(f"All retry attempts failed for operation '{op_name}': {e}")
+            raise
 
     async def health_check(self) -> bool:
         """Delegate health check to wrapped adapter."""

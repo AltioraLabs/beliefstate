@@ -1,18 +1,19 @@
 """Advanced tests for BeliefTracker — helpers, GDPR, context injection, staleness, stats."""
 
-import pytest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
-from datetime import datetime, timezone, timedelta
+
+import pytest
 
 from beliefstate.config import TrackerConfig
 from beliefstate.models import Belief
 from beliefstate.tracker import (
     BeliefTracker,
-    session_context,
-    calculate_staleness_score,
-    estimate_tokens,
     _detect_adapter,
     _ensure_aware,
+    calculate_staleness_score,
+    estimate_tokens,
+    session_context,
 )
 
 

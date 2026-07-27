@@ -1,8 +1,11 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
+
+from typing_extensions import Self
+
+from beliefstate.models import Belief
 from beliefstate.store.base import Store
 from beliefstate.store.utils import cosine_similarity
-from beliefstate.models import Belief
 
 try:
     import redis.asyncio as redis
@@ -30,7 +33,6 @@ class RedisStore(Store):
 
     async def open(self) -> None:
         """No-op for Redis (client initialized in __init__)."""
-        pass
 
     def _get_key(self, session_id: str) -> str:
         return f"beliefstate:session:{session_id}"
@@ -51,8 +53,8 @@ class RedisStore(Store):
         )
 
     async def get_beliefs(
-        self, session_id: str, conversation_id: Optional[str] = None
-    ) -> List[Belief]:
+        self, session_id: str, conversation_id: str | None = None
+    ) -> list[Belief]:
         if not self._client:
             raise RuntimeError(
                 "redis package is not installed. Run `pip install redis`"
@@ -74,11 +76,11 @@ class RedisStore(Store):
     async def search_beliefs(
         self,
         session_id: str,
-        embedding: List[float],
+        embedding: list[float],
         threshold: float = 0.0,
         limit: int = 5,
-        conversation_id: Optional[str] = None,
-    ) -> List[Belief]:
+        conversation_id: str | None = None,
+    ) -> list[Belief]:
         beliefs = await self.get_beliefs(session_id, conversation_id)
         scored_beliefs = []
 
@@ -99,8 +101,8 @@ class RedisStore(Store):
         subject: str,
         predicate: str,
         session_id: str,
-        conversation_id: Optional[str] = None,
-    ) -> Optional[Belief]:
+        conversation_id: str | None = None,
+    ) -> Belief | None:
         """Retrieve a single belief by its composite key using direct hash lookup (O(1))."""
         if not self._client:
             raise RuntimeError(
@@ -138,7 +140,7 @@ class RedisStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
     ) -> None:
         if not self._client:
             raise RuntimeError(
@@ -183,7 +185,7 @@ class RedisStore(Store):
         key = self._get_key(session_id)
         await self._client.expire(key, ttl_seconds)
 
-    async def get_session_ttl(self, session_id: str) -> Optional[int]:
+    async def get_session_ttl(self, session_id: str) -> int | None:
         """Return TTL in seconds for a session's key.
 
         Returns:
@@ -201,7 +203,7 @@ class RedisStore(Store):
             return None  # Key does not exist
         return int(ttl)  # -1 (no expiry) or positive TTL
 
-    async def get_all_session_ids(self) -> List[str]:
+    async def get_all_session_ids(self) -> list[str]:
         if not self._client:
             return []
         keys = await self._client.keys("beliefstate:session:*")
@@ -219,7 +221,7 @@ class RedisStore(Store):
         session_id: str,
         subject: str,
         predicate: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return audit trail for a specific belief (Redis implementation stores as list)."""
         if not self._client:
             return []
@@ -239,7 +241,7 @@ class RedisStore(Store):
             await self._client.aclose()
             self._client = None
 
-    async def __aenter__(self) -> "RedisStore":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:

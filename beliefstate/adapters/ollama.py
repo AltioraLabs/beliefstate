@@ -1,14 +1,16 @@
 import asyncio
+import contextlib
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, cast
+
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
+    PermanentError,
     RetryConfig,
+    StructuredLogger,
     retry_with_backoff,
     with_timeout,
-    StructuredLogger,
-    PermanentError,
 )
 from beliefstate.call import LLMCall, LLMResponse
 
@@ -20,13 +22,13 @@ except ImportError:
     AsyncClient = Any  # type: ignore[misc, assignment]
 
 
-def _dereference_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
+def _dereference_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Inlines all $ref/definitions inside the schema to make it compatible with Ollama."""
     if not isinstance(schema, dict):
         return schema
 
     defs_val = schema.get("$defs") or schema.get("definitions") or {}
-    defs: Dict[str, Any] = defs_val if isinstance(defs_val, dict) else {}
+    defs: dict[str, Any] = defs_val if isinstance(defs_val, dict) else {}
 
     def resolve(node: Any) -> Any:
         if isinstance(node, dict):
@@ -69,14 +71,14 @@ class OllamaAdapter(ProviderAdapter):
 
     def __init__(
         self,
-        client: Optional[Any] = None,
+        client: Any | None = None,
         model: str = "llama3.2",
         embed_model: str = "nomic-embed-text",
-        embed_kwargs: Optional[Dict[str, Any]] = None,
-        host: Optional[str] = None,
-        port: Optional[int] = None,
+        embed_kwargs: dict[str, Any] | None = None,
+        host: str | None = None,
+        port: int | None = None,
         timeout: float = 30.0,
-        retry_config: Optional[RetryConfig] = None,
+        retry_config: RetryConfig | None = None,
         health_check_timeout: float = 5.0,
     ):
         self.model = model
@@ -101,10 +103,8 @@ class OllamaAdapter(ProviderAdapter):
                 parts = ollama_host.split(":")
                 host = parts[0]
                 if len(parts) > 1:
-                    try:
+                    with contextlib.suppress(ValueError):
                         port = int(parts[1])
-                    except ValueError:
-                        pass
 
         self.host = host or "http://localhost"
         self.port = port or 11434
@@ -129,10 +129,10 @@ class OllamaAdapter(ProviderAdapter):
                     port=self.port,
                 )
             except ImportError:
-                self.log.error("Ollama SDK not installed")
+                self.log.exception("Ollama SDK not installed")
                 self.client = None
             except Exception as e:
-                self.log.error(f"Failed to initialize Ollama client: {e}")
+                self.log.exception(f"Failed to initialize Ollama client: {e}")
                 self.client = None
 
     def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
@@ -166,7 +166,7 @@ class OllamaAdapter(ProviderAdapter):
         context_prompt: str,
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         """Inject context prompt into Ollama messages (either in args[1] or kwargs['messages'])."""
         messages = kwargs.get("messages", [])
         in_kwargs = "messages" in kwargs
@@ -188,10 +188,7 @@ class OllamaAdapter(ProviderAdapter):
         new_messages = [m.copy() if isinstance(m, dict) else m for m in messages]
         system_idx = -1
         for idx, m in enumerate(new_messages):
-            if isinstance(m, dict) and m.get("role") == "system":
-                system_idx = idx
-                break
-            elif hasattr(m, "role") and m.role == "system":
+            if (isinstance(m, dict) and m.get("role") == "system") or (hasattr(m, "role") and m.role == "system"):
                 system_idx = idx
                 break
 
@@ -226,7 +223,7 @@ class OllamaAdapter(ProviderAdapter):
         return args, kwargs
 
     async def _generate_with_backoff(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Internal method that actually calls the API."""
         kwargs = call.kwargs.copy()
@@ -248,7 +245,7 @@ class OllamaAdapter(ProviderAdapter):
         return self.to_llm_response(response)
 
     async def generate(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
 
@@ -291,27 +288,27 @@ class OllamaAdapter(ProviderAdapter):
             return cast(LLMResponse, result)
 
         except PermanentError:
-            self.log.error("Generate failed with permanent error", model=self.model)
+            self.log.exception("Generate failed with permanent error", model=self.model)
             raise
         except asyncio.TimeoutError:
-            self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
+            self.log.exception("Generate timed out", timeout=self.timeout, model=self.model)
             raise
         except Exception as e:
-            self.log.error(
+            self.log.exception(
                 "Generate failed unexpectedly", error=str(e), model=self.model
             )
             raise
 
-    async def _get_embedding_with_backoff(self, text: str) -> List[float]:
+    async def _get_embedding_with_backoff(self, text: str) -> list[float]:
         """Internal method for single embedding."""
         emb_args = {"model": self.embed_model, "prompt": text}
         if self.embed_kwargs:
             emb_args.update(self.embed_kwargs)
 
         response = await self.client.embeddings(**emb_args)
-        return cast(List[float], getattr(response, "embedding", []))
+        return cast(list[float], getattr(response, "embedding", []))
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         """Get embedding for a single text.
 
         Args:
@@ -328,9 +325,9 @@ class OllamaAdapter(ProviderAdapter):
 
         try:
 
-            async def api_call() -> List[float]:
+            async def api_call() -> list[float]:
                 return cast(
-                    List[float],
+                    list[float],
                     await retry_with_backoff(
                         self._get_embedding_with_backoff,
                         text,
@@ -343,27 +340,27 @@ class OllamaAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 "Ollama embedding",
             )
-            return cast(List[float], result)
+            return cast(list[float], result)
 
         except PermanentError:
-            self.log.error(
+            self.log.exception(
                 "Get embedding failed with permanent error", model=self.embed_model
             )
             raise
         except asyncio.TimeoutError:
-            self.log.error(
+            self.log.exception(
                 "Get embedding timed out", timeout=self.timeout, model=self.embed_model
             )
             raise
         except Exception as e:
-            self.log.error(
+            self.log.exception(
                 "Get embedding failed unexpectedly",
                 error=str(e),
                 model=self.embed_model,
             )
             raise
 
-    async def _get_embeddings_with_backoff(self, texts: List[str]) -> List[List[float]]:
+    async def _get_embeddings_with_backoff(self, texts: list[str]) -> list[list[float]]:
         """Internal method for batch embeddings (with fallback to individual)."""
         if hasattr(self.client, "embed"):
             try:
@@ -372,7 +369,7 @@ class OllamaAdapter(ProviderAdapter):
                     embed_args.update(self.embed_kwargs)
                 response = await self.client.embed(**embed_args)
                 if "embeddings" in response:
-                    return cast(List[List[float]], response["embeddings"])
+                    return cast(list[list[float]], response["embeddings"])
             except Exception as e:
                 self.log.warning(
                     f"Ollama batch embed failed: {e}. Falling back to individual embeddings."
@@ -382,7 +379,7 @@ class OllamaAdapter(ProviderAdapter):
         tasks = [self._get_embedding_with_backoff(text) for text in texts]
         return list(await asyncio.gather(*tasks))
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for multiple texts with automatic retry and timeout.
 
         Args:
@@ -406,9 +403,9 @@ class OllamaAdapter(ProviderAdapter):
 
         try:
 
-            async def api_call() -> List[List[float]]:
+            async def api_call() -> list[list[float]]:
                 return cast(
-                    List[List[float]],
+                    list[list[float]],
                     await retry_with_backoff(
                         self._get_embeddings_with_backoff,
                         texts,
@@ -421,17 +418,17 @@ class OllamaAdapter(ProviderAdapter):
                 self.timeout * (self.retry_config.max_retries + 1),
                 f"Ollama embeddings ({len(texts)} texts)",
             )
-            return cast(List[List[float]], result)
+            return cast(list[list[float]], result)
 
         except PermanentError:
-            self.log.error(
+            self.log.exception(
                 "Get embeddings failed with permanent error",
                 model=self.embed_model,
                 count=len(texts),
             )
             raise
         except asyncio.TimeoutError:
-            self.log.error(
+            self.log.exception(
                 "Get embeddings timed out",
                 timeout=self.timeout,
                 model=self.embed_model,
@@ -439,7 +436,7 @@ class OllamaAdapter(ProviderAdapter):
             )
             raise
         except Exception as e:
-            self.log.error(
+            self.log.exception(
                 "Get embeddings failed unexpectedly",
                 error=str(e),
                 model=self.embed_model,

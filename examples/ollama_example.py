@@ -1,6 +1,7 @@
-import os
 import asyncio
-from beliefstate import BeliefTracker, TrackerConfig, OllamaAdapter
+import os
+
+from beliefstate import BeliefTracker, OllamaAdapter, TrackerConfig
 
 try:
     from ollama import AsyncClient

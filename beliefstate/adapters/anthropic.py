@@ -1,15 +1,16 @@
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, cast
+
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.adapters.common import (
-    RetryConfig,
-    retry_with_backoff,
-    with_timeout,
-    validate_api_key,
-    StructuredLogger,
     PermanentError,
+    RetryConfig,
+    StructuredLogger,
+    retry_with_backoff,
+    validate_api_key,
+    with_timeout,
 )
 from beliefstate.call import LLMCall, LLMResponse
 
@@ -38,12 +39,12 @@ class AnthropicAdapter(ProviderAdapter):
 
     def __init__(
         self,
-        client: Optional[Any] = None,
+        client: Any | None = None,
         model: str = "claude-3-5-sonnet-latest",
         embed_model: str = "voyage-large-2",
-        embed_kwargs: Optional[Dict[str, Any]] = None,
+        embed_kwargs: dict[str, Any] | None = None,
         timeout: float = 30.0,
-        retry_config: Optional[RetryConfig] = None,
+        retry_config: RetryConfig | None = None,
         health_check_timeout: float = 5.0,
         default_max_tokens: int = 1024,
     ):
@@ -67,10 +68,10 @@ class AnthropicAdapter(ProviderAdapter):
                 self.client = AsyncAnthropic(api_key=api_key)
                 self.log.info("Initialized", model=model)
             except ImportError:
-                self.log.error("Anthropic SDK not installed")
+                self.log.exception("Anthropic SDK not installed")
                 self.client = None
             except ValueError as e:
-                self.log.error(f"Configuration error: {e}")
+                self.log.exception(f"Configuration error: {e}")
                 self.client = None
 
     def to_llm_call(self, *args: Any, **kwargs: Any) -> LLMCall:
@@ -78,7 +79,7 @@ class AnthropicAdapter(ProviderAdapter):
         if not messages and len(args) > 0 and isinstance(args[0], list):
             messages = args[0]
 
-        system_prompt = kwargs.get("system", None)
+        system_prompt = kwargs.get("system")
 
         return LLMCall(
             messages=messages,
@@ -102,7 +103,7 @@ class AnthropicAdapter(ProviderAdapter):
         context_prompt: str,
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         """Inject context prompt into Anthropic kwargs['system']."""
         new_kwargs = kwargs.copy()
         system = new_kwargs.get("system", "")
@@ -113,7 +114,7 @@ class AnthropicAdapter(ProviderAdapter):
         return args, new_kwargs
 
     async def _generate_with_backoff(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Internal method that actually calls the API."""
         import json
@@ -136,9 +137,7 @@ class AnthropicAdapter(ProviderAdapter):
                 existing_content = last_m.get("content", "")
                 if isinstance(existing_content, list):
                     # Anthropic API supports list content blocks
-                    last_m["content"] = existing_content + [
-                        {"type": "text", "text": instruction}
-                    ]
+                    last_m["content"] = [*existing_content, {"type": "text", "text": instruction}]
                 else:
                     last_m["content"] = str(existing_content) + instruction
                 messages[-1] = last_m
@@ -159,7 +158,7 @@ class AnthropicAdapter(ProviderAdapter):
         return self.to_llm_response(response)
 
     async def generate(
-        self, call: LLMCall, response_format: Optional[Any] = None
+        self, call: LLMCall, response_format: Any | None = None
     ) -> LLMResponse:
         """Generate a response with automatic retry and timeout handling.
 
@@ -201,18 +200,18 @@ class AnthropicAdapter(ProviderAdapter):
             return cast(LLMResponse, result)
 
         except PermanentError:
-            self.log.error("Generate failed with permanent error", model=self.model)
+            self.log.exception("Generate failed with permanent error", model=self.model)
             raise
         except asyncio.TimeoutError:
-            self.log.error("Generate timed out", timeout=self.timeout, model=self.model)
+            self.log.exception("Generate timed out", timeout=self.timeout, model=self.model)
             raise
         except Exception as e:
-            self.log.error(
+            self.log.exception(
                 "Generate failed unexpectedly", error=str(e), model=self.model
             )
             raise
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         """Get embedding for a single text.
 
         NOTE: Anthropic does not provide native embeddings.
@@ -230,7 +229,7 @@ class AnthropicAdapter(ProviderAdapter):
             "\nFor more details, see beliefstate/config.py:Config.internal_adapter"
         )
 
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Get embeddings for multiple texts.
 
         NOTE: Anthropic does not provide native embeddings.

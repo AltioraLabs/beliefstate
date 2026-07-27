@@ -1,12 +1,13 @@
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
-from beliefstate.tracker import BeliefTracker, session_context
+
 from beliefstate.call import LLMCall, LLMResponse
+from beliefstate.tracker import BeliefTracker, session_context
 
 try:
     from langchain_core.callbacks import AsyncCallbackHandler
-    from langchain_core.outputs import LLMResult
     from langchain_core.messages import BaseMessage
+    from langchain_core.outputs import LLMResult
 except ImportError:
     AsyncCallbackHandler = object  # type: ignore[misc, assignment]
     LLMResult = Any  # type: ignore[misc, assignment]
@@ -21,17 +22,17 @@ class BeliefTrackerLangchainCallback(AsyncCallbackHandler):
 
     def __init__(self, tracker: BeliefTracker):
         self.tracker = tracker
-        self.pending_calls: Dict[str, LLMCall] = {}
+        self.pending_calls: dict[str, LLMCall] = {}
 
     async def on_llm_start(
         self,
-        serialized: Dict[str, Any],
-        prompts: List[str],
+        serialized: dict[str, Any],
+        prompts: list[str],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Any:
         universal_msgs = []
@@ -44,13 +45,13 @@ class BeliefTrackerLangchainCallback(AsyncCallbackHandler):
 
     async def on_chat_model_start(
         self,
-        serialized: Dict[str, Any],
-        messages: List[List[BaseMessage]],
+        serialized: dict[str, Any],
+        messages: list[list[BaseMessage]],
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Any:
         # Translate LangChain messages into our universal format
@@ -77,8 +78,8 @@ class BeliefTrackerLangchainCallback(AsyncCallbackHandler):
         response: LLMResult,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None,
+        parent_run_id: UUID | None = None,
+        tags: list[str] | None = None,
         **kwargs: Any,
     ) -> Any:
         call = self.pending_calls.pop(str(run_id), None)
@@ -125,7 +126,7 @@ class BeliefTrackerLangchainCallback(AsyncCallbackHandler):
         error: BaseException,
         *,
         run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
+        parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> Any:
         # Prevent memory leaks by cleaning up pending calls on error

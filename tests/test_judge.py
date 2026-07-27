@@ -1,10 +1,12 @@
 import sys
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from beliefstate.models import Belief
-from beliefstate.config import TrackerConfig
+
+import pytest
+
 from beliefstate.call import LLMResponse
+from beliefstate.config import TrackerConfig
 from beliefstate.judge import LLMJudge, LocalNLIJudge
+from beliefstate.models import Belief
 
 
 @pytest.mark.asyncio
@@ -79,7 +81,7 @@ async def test_llm_judge_neutral():
         source="user",
     )
 
-    is_contra, score, reason = await judge.check(b1, b2)
+    is_contra, score, _reason = await judge.check(b1, b2)
     assert is_contra is False
     assert score == 0.1
 

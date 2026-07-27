@@ -8,27 +8,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from beliefstate.config import TrackerConfig
-from beliefstate.models import Belief
-from beliefstate.extractor import (
-    BeliefExtractor,
-    calibrate_confidence,
-    _is_trivial_response,
-)
 from beliefstate.detector import (
     ContradictionDetector,
 )
+from beliefstate.extractor import (
+    BeliefExtractor,
+    _is_trivial_response,
+    calibrate_confidence,
+)
+from beliefstate.models import Belief
 from beliefstate.resolver import BeliefResolver
+from beliefstate.store.base import summary_for_prompt
+from beliefstate.store.memory import InMemoryBeliefStore
+from beliefstate.store.sqlite import SQLiteStore, pack_embedding, unpack_embedding
 from beliefstate.tracker import (
     BeliefTracker,
+    ConfigurationWarning,
     TrackerStats,
     _get_session_lock,
     _validate_deployment_config,
-    ConfigurationWarning,
 )
-from beliefstate.store.base import summary_for_prompt
-from beliefstate.store.sqlite import SQLiteStore, pack_embedding, unpack_embedding
-from beliefstate.store.memory import InMemoryBeliefStore
-
 
 # --- Helpers ---
 
@@ -321,7 +320,7 @@ class TestEmbeddingBinaryPrecision:
         unpacked = unpack_embedding(packed)
 
         assert len(unpacked) == len(original)
-        for orig, unpacked_val in zip(original, unpacked):
+        for orig, unpacked_val in zip(original, unpacked, strict=False):
             # float32 precision: ~7 decimal digits
             assert abs(orig - unpacked_val) < 1e-6
 
@@ -337,7 +336,7 @@ class TestEmbeddingBinaryPrecision:
         beliefs = await store.get_beliefs("s1")
         assert len(beliefs) == 1
         assert len(beliefs[0].embedding) == 3
-        for orig, stored in zip(emb, beliefs[0].embedding):
+        for orig, stored in zip(emb, beliefs[0].embedding, strict=False):
             assert abs(orig - stored) < 1e-5
 
         await store.close()
@@ -462,7 +461,7 @@ class TestEmbeddingModelMismatch:
             embedding_dim=1536,
             embedding_model="new-model",
         )
-        contradictions, _ = await detector.detect_with_deduplication("s1", [new_b])
+        _contradictions, _ = await detector.detect_with_deduplication("s1", [new_b])
 
         # Judge should have been called despite dimension mismatch
         mock_judge.check.assert_called()

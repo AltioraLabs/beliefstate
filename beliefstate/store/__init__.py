@@ -17,9 +17,9 @@ except ImportError:
     InMemoryBeliefStore = None  # type: ignore[assignment,misc]
 
 __all__ = [
-    "Store",
-    "SQLiteStore",
+    "InMemoryBeliefStore",
     "PostgreSQLStore",
     "RedisStore",
-    "InMemoryBeliefStore",
+    "SQLiteStore",
+    "Store",
 ]
