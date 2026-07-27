@@ -123,7 +123,9 @@ class OpenAIAdapter(ProviderAdapter):
         new_messages = [m.copy() if isinstance(m, dict) else m for m in messages]
         system_idx = -1
         for idx, m in enumerate(new_messages):
-            if (isinstance(m, dict) and m.get("role") == "system") or (hasattr(m, "role") and m.role == "system"):
+            if (isinstance(m, dict) and m.get("role") == "system") or (
+                hasattr(m, "role") and m.role == "system"
+            ):
                 system_idx = idx
                 break
 
@@ -226,7 +228,9 @@ class OpenAIAdapter(ProviderAdapter):
             self.log.exception("Generate failed with permanent error", model=self.model)
             raise
         except asyncio.TimeoutError:
-            self.log.exception("Generate timed out", timeout=self.timeout, model=self.model)
+            self.log.exception(
+                "Generate timed out", timeout=self.timeout, model=self.model
+            )
             raise
         except Exception as e:
             self.log.exception(

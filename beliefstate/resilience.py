@@ -22,7 +22,6 @@ class CircuitBreakerOpenException(Exception):
     """Raised when the circuit breaker is OPEN and rejecting calls."""
 
 
-
 class CircuitBreaker:
     """A simple stateful circuit breaker (CLOSED, OPEN, HALF-OPEN)."""
 
@@ -253,7 +252,9 @@ class ResilientAdapterWrapper(ProviderAdapter):
             # Entire operation failed after all retries
             if self.config.enable_circuit_breaker:
                 breaker.record_failure()
-            logger.exception(f"All retry attempts failed for operation '{op_name}': {e}")
+            logger.exception(
+                f"All retry attempts failed for operation '{op_name}': {e}"
+            )
             raise
 
     async def health_check(self) -> bool:

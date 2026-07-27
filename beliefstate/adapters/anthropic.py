@@ -137,7 +137,10 @@ class AnthropicAdapter(ProviderAdapter):
                 existing_content = last_m.get("content", "")
                 if isinstance(existing_content, list):
                     # Anthropic API supports list content blocks
-                    last_m["content"] = [*existing_content, {"type": "text", "text": instruction}]
+                    last_m["content"] = [
+                        *existing_content,
+                        {"type": "text", "text": instruction},
+                    ]
                 else:
                     last_m["content"] = str(existing_content) + instruction
                 messages[-1] = last_m
@@ -203,7 +206,9 @@ class AnthropicAdapter(ProviderAdapter):
             self.log.exception("Generate failed with permanent error", model=self.model)
             raise
         except asyncio.TimeoutError:
-            self.log.exception("Generate timed out", timeout=self.timeout, model=self.model)
+            self.log.exception(
+                "Generate timed out", timeout=self.timeout, model=self.model
+            )
             raise
         except Exception as e:
             self.log.exception(
