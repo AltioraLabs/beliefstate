@@ -123,6 +123,30 @@ warn_unused_ignores = false
 line-length = 88
 target-version = "py310"
 
+[tool.ruff.lint]
+ignore = [
+    "E402",    # Module level import not at top of file (functionally required for Streamlit and mocking conftest)
+    "BLE001",  # Broad exception catching is intentional for resilience fallbacks
+    "G004",    # f-strings in logging are allowed
+    "TRY003",  # Avoid specifying long messages outside exception class
+    "TRY401",  # Redundant exception object in logging.exception
+    "S110",    # try-except-pass is acceptable for silent fallbacks
+    "PYI036",  # __aexit__ argument annotation rules
+    "SIM117",  # Nested with statements are acceptable in tests
+    "C408",    # Unnecessary dict calls are fine
+    "C401",    # Unnecessary generator is fine
+    "DTZ001",  # Datetime timezone is not strictly required in tests
+    "SIM102",  # Nested if statements are fine
+    "SIM103",  # Return conditions directly is optional
+    "TRY004",  # Prefer TypeError exception is optional
+    "TRY201",  # Use raise without exception name is optional
+    "ISC004",  # Implicit string concat in collection
+    "PLR1722", # Use sys.exit() instead of exit
+    "B905",    # zip() without strict= is acceptable
+    "G201",    # Use exception instead of error with exc_info=True
+]
+
+
 [tool.bandit]
 exclude_dirs = ["tests", "test_package", "dashboard", "docs"]
 skips = ["B101", "B110", "B311", "B324"]

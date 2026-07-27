@@ -41,7 +41,7 @@ sys.modules["llama_index.core"] = mock_llama_index.core
 sys.modules["llama_index.core.callbacks"] = mock_llama_index.core.callbacks
 
 # Now safe to import beliefstate (llamaindex.py will see the mocks)
-from beliefstate import session_context  # noqa: E402
+from beliefstate import session_context
 
 
 @pytest.fixture(autouse=True, scope="session")

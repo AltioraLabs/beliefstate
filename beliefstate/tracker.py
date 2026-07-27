@@ -44,9 +44,9 @@ class ConfigurationWarning(UserWarning):
 def _validate_deployment_config(config: TrackerConfig) -> None:
     """Warn if SQLite is used with multiple workers."""
     worker_count = max(
-        int(os.environ.get("WEB_CONCURRENCY", 1)),
-        int(os.environ.get("GUNICORN_WORKERS", 1)),
-        int(os.environ.get("NUM_WORKERS", 1)),
+        int(os.environ.get("WEB_CONCURRENCY", "1")),
+        int(os.environ.get("GUNICORN_WORKERS", "1")),
+        int(os.environ.get("NUM_WORKERS", "1")),
     )
     if worker_count > 1 and config.store_type == "sqlite":
         warnings.warn(
@@ -1026,9 +1026,9 @@ class BeliefTracker:
             else:
                 import copy
 
-                new_config = copy.copy(config)
-                new_config.system_instruction = new_system
-                return new_config
+                copied_config = copy.copy(config)
+                copied_config.system_instruction = new_system
+                return copied_config
         return config
 
     async def _track_background(
