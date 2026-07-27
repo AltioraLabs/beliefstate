@@ -438,7 +438,9 @@ class BeliefTracker:
         self._stats = TrackerStats()
         self._pending_tasks: set[asyncio.Task[None]] = set()
         self._pending_conflict_notes: dict[str, list[str]] = {}
-        self._dashboard_callback: Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None = None
+        self._dashboard_callback: (
+            Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None
+        ) = None
 
         if dispatcher is not None:
             self.dispatcher = dispatcher
@@ -617,9 +619,7 @@ class BeliefTracker:
         notes.extend(self.resolver.pop_pending_conflicts(sid))
         return notes
 
-    async def clear_session(
-        self, session_id: str | None = None
-    ) -> "DeletionReceipt":
+    async def clear_session(self, session_id: str | None = None) -> "DeletionReceipt":
         sid = session_id or session_context.get()
 
         drained_count = 0
@@ -711,9 +711,7 @@ class BeliefTracker:
         sid = session_id or session_context.get()
         await self.store.remove_belief(sid, subject, predicate)
 
-    async def set_session_ttl(
-        self, session_id: str | None, ttl_seconds: int
-    ) -> None:
+    async def set_session_ttl(self, session_id: str | None, ttl_seconds: int) -> None:
         sid = session_id or session_context.get()
         if hasattr(self.store, "set_session_ttl"):
             await self.store.set_session_ttl(sid, ttl_seconds)
@@ -987,7 +985,9 @@ class BeliefTracker:
         new_messages = [m.copy() if isinstance(m, dict) else m for m in messages]
         system_idx = -1
         for idx, m in enumerate(new_messages):
-            if (isinstance(m, dict) and m.get("role") == "system") or (hasattr(m, "role") and m.role == "system"):
+            if (isinstance(m, dict) and m.get("role") == "system") or (
+                hasattr(m, "role") and m.role == "system"
+            ):
                 system_idx = idx
                 break
         if system_idx != -1:

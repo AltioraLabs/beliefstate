@@ -34,7 +34,6 @@ class IntegrationLogger:
         self._log("exception", operation, **metadata)
 
 
-
 def validate_session_id(session_id: str | None) -> str:
     """Validate and normalize a session ID.
 
