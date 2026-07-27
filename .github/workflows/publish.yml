@@ -38,7 +38,7 @@ jobs:
         tar -tzf dist/*.tar.gz | head -20
 
     - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@v1.14.0
+      uses: pypa/gh-action-pypi-publish@v1.14.1
       with:
         skip-existing: true
 
