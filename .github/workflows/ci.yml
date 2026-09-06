@@ -48,7 +48,14 @@ jobs:
 
     - name: Install dev dependencies
       run: |
+        python -m pip install --upgrade pip
         python -m pip install -e ".[dev]"
+
+    - name: Install pip-audit for dependency vulnerability scanning
+      run: python -m pip install pip-audit
+
+    - name: Scan for vulnerable dependencies
+      run: pip-audit --json > pip-audit-report.json || true
 
     - name: Install optional dependencies (non-blocking)
       run: |
