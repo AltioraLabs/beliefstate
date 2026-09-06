@@ -540,7 +540,7 @@ class PostgreSQLStore(Store):
             if len(parts) >= 2:
                 return int(parts[-1])
         except Exception:
-            pass
+            pass  # nosec B110 - version parsing fallback, safe error handling
         return 0
 
     async def get_session_belief_age_stats(self, session_id: str) -> dict[str, Any]:
