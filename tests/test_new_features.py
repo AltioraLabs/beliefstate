@@ -11,6 +11,7 @@ from beliefstate.config import TrackerConfig
 from beliefstate.detector import (
     ContradictionDetector,
 )
+from beliefstate.resilience import ResilientAdapterWrapper
 from beliefstate.extractor import (
     BeliefExtractor,
     _is_trivial_response,
@@ -472,15 +473,15 @@ class TestNLINonblocking:
     """test_nli_nonblocking: Verify _encode() and _nli_predict() use run_in_executor."""
 
     def test_detector_uses_adapter_for_judgment(self):
-        """Verify the detector delegates NLI to the adapter (which should use
-        run_in_executor in production)."""
+        """Verify the detector wraps the adapter with ResilientAdapterWrapper
+        for circuit breaker protection."""
         config = TrackerConfig()
         mock_adapter = AsyncMock()
         store = MagicMock()
         detector = ContradictionDetector(
             adapter=mock_adapter, store=store, config=config
         )
-        assert detector.adapter is mock_adapter
+        assert isinstance(detector.adapter, ResilientAdapterWrapper)
 
 
 # =====================================================================

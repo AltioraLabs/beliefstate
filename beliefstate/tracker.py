@@ -1152,6 +1152,15 @@ class BeliefTracker:
                 for b in new_beliefs:
                     if b not in contradicting_new_beliefs and b not in duplicates:
                         # Enforce storage limit: evict lowest-confidence belief if full
+                        # Idempotency check: skip if belief already stored
+                        existing = await self.store.get_by_key(
+                            b.subject or "",
+                            b.predicate or "",
+                            session_id,
+                            b.conversation_id or "",
+                        )
+                        if existing and existing.turn <= b.turn:
+                            continue  # already stored, skip
                         current_count = await self.store.belief_count(session_id)
                         if current_count >= self.config.max_beliefs:
                             await self._evict_lowest_confidence_belief(session_id)

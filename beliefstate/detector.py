@@ -9,6 +9,7 @@ from typing import Any
 from beliefstate.adapters.base import ProviderAdapter
 from beliefstate.config import TrackerConfig
 from beliefstate.models import Belief
+from beliefstate.resilience import ResilientAdapterWrapper, CircuitBreakerOpenException
 from beliefstate.store.base import Store
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,18 @@ def has_negation(text: str) -> bool:
     if "n't" in text_lower:
         return True
     # Multi-word negation tokens: use substring match (no word boundaries)
-    _MULTI_WORD_NEGATION = {"no longer", "not any"}
+    _MULTI_WORD_NEGATION = {
+        "no longer",
+        "not any",
+        "never",
+        "nope",
+        "nothing",
+        "nowhere",
+        "neither",
+        "hardly",
+        "scarcely",
+        "rarely",
+    }
     for token in _MULTI_WORD_NEGATION:
         if token in text_lower:
             return True
@@ -142,7 +154,7 @@ class ContradictionDetector:
         config: TrackerConfig,
         judge: Any | None = None,
     ):
-        self.adapter = adapter
+        self.adapter = ResilientAdapterWrapper(adapter, config)
         self.store = store
         self.config = config
         if judge:
@@ -208,9 +220,19 @@ class ContradictionDetector:
                         f"Embedding model mismatch: old='{old_b.embedding_model}' "
                         f"vs new='{new_b.embedding_model}'. "
                         f"Belief may be from a different embedding version. "
-                        f"Skipping comparison."
+                        f"Using LLM judge instead of vector comparison."
                     )
-                    continue
+                    is_contradiction, score, reason = await self.judge.check(
+                        old_b, new_b
+                    )
+                    if is_contradiction:
+                        contradictions.append((old_b, new_b, score, reason))
+                    elif (
+                        reason
+                        and "entailment" in reason.lower()
+                        and score >= self.config.entailment_threshold
+                    ):
+                        duplicates_to_skip.append(new_b)
 
                 is_contradiction, score, reason = await self.judge.check(old_b, new_b)
                 if is_contradiction:
@@ -275,7 +297,7 @@ class ContradictionDetector:
                     logger.warning(
                         f"Embedding model mismatch: old='{old_b.embedding_model}' "
                         f"vs new='{new_b.embedding_model}'. "
-                        f"Skipping vector comparison, using LLM judge instead."
+                        f"Using LLM judge instead of vector comparison."
                     )
                     is_contradiction, score, reason = await self.judge.check(
                         old_b, new_b
@@ -288,7 +310,6 @@ class ContradictionDetector:
                         and score >= self.config.entailment_threshold
                     ):
                         duplicates_to_skip.append(new_b)
-                    continue
 
                 # Guard against embedding dimension mismatch
                 if (
