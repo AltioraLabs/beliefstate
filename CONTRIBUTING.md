@@ -193,7 +193,17 @@ docs/              # Documentation site
 
 ## Security
 
-If you discover a security vulnerability, please **do not** open a public issue. Instead, report it via [GitHub Security Advisories](https://github.com/AltioraLabs/beliefstate/security/advisories/new). See [SECURITY.md](SECURITY.md) for details.
+If you discover a security vulnerability, please **do not** open a public issue. Instead, report it via [GitHub Security Advisories](https://github.com/abhay-2108/beliefstate/security/advisories/new). See [SECURITY.md](SECURITY.md) for details.
+
+## PII Redaction & Injection Stripping
+
+When contributing code that processes user messages or assistant responses, please note:
+
+- **PII Redaction**: The framework automatically redacts personally identifiable information (API keys, email addresses, etc.) from beliefs before they are stored or injected into prompts. If you add new belief extraction or storage logic, ensure PII redaction continues to work by testing with sensitive data.
+
+- **Injection Pattern Stripping**: Before belief extraction, user and assistant messages pass through `strip_injection_patterns()` to remove common prompt injection attempts. Any new extraction code should not re-introduce injection vectors. See `beliefstate/extractor.py` for the existing stripping logic.
+
+Contributions that handle user-generated content must not introduce security vulnerabilities such as prompt injection or data leakage.
 
 ## License
 
